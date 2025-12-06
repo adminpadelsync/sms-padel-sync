@@ -102,7 +102,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
             setLoading(true)
             try {
                 // Fetch recommendations
-                const response = await fetch('http://localhost:8001/api/recommendations', {
+                const response = await fetch('/api/recommendations', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -132,7 +132,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
     const handleSendInvites = async () => {
         setLoading(true)
         try {
-            const response = await fetch('http://localhost:8001/api/outreach', {
+            const response = await fetch('/api/outreach', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

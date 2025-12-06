@@ -65,7 +65,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const handleSave = async () => {
         setLoading(true)
         try {
-            const response = await fetch(`http://localhost:8001/api/matches/${match.match_id}`, {
+            const response = await fetch(`/api/matches/${match.match_id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -90,7 +90,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
         setLoading(true)
         try {
             // Add to team 1 by default (teams don't matter per user feedback)
-            const response = await fetch(`http://localhost:8001/api/matches/${match.match_id}/players`, {
+            const response = await fetch(`/api/matches/${match.match_id}/players`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ player_id: playerId, team: 1 })
@@ -114,7 +114,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const handleRemovePlayer = async (playerId: string) => {
         setLoading(true)
         try {
-            const response = await fetch(`http://localhost:8001/api/matches/${match.match_id}/players/${playerId}`, {
+            const response = await fetch(`/api/matches/${match.match_id}/players/${playerId}`, {
                 method: 'DELETE'
             })
 
@@ -132,7 +132,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const handleConfirm = async () => {
         setLoading(true)
         try {
-            const response = await fetch(`http://localhost:8001/api/matches/${match.match_id}`, {
+            const response = await fetch(`/api/matches/${match.match_id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'confirmed' })
@@ -154,7 +154,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
 
         setLoading(true)
         try {
-            const response = await fetch(`http://localhost:8001/api/matches/${match.match_id}`, {
+            const response = await fetch(`/api/matches/${match.match_id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'cancelled' })

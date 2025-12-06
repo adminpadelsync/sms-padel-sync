@@ -161,7 +161,7 @@ export function DashboardClient({
 
     const handleMatchClick = async (matchId: string) => {
         try {
-            const response = await fetch(`http://localhost:8001/api/matches/${matchId}`)
+            const response = await fetch(`/api/matches/${matchId}`)
             if (!response.ok) throw new Error('Failed to fetch match details')
             const data = await response.json()
             setSelectedMatch(data.match)
@@ -176,7 +176,7 @@ export function DashboardClient({
         // Refetch the match data without closing the modal
         if (selectedMatch) {
             try {
-                const response = await fetch(`http://localhost:8001/api/matches/${selectedMatch.match_id}`)
+                const response = await fetch(`/api/matches/${selectedMatch.match_id}`)
                 if (!response.ok) throw new Error('Failed to fetch match details')
                 const data = await response.json()
                 setSelectedMatch(data.match)
