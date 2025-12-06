@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PlayerColumn } from './player-column'
 
 interface Player {
@@ -26,6 +26,13 @@ interface Match {
     confirmedPlayerIds: string[]
 }
 
+interface OutboxMessage {
+    id: string
+    to_number: string
+    body: string
+    created_at: string
+}
+
 export default function SMSSimulatorPage() {
     const [players, setPlayers] = useState<Player[]>([])
     const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([])
@@ -34,11 +41,61 @@ export default function SMSSimulatorPage() {
     const [playerMatches, setPlayerMatches] = useState<Record<string, number[]>>({}) // player_id -> match numbers
     const [loading, setLoading] = useState(false)
     const [nextMatchNumber, setNextMatchNumber] = useState(1)
+    const [testMode, setTestMode] = useState(true) // Default to test mode
 
     // Fetch players on mount
     useEffect(() => {
         fetchPlayers()
     }, [])
+
+    // Poll for outbox messages when in test mode
+    useEffect(() => {
+        if (!testMode || selectedPlayers.length === 0) return
+
+        const pollOutbox = async () => {
+            try {
+                const response = await fetch('/api/sms-outbox')
+                if (response.ok) {
+                    const data = await response.json()
+                    const messages: OutboxMessage[] = data.messages || []
+
+                    // Group messages by phone number and add to conversations
+                    for (const msg of messages) {
+                        const player = selectedPlayers.find(p => p.phone_number === msg.to_number)
+                        if (player) {
+                            const newMessage: Message = {
+                                id: msg.id,
+                                from: 'system',
+                                text: msg.body,
+                                timestamp: new Date(msg.created_at)
+                            }
+
+                            setConversations(prev => {
+                                const existing = prev[player.player_id] || []
+                                // Avoid duplicates
+                                if (existing.some(m => m.id === msg.id)) return prev
+                                return {
+                                    ...prev,
+                                    [player.player_id]: [...existing, newMessage]
+                                }
+                            })
+
+                            // Mark as read
+                            await fetch(`/api/sms-outbox/${msg.id}/read`, { method: 'POST' })
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling outbox:', error)
+            }
+        }
+
+        // Poll every 2 seconds
+        const interval = setInterval(pollOutbox, 2000)
+        pollOutbox() // Initial poll
+
+        return () => clearInterval(interval)
+    }, [testMode, selectedPlayers])
 
     const fetchPlayers = async () => {
         try {
@@ -173,7 +230,10 @@ Reply YES to join or NO to decline`
         }
     }
 
-    const handlePlayerMessage = (playerId: string, messageText: string) => {
+    const handlePlayerMessage = async (playerId: string, messageText: string) => {
+        const player = selectedPlayers.find(p => p.player_id === playerId)
+        if (!player) return
+
         const message: Message = {
             id: Date.now().toString(),
             from: 'player',
@@ -181,12 +241,29 @@ Reply YES to join or NO to decline`
             timestamp: new Date()
         }
 
-        setConversations({
-            ...conversations,
-            [playerId]: [...(conversations[playerId] || []), message]
-        })
+        setConversations(prev => ({
+            ...prev,
+            [playerId]: [...(prev[playerId] || []), message]
+        }))
 
-        // Simulate system response
+        // Test mode: POST to backend, response will come via outbox polling
+        if (testMode) {
+            try {
+                await fetch('/api/sms-inbox', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        from_number: player.phone_number,
+                        body: messageText
+                    })
+                })
+            } catch (error) {
+                console.error('Error sending to inbox:', error)
+            }
+            return
+        }
+
+        // Local simulation mode (fallback)
         setTimeout(() => {
             let responseText = ''
             const upperMessage = messageText.toUpperCase().trim()
@@ -505,13 +582,33 @@ Example: MAYBE 1`
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">SMS Testing Simulator</h1>
+                    <div className="flex items-center gap-3 mb-2">
+                        <h1 className="text-2xl font-bold text-gray-900">SMS Testing Simulator</h1>
+                        {testMode && (
+                            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                                🔗 Backend Connected
+                            </span>
+                        )}
+                    </div>
                     <p className="text-gray-600">Test SMS match flow with simulated player responses</p>
                 </div>
 
                 {/* Controls */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
                     <div className="flex flex-wrap items-center gap-4">
+                        {/* Test Mode Toggle */}
+                        <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
+                            <label className="text-sm font-medium text-gray-700">Mode:</label>
+                            <button
+                                onClick={() => setTestMode(!testMode)}
+                                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${testMode
+                                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                            >
+                                {testMode ? '🔗 Test Mode (Backend)' : '💻 Local Mode'}
+                            </button>
+                        </div>
                         <div className="flex items-center gap-2">
                             <label className="text-sm font-medium text-gray-700">Add Player:</label>
                             <select

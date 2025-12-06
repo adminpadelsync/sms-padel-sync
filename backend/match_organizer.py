@@ -131,7 +131,46 @@ def initiate_match_outreach(
     if invites:
         supabase.table("match_invites").insert(invites).execute()
         
-    print(f"Would send SMS to {len(player_ids)} players for match {match_id}")
+    # 3. Fetch player details to get phone numbers for sending SMS
+    if player_ids:
+        # We need to fetch the players to get their phone numbers
+        # Supabase client doesn't support 'in' with a list easily in all versions, 
+        # but we can try .in_("player_id", player_ids) or loop if needed.
+        # Assuming .in_() works as per Supabase-py docs or using a loop for safety.
+        # Let's try to fetch all at once.
+        players_result = supabase.table("players").select("player_id, phone_number, name").in_("player_id", player_ids).execute()
+        players_to_notify = players_result.data
+        
+        from twilio_client import send_sms
+        
+        # Format date for SMS
+        try:
+            dt = datetime.fromisoformat(scheduled_time)
+            formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
+        except:
+            formatted_time = scheduled_time
+            
+        success_count = 0
+        for p in players_to_notify:
+            phone = p.get('phone_number')
+            name = p.get('name')
+            if phone:
+                # Construct message
+                # TODO: Use a template or configurable message
+                body = (
+                    f"🎾 Padel Match Invite! \n"
+                    f"{formatted_time}\n"
+                    f"Reply YES to join, NO to decline."
+                )
+                
+                if send_sms(phone, body):
+                    success_count += 1
+                    print(f"Sent invite to {name} ({phone})")
+                else:
+                    print(f"Failed to send invite to {name} ({phone})")
+        
+        print(f"Sent SMS to {success_count}/{len(players_to_notify)} players for match {match_id}")
+
     print(f"Match created with {len(initial_player_ids)} initial players already committed")
     
     return match

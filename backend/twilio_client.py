@@ -8,6 +8,7 @@ load_dotenv()
 account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
 auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
 from_number = os.environ.get("TWILIO_PHONE_NUMBER")
+test_mode = os.environ.get("SMS_TEST_MODE", "false").lower() == "true"
 
 def get_twilio_client():
     if not account_sid or not auth_token:
@@ -16,6 +17,21 @@ def get_twilio_client():
     return Client(account_sid, auth_token)
 
 def send_sms(to_number: str, body: str) -> bool:
+    # Test mode: store in outbox instead of sending
+    if test_mode:
+        try:
+            from database import supabase
+            supabase.table("sms_outbox").insert({
+                "to_number": to_number,
+                "body": body
+            }).execute()
+            print(f"[TEST MODE] Stored SMS to {to_number}: {body[:50]}...")
+            return True
+        except Exception as e:
+            print(f"[TEST MODE] Error storing SMS: {e}")
+            return False
+    
+    # Production mode: send via Twilio
     client = get_twilio_client()
     if not client:
         return False
@@ -33,3 +49,4 @@ def send_sms(to_number: str, body: str) -> bool:
     except Exception as e:
         print(f"Error sending SMS: {e}")
         return False
+

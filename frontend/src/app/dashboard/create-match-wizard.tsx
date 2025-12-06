@@ -47,11 +47,9 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
         if (isOpen && initialSelectedPlayers.length > 0) {
             // If we have initial players from the table selection, treat them as the invite list
             setSelectedPlayers(initialSelectedPlayers.map(p => p.player_id))
-            // Also set them as initial_player_ids so they are treated as "Starting Players" (confirmed)
-            setConfig(prev => ({
-                ...prev,
-                initial_player_ids: initialSelectedPlayers.map(p => p.player_id)
-            }))
+            // We DO NOT set them as initial_player_ids anymore, they are just invitees
+            // unless the user explicitly moves them (which we don't strictly support moving back to initial yet, 
+            // but the requirement is they are invites).
         } else {
             setSelectedPlayers([])
         }

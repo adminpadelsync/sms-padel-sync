@@ -61,3 +61,41 @@ async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
     """
     handle_incoming_sms(From, Body)
     return {"status": "success"}
+
+# --- SMS Test Mode Endpoints ---
+from database import supabase
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+class InboxMessage(BaseModel):
+    from_number: str
+    body: str
+
+@app.get("/api/sms-outbox")
+async def get_sms_outbox(phone_number: Optional[str] = None):
+    """
+    Get pending outbound SMS messages (test mode only).
+    Optionally filter by phone_number.
+    """
+    query = supabase.table("sms_outbox").select("*").is_("read_at", "null").order("created_at", desc=False)
+    if phone_number:
+        query = query.eq("to_number", phone_number)
+    result = query.execute()
+    return {"messages": result.data}
+
+@app.post("/api/sms-outbox/{message_id}/read")
+async def mark_message_read(message_id: str):
+    """Mark a message as read."""
+    supabase.table("sms_outbox").update({"read_at": datetime.now().isoformat()}).eq("id", message_id).execute()
+    return {"status": "ok"}
+
+@app.post("/api/sms-inbox")
+async def post_sms_inbox(message: InboxMessage):
+    """
+    Simulate an incoming SMS (test mode).
+    Calls the same handler as the Twilio webhook.
+    """
+    handle_incoming_sms(message.from_number, message.body)
+    return {"status": "success"}
+
