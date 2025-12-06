@@ -24,7 +24,7 @@ export default function Home() {
         <div className="bg-card p-8 rounded-xl border shadow-sm max-w-md w-full mb-12">
           <h3 className="text-lg font-semibold mb-4">Join the List</h3>
           <p className="text-2xl font-mono font-bold text-primary mb-2">
-            Text START to (855) 123-4567
+            Text START to (500) 555-0006
           </p>
           <p className="text-sm text-muted-foreground">
             Msg & data rates may apply. Msg freq varies. <br />
