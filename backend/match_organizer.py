@@ -153,15 +153,39 @@ def initiate_match_outreach(
         success_count = 0
         for p in players_to_notify:
             phone = p.get('phone_number')
+            player_id = p.get('player_id')
             name = p.get('name')
             if phone:
-                # Construct message
-                # TODO: Use a template or configurable message
+                # Check for other pending invites for this player (excluding the one we just created)
+                other_invites_res = supabase.table("match_invites").select("match_id").eq("player_id", player_id).eq("status", "sent").neq("match_id", match_id).order("sent_at", desc=True).execute()
+                other_invites = other_invites_res.data if other_invites_res.data else []
+                
+                # Construct message with new invite as primary
                 body = (
-                    f"🎾 Padel Match Invite! \n"
-                    f"{formatted_time}\n"
+                    f"🎾 NEW MATCH INVITE!\n"
+                    f"{formatted_time}\n\n"
                     f"Reply YES to join, NO to decline."
                 )
+                
+                # Add other pending invites if any
+                if other_invites:
+                    # Get match details for other invites
+                    other_match_ids = [inv["match_id"] for inv in other_invites]
+                    other_matches_res = supabase.table("matches").select("match_id, scheduled_time, team_1_players, team_2_players").in_("match_id", other_match_ids).execute()
+                    other_matches = {m["match_id"]: m for m in other_matches_res.data} if other_matches_res.data else {}
+                    
+                    body += f"\n\nYou also have {len(other_invites)} other pending invite(s):\n"
+                    for idx, inv in enumerate(other_invites, 2):  # Start at 2 since new invite is implicitly #1
+                        m = other_matches.get(inv["match_id"])
+                        if m:
+                            try:
+                                other_dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                                other_time = other_dt.strftime("%a, %b %d at %I:%M %p")
+                            except:
+                                other_time = m['scheduled_time']
+                            count = len(m.get("team_1_players") or []) + len(m.get("team_2_players") or [])
+                            body += f"{idx}. {other_time} ({count}/4)\n"
+                    body += "\nReply 2Y/3Y to join, 2N/3N to decline."
                 
                 if send_sms(phone, body):
                     success_count += 1
