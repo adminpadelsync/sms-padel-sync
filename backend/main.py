@@ -30,7 +30,12 @@ class Settings(BaseSettings):
         extra = "ignore" # Allow extra fields if any
 
 settings = Settings()
-app = FastAPI()
+
+# For Vercel, requests come in at /api/* so we need to handle that
+import os
+is_vercel = os.environ.get('VERCEL', False)
+
+app = FastAPI(root_path="/api" if is_vercel else "")
 
 # Configure CORS
 app.add_middleware(
@@ -41,7 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_routes.router, prefix="/api")
+# Include routes - remove /api prefix when on Vercel since /api is already in the path
+app.include_router(api_routes.router, prefix="" if is_vercel else "/api")
 
 @app.get("/")
 async def root():
@@ -72,7 +78,10 @@ class InboxMessage(BaseModel):
     from_number: str
     body: str
 
-@app.get("/api/sms-outbox")
+# SMS test mode routes - path depends on environment
+sms_prefix = "" if os.environ.get('VERCEL', False) else "/api"
+
+@app.get(f"{sms_prefix}/sms-outbox")
 async def get_sms_outbox(phone_number: Optional[str] = None):
     """
     Get pending outbound SMS messages (test mode only).
@@ -84,13 +93,13 @@ async def get_sms_outbox(phone_number: Optional[str] = None):
     result = query.execute()
     return {"messages": result.data}
 
-@app.post("/api/sms-outbox/{message_id}/read")
+@app.post(f"{sms_prefix}/sms-outbox/{{message_id}}/read")
 async def mark_message_read(message_id: str):
     """Mark a message as read."""
     supabase.table("sms_outbox").update({"read_at": datetime.now().isoformat()}).eq("id", message_id).execute()
     return {"status": "ok"}
 
-@app.post("/api/sms-inbox")
+@app.post(f"{sms_prefix}/sms-inbox")
 async def post_sms_inbox(message: InboxMessage):
     """
     Simulate an incoming SMS (test mode).
