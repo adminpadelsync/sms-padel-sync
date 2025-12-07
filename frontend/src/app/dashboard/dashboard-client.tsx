@@ -128,6 +128,9 @@ export function DashboardClient({
         )
     }
 
+    // Sort by name (alphabetically)
+    filteredPlayers = filteredPlayers.sort((a, b) => a.name.localeCompare(b.name))
+
     // Reset page when filters change
     // Reset page when filters change
     useEffect(() => {

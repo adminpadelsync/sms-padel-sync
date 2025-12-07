@@ -123,50 +123,129 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
     elif match["status"] == "pending":
         # Existing YES/NO Logic
         if cmd == "yes":
-            # Accept
-            if match["status"] != "pending":
-                send_sms(from_number, msg.MSG_MATCH_ALREADY_FULL)
-                return
-            
-            # Count current players
+            # Count current players BEFORE adding
             current_players = len(match["team_1_players"]) + len(match["team_2_players"])
+            
+            # Check if match is already full
             if current_players >= 4:
-                send_sms(from_number, msg.MSG_MATCH_FULL)
+                # Mark invite as expired so we don't keep picking it up
+                supabase.table("match_invites").update({
+                    "status": "expired",
+                    "responded_at": datetime.utcnow().isoformat()
+                }).eq("invite_id", invite["invite_id"]).execute()
+                
+                send_sms(from_number, 
+                    "Sorry, this match is already full! 🏸\n\n"
+                    "Text PLAY to request a new match, or reply MATCHES to see your invites."
+                )
                 return
             
-            # 2. Update Invite
-            supabase.table("match_invites").update({"status": "accepted", "responded_at": datetime.utcnow().isoformat()}).eq("invite_id", invite["invite_id"]).execute()
+            # 1. Update Invite
+            supabase.table("match_invites").update({
+                "status": "accepted", 
+                "responded_at": datetime.utcnow().isoformat()
+            }).eq("invite_id", invite["invite_id"]).execute()
             
-            # 3. Add to Match
-            # Simple logic: Fill Team 1, then Team 2
+            # 2. Add to Match (Fill Team 1, then Team 2)
             if len(match["team_1_players"]) < 2:
                 new_team_1 = match["team_1_players"] + [player["player_id"]]
                 supabase.table("matches").update({"team_1_players": new_team_1}).eq("match_id", match_id).execute()
             else:
                 new_team_2 = match["team_2_players"] + [player["player_id"]]
                 supabase.table("matches").update({"team_2_players": new_team_2}).eq("match_id", match_id).execute()
+            
+            # 3. Build progressive confirmation message
+            new_player_count = current_players + 1
+            spots_left = 4 - new_player_count
+            
+            if new_player_count == 1:
+                # First player
+                response_msg = "✅ You're in! You're the first player.\n\nWe'll confirm once we have 4 players."
+            elif new_player_count < 4:
+                # 2nd or 3rd player - list who's confirmed so far
+                # Fetch updated match to get current player IDs
+                updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
+                all_confirmed_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
                 
-            send_sms(from_number, msg.MSG_YOU_ARE_IN)
+                # Get player names and levels (excluding current player since we're telling THEM)
+                other_players = []
+                for pid in all_confirmed_ids:
+                    if pid != player["player_id"]:
+                        p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+                        if p_res.data:
+                            p = p_res.data[0]
+                            other_players.append(f"{p['name']} ({p['declared_skill_level']})")
+                
+                player_list = ", ".join(other_players) if other_players else "You!"
+                response_msg = (
+                    f"✅ You're in! ({new_player_count}/4 confirmed)\n\n"
+                    f"So far: {player_list}\n\n"
+                    f"We need {spots_left} more player{'s' if spots_left > 1 else ''} to confirm the match."
+                )
+            else:
+                # This is the 4th player - match is now confirmed
+                response_msg = None  # Will send the full confirmation message below
+            
+            if response_msg:
+                send_sms(from_number, response_msg)
 
             # Notify MAYBE players
-            spots_left = 4 - (current_players + 1)
             if spots_left > 0:
                 notify_maybe_players(match_id, player["name"], spots_left)
 
-            
             # 4. Check if Full (4 players)
-            # We just added one, so check if we hit 4
-            if current_players + 1 == 4:
+            if new_player_count == 4:
                 # Confirm Match!
-                supabase.table("matches").update({"status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()}).eq("match_id", match_id).execute()
+                supabase.table("matches").update({
+                    "status": "confirmed", 
+                    "confirmed_at": datetime.utcnow().isoformat()
+                }).eq("match_id", match_id).execute()
                 
-                # Notify all players
-                # Fetch updated match to get all IDs
+                # Fetch updated match for player list and time
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
                 all_player_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
                 
+                # Format the date/time nicely
+                try:
+                    dt = datetime.fromisoformat(updated_match['scheduled_time'].replace('Z', '+00:00'))
+                    formatted_time = dt.strftime("%A, %b %d at %I:%M %p")
+                except:
+                    formatted_time = updated_match['scheduled_time']
+                
+                # Get all player names for the confirmation message
+                player_names = []
+                for pid in all_player_ids:
+                    p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+                    if p_res.data:
+                        p = p_res.data[0]
+                        player_names.append(f"{p['name']} ({p['declared_skill_level']})")
+                
+                players_text = "\n".join([f"  • {name}" for name in player_names])
+                
+                # Notify all players
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
-                        send_sms(p_res.data[0]["phone_number"], msg.MSG_MATCH_CONFIRMED.format(time=updated_match['scheduled_time']))
+                        confirmation_msg = (
+                            f"🎾 MATCH CONFIRMED!\n\n"
+                            f"📅 {formatted_time}\n\n"
+                            f"👥 Players:\n{players_text}\n\n"
+                            f"See you on the court! 🏸"
+                        )
+                        send_sms(p_res.data[0]["phone_number"], confirmation_msg)
+        return
+
+    elif match["status"] == "confirmed":
+        # Match is already confirmed - handle late responses
+        if cmd == "yes":
+            # Mark this invite as expired so we don't keep picking it up
+            supabase.table("match_invites").update({
+                "status": "expired",
+                "responded_at": datetime.utcnow().isoformat()
+            }).eq("invite_id", invite["invite_id"]).execute()
+            
+            send_sms(from_number, 
+                "Sorry, this match is already full! 🏸\n\n"
+                "Text PLAY to request a new match, or reply MATCHES to see your invites."
+            )
         return

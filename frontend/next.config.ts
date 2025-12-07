@@ -34,6 +34,20 @@ const nextConfig: NextConfig = {
             ? 'http://localhost:8001/webhook/sms'
             : `${apiUrl || ''}/webhook/sms`,
       },
+      {
+        source: '/api/sms-outbox/:path*',
+        destination:
+          process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8001/api/sms-outbox/:path*'
+            : `${apiUrl || ''}/api/sms-outbox/:path*`,
+      },
+      {
+        source: '/api/sms-inbox',
+        destination:
+          process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8001/api/sms-inbox'
+            : `${apiUrl || ''}/api/sms-inbox`,
+      },
     ]
   },
 };
