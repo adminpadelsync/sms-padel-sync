@@ -274,6 +274,7 @@ def get_match_invites(match_id: str) -> list:
 def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
     """
     Send invites to additional players for an existing match.
+    Includes info about already confirmed players in the message.
     
     Args:
         match_id: The match ID
@@ -298,6 +299,15 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
     except:
         formatted_time = match['scheduled_time']
     
+    # Get already confirmed players
+    confirmed_player_ids = (match.get('team_1_players') or []) + (match.get('team_2_players') or [])
+    confirmed_players_text = ""
+    if confirmed_player_ids:
+        confirmed_result = supabase.table("players").select("name, declared_skill_level").in_("player_id", confirmed_player_ids).execute()
+        if confirmed_result.data:
+            player_list = [f"{p['name']} ({p['declared_skill_level']})" for p in confirmed_result.data]
+            confirmed_players_text = "Already in:\n" + "\n".join([f"• {name}" for name in player_list]) + "\n\n"
+    
     # Create invites
     invites = []
     for pid in player_ids:
@@ -311,6 +321,10 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
     if invites:
         supabase.table("match_invites").insert(invites).execute()
     
+    # Calculate spots left
+    spots_left = 4 - len(confirmed_player_ids)
+    spots_text = f"{spots_left} spot{'s' if spots_left != 1 else ''} left"
+    
     # Fetch player details and send SMS
     players_result = supabase.table("players").select("player_id, phone_number, name").in_("player_id", player_ids).execute()
     
@@ -321,7 +335,9 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
         if phone:
             body = (
                 f"🎾 NEW MATCH INVITE!\n"
-                f"{formatted_time}\n\n"
+                f"{formatted_time}\n"
+                f"({spots_text})\n\n"
+                f"{confirmed_players_text}"
                 f"Reply YES to join, NO to decline."
             )
             
