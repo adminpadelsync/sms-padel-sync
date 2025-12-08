@@ -6,6 +6,7 @@ from match_organizer import (
     initiate_match_outreach,
     get_match_details,
     get_match_invites,
+    send_match_invites,
     update_match,
     add_player_to_match,
     remove_player_from_match
@@ -32,6 +33,9 @@ class MatchUpdateRequest(BaseModel):
 class AddPlayerRequest(BaseModel):
     player_id: str
     team: int  # 1 or 2
+
+class SendInvitesRequest(BaseModel):
+    player_ids: List[str]
 
 @router.post("/recommendations")
 async def get_recommendations(request: RecommendationRequest):
@@ -74,6 +78,15 @@ async def get_invites(match_id: str):
     try:
         invites = get_match_invites(match_id)
         return {"invites": invites}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/matches/{match_id}/invites")
+async def send_invites(match_id: str, request: SendInvitesRequest):
+    """Send invites to additional players for an existing match."""
+    try:
+        invites = send_match_invites(match_id, request.player_ids)
+        return {"invites": invites, "message": f"Sent {len(invites)} invite(s)"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

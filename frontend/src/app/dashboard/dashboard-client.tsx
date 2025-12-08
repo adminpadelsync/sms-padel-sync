@@ -162,17 +162,9 @@ export function DashboardClient({
         return matchDate.getTime() === today.getTime() && m.status === 'completed'
     }).length
 
-    const handleMatchClick = async (matchId: string) => {
-        try {
-            const response = await fetch(`/api/matches/${matchId}`)
-            if (!response.ok) throw new Error('Failed to fetch match details')
-            const data = await response.json()
-            setSelectedMatch(data.match)
-            setMatchModalOpen(true)
-        } catch (error) {
-            console.error('Error fetching match details:', error)
-            alert('Failed to load match details')
-        }
+    const handleMatchClick = (matchId: string) => {
+        // Navigate to the match detail page
+        window.location.href = `/dashboard/matches/${matchId}`
     }
 
     const handleMatchUpdate = async () => {

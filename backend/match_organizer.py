@@ -271,6 +271,70 @@ def get_match_invites(match_id: str) -> list:
     
     return result
 
+def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
+    """
+    Send invites to additional players for an existing match.
+    
+    Args:
+        match_id: The match ID
+        player_ids: List of player IDs to invite
+        
+    Returns:
+        List of created invite dictionaries
+    """
+    from twilio_client import send_sms
+    
+    # Get match details
+    match_result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    if not match_result.data:
+        raise Exception(f"Match {match_id} not found")
+    
+    match = match_result.data[0]
+    
+    # Format date for SMS
+    try:
+        dt = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
+        formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
+    except:
+        formatted_time = match['scheduled_time']
+    
+    # Create invites
+    invites = []
+    for pid in player_ids:
+        invites.append({
+            "match_id": match_id,
+            "player_id": pid,
+            "status": "sent",
+            "sent_at": datetime.now().isoformat()
+        })
+    
+    if invites:
+        supabase.table("match_invites").insert(invites).execute()
+    
+    # Fetch player details and send SMS
+    players_result = supabase.table("players").select("player_id, phone_number, name").in_("player_id", player_ids).execute()
+    
+    success_count = 0
+    for p in players_result.data:
+        phone = p.get('phone_number')
+        name = p.get('name')
+        if phone:
+            body = (
+                f"🎾 NEW MATCH INVITE!\n"
+                f"{formatted_time}\n\n"
+                f"Reply YES to join, NO to decline."
+            )
+            
+            if send_sms(phone, body):
+                success_count += 1
+                print(f"Sent invite to {name} ({phone})")
+            else:
+                print(f"Failed to send invite to {name} ({phone})")
+    
+    print(f"Sent SMS to {success_count}/{len(player_ids)} players for match {match_id}")
+    
+    return invites
+
 def update_match(match_id: str, updates: dict) -> dict:
     """
     Update match fields.
