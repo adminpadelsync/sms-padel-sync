@@ -372,7 +372,7 @@ export default function MatchDetailPage() {
                             <h2 className="text-lg font-medium text-gray-900">
                                 Invites Sent ({invites.length})
                             </h2>
-                            {!showInvitePanel && match.status === 'pending' && (
+                            {!showInvitePanel && (match.status === 'pending' || allPlayers.length < 4) && (
                                 <button
                                     onClick={() => setShowInvitePanel(true)}
                                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
