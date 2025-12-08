@@ -151,9 +151,14 @@ export function DashboardClient({
             ? initialMatches.filter(m => m.club_id === (userClubId || clubs[0]?.club_id))
             : initialMatches
 
-    // Filter out completed matches if checkbox is checked
+    // Filter out completed/cancelled AND past matches if checkbox is checked
     if (hideCompletedMatches) {
-        filteredMatches = filteredMatches.filter(m => m.status !== 'completed' && m.status !== 'cancelled')
+        const now = new Date()
+        filteredMatches = filteredMatches.filter(m =>
+            m.status !== 'completed' &&
+            m.status !== 'cancelled' &&
+            new Date(m.scheduled_time) > now
+        )
     }
 
     // Calculate summary stats
