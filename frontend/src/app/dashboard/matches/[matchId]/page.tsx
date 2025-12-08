@@ -83,6 +83,10 @@ export default function MatchDetailPage() {
 
         if (matchId) {
             fetchData()
+
+            // Poll for updates every 5 seconds for live data
+            const interval = setInterval(fetchData, 5000)
+            return () => clearInterval(interval)
         }
     }, [matchId])
 
