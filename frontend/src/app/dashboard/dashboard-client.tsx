@@ -84,7 +84,7 @@ export function DashboardClient({
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
     const [isMatchWizardOpen, setIsMatchWizardOpen] = useState(false)
-    const [hideCompletedMatches, setHideCompletedMatches] = useState(true)
+    const [showCompletedMatches, setShowCompletedMatches] = useState(false)
 
     // After mount, check localStorage for saved club selection
     useEffect(() => {
@@ -151,8 +151,8 @@ export function DashboardClient({
             ? initialMatches.filter(m => m.club_id === (userClubId || clubs[0]?.club_id))
             : initialMatches
 
-    // Filter out completed/cancelled AND past matches if checkbox is checked
-    if (hideCompletedMatches) {
+    // Filter out completed/cancelled AND past matches unless checkbox is checked
+    if (!showCompletedMatches) {
         const now = new Date()
         filteredMatches = filteredMatches.filter(m =>
             m.status !== 'completed' &&
@@ -594,11 +594,11 @@ export function DashboardClient({
                             <label className="flex items-center gap-2 text-sm text-gray-600">
                                 <input
                                     type="checkbox"
-                                    checked={hideCompletedMatches}
-                                    onChange={(e) => setHideCompletedMatches(e.target.checked)}
+                                    checked={showCompletedMatches}
+                                    onChange={(e) => setShowCompletedMatches(e.target.checked)}
                                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 />
-                                Hide completed
+                                Show completed/past
                             </label>
                         </div>
                         <CreateMatchButton clubId={selectedClubId} />
