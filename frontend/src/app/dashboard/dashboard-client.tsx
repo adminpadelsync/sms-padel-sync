@@ -84,6 +84,7 @@ export function DashboardClient({
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
     const [isMatchWizardOpen, setIsMatchWizardOpen] = useState(false)
+    const [hideCompletedMatches, setHideCompletedMatches] = useState(true)
 
     // After mount, check localStorage for saved club selection
     useEffect(() => {
@@ -144,11 +145,16 @@ export function DashboardClient({
     const endIndex = startIndex + itemsPerPage
     const currentPlayers = filteredPlayers.slice(startIndex, endIndex)
 
-    const filteredMatches = isSuperuser && mounted
+    let filteredMatches = isSuperuser && mounted
         ? initialMatches.filter(m => m.club_id === selectedClubId)
         : isSuperuser
             ? initialMatches.filter(m => m.club_id === (userClubId || clubs[0]?.club_id))
             : initialMatches
+
+    // Filter out completed matches if checkbox is checked
+    if (hideCompletedMatches) {
+        filteredMatches = filteredMatches.filter(m => m.status !== 'completed' && m.status !== 'cancelled')
+    }
 
     // Calculate summary stats
     const activePlayers = filteredPlayers.filter(p => p.active_status).length
@@ -578,7 +584,18 @@ export function DashboardClient({
                 {/* Matches Section */}
                 <div className="bg-white shadow-sm rounded-lg border border-gray-200">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <h2 className="text-lg font-medium text-gray-900">Matches</h2>
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-lg font-medium text-gray-900">Matches</h2>
+                            <label className="flex items-center gap-2 text-sm text-gray-600">
+                                <input
+                                    type="checkbox"
+                                    checked={hideCompletedMatches}
+                                    onChange={(e) => setHideCompletedMatches(e.target.checked)}
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                />
+                                Hide completed
+                            </label>
+                        </div>
                         <CreateMatchButton clubId={selectedClubId} />
                     </div>
                     <div className="overflow-x-auto">
