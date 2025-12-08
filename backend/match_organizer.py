@@ -444,5 +444,30 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
         updates['status'] = 'pending'
         updates['confirmed_at'] = None
     
+    # Send SMS notification to the removed player
+    from twilio_client import send_sms
+    try:
+        # Get player phone number
+        player_result = supabase.table("players").select("phone_number, name").eq("player_id", player_id).execute()
+        if player_result.data:
+            player = player_result.data[0]
+            phone = player.get('phone_number')
+            
+            # Format match time for message
+            try:
+                dt = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
+                formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
+            except:
+                formatted_time = match['scheduled_time']
+            
+            if phone:
+                message = (
+                    f"📋 You've been removed from the match on {formatted_time}.\n\n"
+                    f"If you have questions, please contact the organizer."
+                )
+                send_sms(phone, message)
+                print(f"Sent removal notification to {player.get('name')} ({phone})")
+    except Exception as e:
+        print(f"[WARNING] Failed to send removal SMS: {e}")
+    
     return update_match(match_id, updates)
-
