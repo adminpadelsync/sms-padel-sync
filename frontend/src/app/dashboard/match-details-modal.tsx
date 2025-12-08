@@ -11,6 +11,16 @@ interface Player {
     gender: string
 }
 
+interface Invite {
+    invite_id: string
+    match_id: string
+    player_id: string
+    status: 'sent' | 'accepted' | 'declined' | 'expired' | 'maybe'
+    sent_at: string
+    responded_at: string | null
+    player?: Player
+}
+
 interface Match {
     match_id: string
     club_id: string
@@ -37,6 +47,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const [playerSearchTerm, setPlayerSearchTerm] = useState('')
     const [searchResults, setSearchResults] = useState<Player[]>([])
     const [loading, setLoading] = useState(false)
+    const [invites, setInvites] = useState<Invite[]>([])
 
     useEffect(() => {
         if (match) {
@@ -44,6 +55,18 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
             setStatus(match.status)
         }
     }, [match])
+
+    // Fetch invites when modal opens
+    useEffect(() => {
+        if (match && isOpen) {
+            fetch(`/api/matches/${match.match_id}/invites`)
+                .then(res => res.json())
+                .then(data => setInvites(data.invites || []))
+                .catch(err => console.error('Error fetching invites:', err))
+        } else {
+            setInvites([])
+        }
+    }, [match, isOpen])
 
     // Search for players
     useEffect(() => {
@@ -267,6 +290,46 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                             )}
                         </div>
                     </div>
+
+                    {/* Invites Sent */}
+                    {invites.length > 0 && (
+                        <div className="border-t border-gray-200 pt-4">
+                            <h3 className="text-lg font-medium text-gray-900 mb-3">Invites Sent ({invites.length})</h3>
+                            <div className="space-y-2">
+                                {invites.map((invite) => {
+                                    const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+                                        accepted: { bg: 'bg-green-100', text: 'text-green-800', label: 'Accepted' },
+                                        declined: { bg: 'bg-red-100', text: 'text-red-800', label: 'Declined' },
+                                        maybe: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Maybe' },
+                                        sent: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'No Response' },
+                                        expired: { bg: 'bg-gray-200', text: 'text-gray-500', label: 'Expired' }
+                                    }
+                                    const config = statusConfig[invite.status] || statusConfig.sent
+
+                                    return (
+                                        <div key={invite.invite_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <p className="font-medium text-gray-900">
+                                                    {invite.player?.name || 'Unknown Player'}
+                                                </p>
+                                                <p className="text-sm text-gray-500">
+                                                    Level {invite.player?.declared_skill_level || '?'}
+                                                    {invite.responded_at && (
+                                                        <span className="ml-2">
+                                                            • {new Date(invite.responded_at).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${config.bg} ${config.text}`}>
+                                                {config.label}
+                                            </span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Player Search */}
                     {showPlayerSearch && isEditing && (

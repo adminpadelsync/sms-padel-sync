@@ -5,6 +5,7 @@ from match_organizer import (
     get_player_recommendations, 
     initiate_match_outreach,
     get_match_details,
+    get_match_invites,
     update_match,
     add_player_to_match,
     remove_player_from_match
@@ -66,6 +67,15 @@ async def get_match(match_id: str):
         return {"match": match}
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@router.get("/matches/{match_id}/invites")
+async def get_invites(match_id: str):
+    """Get all invites for a match with player details and status."""
+    try:
+        invites = get_match_invites(match_id)
+        return {"invites": invites}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/matches/{match_id}")
 async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):

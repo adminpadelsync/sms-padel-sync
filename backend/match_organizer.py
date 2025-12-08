@@ -238,6 +238,39 @@ def get_match_details(match_id: str) -> dict:
     
     return match
 
+def get_match_invites(match_id: str) -> list:
+    """
+    Get all invites for a match with player details.
+    
+    Args:
+        match_id: The match ID
+        
+    Returns:
+        List of invite dictionaries with player details
+    """
+    # Get all invites for this match
+    invites_result = supabase.table("match_invites").select("*").eq("match_id", match_id).order("sent_at").execute()
+    
+    if not invites_result.data:
+        return []
+    
+    # Get player details for each invite
+    result = []
+    for invite in invites_result.data:
+        player_result = supabase.table("players").select(
+            "player_id, name, declared_skill_level, phone_number"
+        ).eq("player_id", invite["player_id"]).execute()
+        
+        if player_result.data:
+            result.append({
+                **invite,
+                "player": player_result.data[0]
+            })
+        else:
+            result.append(invite)
+    
+    return result
+
 def update_match(match_id: str, updates: dict) -> dict:
     """
     Update match fields.
