@@ -37,7 +37,8 @@ const statusConfig: Record<string, { bg: string; text: string; label: string; ic
     declined: { bg: 'bg-red-100', text: 'text-red-800', label: 'Declined', icon: '❌' },
     maybe: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Maybe', icon: '🤔' },
     sent: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'No Response', icon: '⏳' },
-    expired: { bg: 'bg-gray-200', text: 'text-gray-500', label: 'Expired', icon: '⌛' }
+    expired: { bg: 'bg-gray-200', text: 'text-gray-500', label: 'Expired', icon: '⌛' },
+    removed: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Removed', icon: '🚫' }
 }
 
 export default function MatchDetailPage() {

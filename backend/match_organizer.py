@@ -444,6 +444,12 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
         updates['status'] = 'pending'
         updates['confirmed_at'] = None
     
+    # Update the player's invite status to 'removed'
+    supabase.table("match_invites").update({
+        "status": "removed",
+        "responded_at": datetime.now().isoformat()
+    }).eq("match_id", match_id).eq("player_id", player_id).execute()
+    
     # Send SMS notification to the removed player
     from twilio_client import send_sms
     try:
