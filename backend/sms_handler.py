@@ -178,9 +178,19 @@ def handle_incoming_sms(from_number: str, body: str):
                         except:
                             time_str = m['scheduled_time']
                         # Count confirmed players
-                        count = len(m.get("team_1_players") or []) + len(m.get("team_2_players") or [])
+                        all_pids = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
+                        count = len(all_pids)
                         response += f"{i}. {time_str} ({count}/4)\n"
-                    response += "\nReply 1Y to join, 1N to decline, etc."
+                        
+                        # Show who's already in
+                        if all_pids:
+                            for pid in all_pids:
+                                p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+                                if p_res.data:
+                                    p = p_res.data[0]
+                                    response += f"  - {p['name']} ({p['declared_skill_level']})\n"
+                        response += "\n"
+                    response += "Reply 1Y to join, 1N to decline, etc."
                 
                 if not confirmed and not pending_matches:
                     response = "📅 No active matches. Text PLAY to request a match!"
