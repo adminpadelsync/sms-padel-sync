@@ -209,6 +209,28 @@ export default function MatchDetailPage() {
         setSelectedToInvite(newSet)
     }
 
+    const handleRemovePlayer = async (playerId: string) => {
+        if (!match || !confirm('Remove this player from the match?')) return
+        setActionLoading(true)
+        try {
+            const res = await fetch(`/api/matches/${matchId}/players/${playerId}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                // Refresh match data
+                const matchRes = await fetch(`/api/matches/${matchId}`)
+                if (matchRes.ok) {
+                    const matchData = await matchRes.json()
+                    setMatch(matchData.match)
+                }
+            }
+        } catch (error) {
+            console.error('Error removing player:', error)
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -266,9 +288,9 @@ export default function MatchDetailPage() {
                             </h1>
                             <div className="mt-2 flex items-center gap-3">
                                 <span className={`px-3 py-1 text-sm font-semibold rounded-full ${match.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                        match.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                            match.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                                'bg-gray-100 text-gray-800'
+                                    match.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                        match.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                            'bg-gray-100 text-gray-800'
                                     }`}>
                                     {match.status.charAt(0).toUpperCase() + match.status.slice(1)}
                                 </span>
@@ -322,6 +344,13 @@ export default function MatchDetailPage() {
                                                     <p className="text-sm text-gray-500">Level {player.declared_skill_level}</p>
                                                 </div>
                                             </div>
+                                            <button
+                                                onClick={() => handleRemovePlayer(player.player_id)}
+                                                disabled={actionLoading}
+                                                className="text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                                            >
+                                                Remove
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
@@ -343,7 +372,7 @@ export default function MatchDetailPage() {
                             <h2 className="text-lg font-medium text-gray-900">
                                 Invites Sent ({invites.length})
                             </h2>
-                            {!showInvitePanel && (
+                            {!showInvitePanel && match.status === 'pending' && (
                                 <button
                                     onClick={() => setShowInvitePanel(true)}
                                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
@@ -387,8 +416,8 @@ export default function MatchDetailPage() {
                                                     key={player.player_id}
                                                     onClick={() => togglePlayerSelection(player.player_id)}
                                                     className={`p-2 rounded cursor-pointer transition-colors ${selectedToInvite.has(player.player_id)
-                                                            ? 'bg-indigo-100 border border-indigo-300'
-                                                            : 'bg-white hover:bg-gray-50 border border-gray-200'
+                                                        ? 'bg-indigo-100 border border-indigo-300'
+                                                        : 'bg-white hover:bg-gray-50 border border-gray-200'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-2">
