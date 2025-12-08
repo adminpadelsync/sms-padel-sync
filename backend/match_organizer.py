@@ -391,6 +391,7 @@ def add_player_to_match(match_id: str, player_id: str, team: int) -> dict:
 def remove_player_from_match(match_id: str, player_id: str) -> dict:
     """
     Remove a player from a match.
+    If match was confirmed and removing drops below 4 players, revert to pending.
     
     Args:
         match_id: The match ID
@@ -405,18 +406,27 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
         raise Exception(f"Match {match_id} not found")
     
     match = match_result.data[0]
+    team_1_players = match.get('team_1_players', [])
+    team_2_players = match.get('team_2_players', [])
+    updates = {}
     
     # Remove from team 1 if present
-    team_1_players = match.get('team_1_players', [])
     if player_id in team_1_players:
         team_1_players.remove(player_id)
-        return update_match(match_id, {'team_1_players': team_1_players})
-    
+        updates['team_1_players'] = team_1_players
     # Remove from team 2 if present
-    team_2_players = match.get('team_2_players', [])
-    if player_id in team_2_players:
+    elif player_id in team_2_players:
         team_2_players.remove(player_id)
-        return update_match(match_id, {'team_2_players': team_2_players})
+        updates['team_2_players'] = team_2_players
+    else:
+        # Player not found in either team
+        raise Exception(f"Player {player_id} not found in match {match_id}")
     
-    # Player not found in either team
-    raise Exception(f"Player {player_id} not found in match {match_id}")
+    # Check if we need to revert status to pending
+    new_total = len(team_1_players) + len(team_2_players)
+    if match.get('status') == 'confirmed' and new_total < 4:
+        updates['status'] = 'pending'
+        updates['confirmed_at'] = None
+    
+    return update_match(match_id, updates)
+
