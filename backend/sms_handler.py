@@ -115,21 +115,35 @@ def handle_incoming_sms(from_number: str, body: str):
                 matches_by_id = {m["match_id"]: m for m in matches_data}
                 print(f"[DEBUG] Found {len(matches_data) if matches_data else 0} matches")
                 
-                # Only show CONFIRMED matches where player is actually in the teams
+                # Get current time for filtering past matches
+                now = datetime.utcnow()
+                
+                def is_future_match(match):
+                    """Check if match scheduled_time is in the future."""
+                    try:
+                        scheduled = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
+                        # Remove timezone info for comparison
+                        scheduled = scheduled.replace(tzinfo=None)
+                        return scheduled > now
+                    except:
+                        return True  # If can't parse, include it
+                
+                # Only show CONFIRMED matches where player is actually in the teams AND match is in the future
                 confirmed = []
                 for m in matches_data:
-                    if m["status"] == "confirmed":
+                    if m["status"] == "confirmed" and is_future_match(m):
                         all_players = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
                         if player_id in all_players:
                             confirmed.append(m)
                 
                 # Get pending invites in order (newest first = index 0 = number 1)
                 # Include BOTH 'sent' AND 'maybe' so players can see and respond to matches they said maybe to
+                # Filter out past matches
                 pending_invites = [inv for inv in all_invites if inv["status"] in ["sent", "maybe"]]
                 pending_matches = []
                 for inv in pending_invites:
                     m = matches_by_id.get(inv["match_id"])
-                    if m and m["status"] == "pending":
+                    if m and m["status"] == "pending" and is_future_match(m):
                         pending_matches.append(m)
                 
                 print(f"[DEBUG] Confirmed: {len(confirmed)}, Pending: {len(pending_matches)}")
