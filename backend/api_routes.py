@@ -50,6 +50,23 @@ async def get_recommendations(request: RecommendationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/players/search")
+async def search_players(club_id: str, q: str = ""):
+    """Search for players by name in a club."""
+    from database import supabase
+    try:
+        query = supabase.table("players").select(
+            "player_id, name, phone_number, declared_skill_level, gender"
+        ).eq("club_id", club_id).eq("active_status", True)
+        
+        if q:
+            query = query.ilike("name", f"%{q}%")
+        
+        result = query.order("name").limit(20).execute()
+        return {"players": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/outreach")
 async def create_outreach(request: OutreachRequest):
     try:

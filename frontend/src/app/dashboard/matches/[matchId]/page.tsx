@@ -88,27 +88,18 @@ export default function MatchDetailPage() {
 
     // Search for players to invite
     useEffect(() => {
-        async function searchPlayers() {
+        async function searchPlayersApi() {
             if (searchTerm.length < 2 || !match) {
                 setSearchResults([])
                 return
             }
 
             try {
-                const res = await fetch(`/api/recommendations`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        club_id: match.club_id,
-                        target_level: 3.5, // Default, will search broadly
-                        gender_preference: 'mixed',
-                        exclude_player_ids: []
-                    })
-                })
+                const res = await fetch(`/api/players/search?club_id=${match.club_id}&q=${encodeURIComponent(searchTerm)}`)
 
                 if (res.ok) {
                     const data = await res.json()
-                    // Filter by search term and exclude already invited players
+                    // Exclude already invited players and confirmed players
                     const alreadyInvitedIds = new Set(invites.map(i => i.player_id))
                     const allPlayerIds = new Set([
                         ...(match.team_1_players || []),
@@ -116,7 +107,6 @@ export default function MatchDetailPage() {
                     ])
 
                     const filtered = data.players.filter((p: Player) =>
-                        p.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
                         !alreadyInvitedIds.has(p.player_id) &&
                         !allPlayerIds.has(p.player_id)
                     )
@@ -127,7 +117,7 @@ export default function MatchDetailPage() {
             }
         }
 
-        const debounce = setTimeout(searchPlayers, 300)
+        const debounce = setTimeout(searchPlayersApi, 300)
         return () => clearTimeout(debounce)
     }, [searchTerm, match, invites])
 

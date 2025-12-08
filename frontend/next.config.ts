@@ -48,6 +48,13 @@ const nextConfig: NextConfig = {
             ? 'http://localhost:8001/api/sms-inbox'
             : `${apiUrl || ''}/api/sms-inbox`,
       },
+      {
+        source: '/api/players/:path*',
+        destination:
+          process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8001/api/players/:path*'
+            : `${apiUrl || ''}/api/players/:path*`,
+      },
     ]
   },
 };
