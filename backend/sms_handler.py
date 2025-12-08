@@ -23,8 +23,9 @@ def handle_incoming_sms(from_number: str, body: str):
         
         # Check for Invite Responses
         # Patterns: YES, NO, MAYBE, 1, 1Y, 1N, 2Y, 2N, A, B, AB (voting)
-        # Get ALL sent invites for this player, ordered by sent_at DESC (newest first)
-        all_invites_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).eq("status", "sent").order("sent_at", desc=True).execute()
+        # Get ALL active invites for this player (both 'sent' AND 'maybe'), ordered by sent_at DESC (newest first)
+        # IMPORTANT: Include 'maybe' so players who said MAYBE can later say YES
+        all_invites_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute()
         all_sent_invites = all_invites_res.data if all_invites_res.data else []
         
         if all_sent_invites:
@@ -123,7 +124,8 @@ def handle_incoming_sms(from_number: str, body: str):
                             confirmed.append(m)
                 
                 # Get pending invites in order (newest first = index 0 = number 1)
-                pending_invites = [inv for inv in all_invites if inv["status"] == "sent"]
+                # Include BOTH 'sent' AND 'maybe' so players can see and respond to matches they said maybe to
+                pending_invites = [inv for inv in all_invites if inv["status"] in ["sent", "maybe"]]
                 pending_matches = []
                 for inv in pending_invites:
                     m = matches_by_id.get(inv["match_id"])
