@@ -1,5 +1,6 @@
 """Handler for feedback SMS responses."""
 
+from typing import Optional, List
 from database import supabase
 from twilio_client import send_sms
 import sms_constants as msg
@@ -63,7 +64,7 @@ def handle_feedback_response(from_number: str, body: str, player: dict, state_da
     send_sms(from_number, msg.MSG_FEEDBACK_THANKS)
 
 
-def parse_ratings(body: str) -> list | None:
+def parse_ratings(body: str) -> Optional[List[int]]:
     """Parse space-separated ratings from message body."""
     # Match 3 numbers separated by spaces or commas
     parts = re.split(r'[\s,]+', body.strip())
