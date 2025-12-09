@@ -45,5 +45,19 @@ STATE_WAITING_AVAILABILITY = "WAITING_AVAILABILITY"
 STATE_MATCH_REQUEST_DATE = "MATCH_REQUEST_DATE"
 STATE_MATCH_REQUEST_DURATION = "MATCH_REQUEST_DURATION"
 STATE_COMPLETED = "COMPLETED"
+STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"
 
+# Feedback Collection
+MSG_FEEDBACK_REQUEST = """On a scale of 1-10, how likely are you to play in a match again with:
+
+1. {player1_name}
+2. {player2_name}
+3. {player3_name}
+
+Reply with 3 numbers separated by spaces (e.g., "8 7 9")
+Reply SKIP to skip feedback."""
+
+MSG_FEEDBACK_THANKS = "Thanks for your feedback! This helps us create better matches for you."
+MSG_FEEDBACK_INVALID = "Please reply with 3 numbers (1-10) separated by spaces, e.g., '8 7 9'"
+MSG_FEEDBACK_SKIPPED = "No problem! We'll ask again next time."
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PlayerColumn } from './player-column'
+import { ClubSettingsPanel } from './club-settings-panel'
 
 interface Player {
     player_id: string
@@ -33,6 +34,16 @@ interface OutboxMessage {
     created_at: string
 }
 
+interface ConfirmedMatch {
+    match_id: string
+    scheduled_time: string
+    status: string
+    team_1_players: string[]
+    team_2_players: string[]
+    feedback_collected: boolean
+    player_names: string[]
+}
+
 export default function SMSSimulatorPage() {
     const [players, setPlayers] = useState<Player[]>([])
     const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([])
@@ -42,10 +53,14 @@ export default function SMSSimulatorPage() {
     const [loading, setLoading] = useState(false)
     const [nextMatchNumber, setNextMatchNumber] = useState(1)
     const [testMode, setTestMode] = useState(true) // Default to test mode
+    const [confirmedMatches, setConfirmedMatches] = useState<ConfirmedMatch[]>([])
+    const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null)
+    const [currentClubId, setCurrentClubId] = useState<string | null>(null)
 
-    // Fetch players on mount
+    // Fetch players and confirmed matches on mount
     useEffect(() => {
         fetchPlayers()
+        fetchConfirmedMatches()
     }, [])
 
     // Poll for outbox messages when in test mode
@@ -108,6 +123,50 @@ export default function SMSSimulatorPage() {
             console.error('Error fetching players:', error)
         }
     }
+
+    const fetchConfirmedMatches = async () => {
+        try {
+            // Get club_id from first player or use a default
+            const clubResponse = await fetch('/api/clubs')
+            if (!clubResponse.ok) return
+            const clubData = await clubResponse.json()
+            const clubId = clubData.clubs?.[0]?.club_id
+            if (!clubId) return
+
+            setCurrentClubId(clubId) // Store for settings panel
+
+            const response = await fetch(`/api/matches/confirmed?club_id=${clubId}`)
+            if (response.ok) {
+                const data = await response.json()
+                setConfirmedMatches(data.matches || [])
+            }
+        } catch (error) {
+            console.error('Error fetching confirmed matches:', error)
+        }
+    }
+
+    const handleSendFeedback = async (matchId: string) => {
+        setFeedbackLoading(matchId)
+        try {
+            const response = await fetch(`/api/matches/${matchId}/feedback`, {
+                method: 'POST'
+            })
+            if (response.ok) {
+                const data = await response.json()
+                alert(`Feedback SMS sent to ${data.sms_sent} players!`)
+                fetchConfirmedMatches() // Refresh list
+            } else {
+                const error = await response.json()
+                alert(`Error: ${error.detail || 'Failed to send feedback'}`)
+            }
+        } catch (error) {
+            console.error('Error sending feedback:', error)
+            alert('Failed to send feedback SMS')
+        } finally {
+            setFeedbackLoading(null)
+        }
+    }
+
 
     const handleSelectPlayer = (playerId: string) => {
         const player = players.find(p => p.player_id === playerId)
@@ -602,8 +661,8 @@ Example: MAYBE 1`
                             <button
                                 onClick={() => setTestMode(!testMode)}
                                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${testMode
-                                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                             >
                                 {testMode ? '🔗 Test Mode (Backend)' : '💻 Local Mode'}
@@ -647,6 +706,64 @@ Example: MAYBE 1`
                         </button>
                     </div>
                 </div>
+
+                {/* Confirmed Matches Panel */}
+                {testMode && (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-semibold text-gray-900">📋 Confirmed Matches (for Feedback Testing)</h2>
+                            <button
+                                onClick={fetchConfirmedMatches}
+                                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                            >
+                                🔄 Refresh
+                            </button>
+                        </div>
+                        {confirmedMatches.length === 0 ? (
+                            <p className="text-gray-500 text-sm">No confirmed matches found. Create a match in the dashboard first.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {confirmedMatches.map(match => {
+                                    const date = new Date(match.scheduled_time)
+                                    const dateStr = date.toLocaleDateString('en-US', {
+                                        weekday: 'short',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit'
+                                    })
+                                    return (
+                                        <div key={match.match_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <div className="font-medium text-gray-900">{dateStr}</div>
+                                                <div className="text-sm text-gray-600">
+                                                    {match.player_names?.join(', ') || 'No players'}
+                                                </div>
+                                                {match.feedback_collected && (
+                                                    <span className="text-xs text-green-600">✓ Feedback collected</span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => handleSendFeedback(match.match_id)}
+                                                disabled={feedbackLoading === match.match_id}
+                                                className="px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+                                            >
+                                                {feedbackLoading === match.match_id ? 'Sending...' : '📨 Send Feedback SMS'}
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Club Settings Panel */}
+                {testMode && currentClubId && (
+                    <div className="mb-6">
+                        <ClubSettingsPanel clubId={currentClubId} />
+                    </div>
+                )}
 
                 {/* Player Columns */}
                 {selectedPlayers.length === 0 ? (

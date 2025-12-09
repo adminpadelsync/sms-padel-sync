@@ -37,6 +37,33 @@ class AddPlayerRequest(BaseModel):
 class SendInvitesRequest(BaseModel):
     player_ids: List[str]
 
+@router.get("/clubs")
+async def get_clubs():
+    """Get all active clubs."""
+    from database import supabase
+    try:
+        result = supabase.table("clubs").select("club_id, name, settings").eq("active", True).execute()
+        return {"clubs": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/players")
+async def get_players(club_id: str = None):
+    """Get all players, optionally filtered by club."""
+    from database import supabase
+    try:
+        query = supabase.table("players").select(
+            "player_id, name, phone_number, declared_skill_level, gender, active_status"
+        )
+        if club_id:
+            query = query.eq("club_id", club_id)
+        result = query.eq("active_status", True).order("name").execute()
+        return {"players": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/recommendations")
 async def get_recommendations(request: RecommendationRequest):
     try:
@@ -49,6 +76,7 @@ async def get_recommendations(request: RecommendationRequest):
         return {"players": players}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/players/search")
 async def search_players(club_id: str, q: str = ""):
@@ -141,5 +169,125 @@ async def remove_player(match_id: str, player_id: str):
     try:
         match = remove_player_from_match(match_id, player_id)
         return {"match": match, "message": "Player removed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cron/feedback")
+async def trigger_feedback_collection():
+    """Cron endpoint to send feedback requests for recent matches."""
+    from feedback_scheduler import run_feedback_scheduler
+    try:
+        result = run_feedback_scheduler()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/matches/{match_id}/feedback")
+async def trigger_match_feedback(match_id: str):
+    """Manually trigger feedback SMS for a specific match (for testing)."""
+    from feedback_scheduler import trigger_feedback_for_match
+    try:
+        result = trigger_feedback_for_match(match_id)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/matches/confirmed")
+async def get_confirmed_matches(club_id: str):
+    """Get all confirmed matches for a club (for feedback testing UI)."""
+    from database import supabase
+    try:
+        result = supabase.table("matches").select(
+            "match_id, scheduled_time, status, team_1_players, team_2_players, feedback_collected"
+        ).eq("club_id", club_id).eq("status", "confirmed").order(
+            "scheduled_time", desc=True
+        ).limit(20).execute()
+        
+        matches = result.data or []
+        
+        # Get player names for each match
+        all_player_ids = set()
+        for match in matches:
+            for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
+                if pid:
+                    all_player_ids.add(pid)
+        
+        if all_player_ids:
+            players_result = supabase.table("players").select(
+                "player_id, name"
+            ).in_("player_id", list(all_player_ids)).execute()
+            player_map = {p["player_id"]: p["name"] for p in players_result.data}
+            
+            # Add player names to matches
+            for match in matches:
+                match["player_names"] = []
+                for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
+                    if pid and pid in player_map:
+                        match["player_names"].append(player_map[pid])
+        
+        return {"matches": matches}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ClubSettingsUpdate(BaseModel):
+    feedback_delay_hours: Optional[float] = None
+    feedback_reminder_delay_hours: Optional[float] = None
+
+
+@router.get("/clubs/{club_id}/settings")
+async def get_club_settings(club_id: str):
+    """Get club settings."""
+    from database import supabase
+    try:
+        result = supabase.table("clubs").select("settings").eq("club_id", club_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Club not found")
+        
+        settings = result.data[0].get("settings") or {}
+        # Return with defaults
+        return {
+            "feedback_delay_hours": settings.get("feedback_delay_hours", 3.0),
+            "feedback_reminder_delay_hours": settings.get("feedback_reminder_delay_hours", 4.0)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/clubs/{club_id}/settings")
+async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
+    """Update club settings."""
+    from database import supabase
+    try:
+        # Get current settings
+        result = supabase.table("clubs").select("settings").eq("club_id", club_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Club not found")
+        
+        current_settings = result.data[0].get("settings") or {}
+        
+        # Merge updates
+        if updates.feedback_delay_hours is not None:
+            current_settings["feedback_delay_hours"] = updates.feedback_delay_hours
+        if updates.feedback_reminder_delay_hours is not None:
+            current_settings["feedback_reminder_delay_hours"] = updates.feedback_reminder_delay_hours
+        
+        # Save
+        supabase.table("clubs").update({
+            "settings": current_settings
+        }).eq("club_id", club_id).execute()
+        
+        return {"message": "Settings updated", "settings": current_settings}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

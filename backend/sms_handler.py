@@ -5,6 +5,7 @@ import sms_constants as msg
 from handlers.invite_handler import handle_invite_response
 from handlers.match_handler import handle_match_request
 from handlers.onboarding_handler import handle_onboarding
+from handlers.feedback_handler import handle_feedback_response
 from datetime import datetime
 import re
 
@@ -268,3 +269,7 @@ def handle_incoming_sms(from_number: str, body: str):
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:
         handle_match_request(from_number, body, player)
+
+    # --- Feedback Collection Flow ---
+    elif current_state == msg.STATE_WAITING_FEEDBACK:
+        handle_feedback_response(from_number, body, player, state_data)
