@@ -163,15 +163,46 @@ export function DashboardClient({
 
     // Calculate summary stats
     const activePlayers = filteredPlayers.filter(p => p.active_status).length
-    const upcomingMatches = filteredMatches.filter(m => m.status === 'confirmed' && new Date(m.scheduled_time) > new Date()).length
-    const votingMatches = filteredMatches.filter(m => m.status === 'voting').length
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const completedToday = filteredMatches.filter(m => {
-        const matchDate = new Date(m.scheduled_time)
-        matchDate.setHours(0, 0, 0, 0)
-        return matchDate.getTime() === today.getTime() && m.status === 'completed'
-    }).length
+    const now = new Date()
+    const upcomingMatches = filteredMatches.filter(m => m.status === 'confirmed' && new Date(m.scheduled_time) > now).length
+    const pendingMatches = filteredMatches.filter(m => m.status === 'pending' && new Date(m.scheduled_time) > now).length
+
+    // Open invites - count from matches (sum of invites awaiting response)
+    const [openInvites, setOpenInvites] = useState(0)
+
+    useEffect(() => {
+        // Fetch open invites count
+        async function fetchOpenInvites() {
+            try {
+                // Get all pending match IDs for this club
+                const pendingMatchIds = filteredMatches
+                    .filter(m => m.status === 'pending' && new Date(m.scheduled_time) > new Date())
+                    .map(m => m.match_id)
+
+                if (pendingMatchIds.length === 0) {
+                    setOpenInvites(0)
+                    return
+                }
+
+                // For each match, count 'sent' invites
+                let totalOpen = 0
+                for (const matchId of pendingMatchIds) {
+                    const res = await fetch(`/api/matches/${matchId}/invites`)
+                    if (res.ok) {
+                        const data = await res.json()
+                        totalOpen += (data.invites || []).filter((i: { status: string }) => i.status === 'sent').length
+                    }
+                }
+                setOpenInvites(totalOpen)
+            } catch (error) {
+                console.error('Error fetching open invites:', error)
+            }
+        }
+
+        if (mounted) {
+            fetchOpenInvites()
+        }
+    }, [filteredMatches, mounted])
 
     const handleMatchClick = (matchId: string) => {
         // Navigate to the match detail page
@@ -284,13 +315,13 @@ export function DashboardClient({
                     <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="px-6 py-5">
                             <div className="flex items-center">
-                                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                    <span className="text-2xl">🗳️</span>
+                                <div className="flex-shrink-0 w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                                    <span className="text-2xl">⏳</span>
                                 </div>
                                 <div className="ml-5 flex-1">
                                     <dl>
-                                        <dt className="text-sm font-medium text-gray-500 truncate">Voting Matches</dt>
-                                        <dd className="mt-1 text-2xl font-semibold text-gray-900">{votingMatches}</dd>
+                                        <dt className="text-sm font-medium text-gray-500 truncate">Pending Matches</dt>
+                                        <dd className="mt-1 text-2xl font-semibold text-gray-900">{pendingMatches}</dd>
                                     </dl>
                                 </div>
                             </div>
@@ -301,12 +332,12 @@ export function DashboardClient({
                         <div className="px-6 py-5">
                             <div className="flex items-center">
                                 <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                                    <span className="text-2xl">✅</span>
+                                    <span className="text-2xl">📩</span>
                                 </div>
                                 <div className="ml-5 flex-1">
                                     <dl>
-                                        <dt className="text-sm font-medium text-gray-500 truncate">Completed Today</dt>
-                                        <dd className="mt-1 text-2xl font-semibold text-gray-900">{completedToday}</dd>
+                                        <dt className="text-sm font-medium text-gray-500 truncate">Open Invites</dt>
+                                        <dd className="mt-1 text-2xl font-semibold text-gray-900">{openInvites}</dd>
                                     </dl>
                                 </div>
                             </div>
