@@ -108,6 +108,59 @@ async def create_outreach(request: OutreachRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# IMPORTANT: This route MUST come before /matches/{match_id} or "confirmed" gets treated as a match_id
+@router.get("/matches/confirmed")
+async def get_confirmed_matches(club_id: str = None):
+    """Get all confirmed/completable matches for feedback testing UI."""
+    from database import supabase
+    try:
+        # Query matches that are confirmed OR have 4 players
+        query = supabase.table("matches").select(
+            "match_id, scheduled_time, status, team_1_players, team_2_players, feedback_collected, club_id"
+        )
+        
+        if club_id:
+            query = query.eq("club_id", club_id)
+        
+        # Get confirmed matches or matches with players
+        result = query.in_("status", ["confirmed", "pending"]).order(
+            "scheduled_time", desc=True
+        ).limit(30).execute()
+        
+        matches = result.data or []
+        
+        # Filter to only matches with 4 players (for feedback eligibility)
+        matches = [
+            m for m in matches 
+            if len((m.get("team_1_players") or []) + (m.get("team_2_players") or [])) == 4
+            or m.get("status") == "confirmed"
+        ][:20]  # Limit after filtering
+        
+        # Get player names for each match
+        all_player_ids = set()
+        for match in matches:
+            for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
+                if pid:
+                    all_player_ids.add(pid)
+        
+        if all_player_ids:
+            players_result = supabase.table("players").select(
+                "player_id, name"
+            ).in_("player_id", list(all_player_ids)).execute()
+            player_map = {p["player_id"]: p["name"] for p in players_result.data}
+            
+            # Add player names to matches
+            for match in matches:
+                match["player_names"] = []
+                for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
+                    if pid and pid in player_map:
+                        match["player_names"].append(player_map[pid])
+        
+        return {"matches": matches}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/matches/{match_id}")
 async def get_match(match_id: str):
     """Get detailed match information including player names."""
@@ -197,60 +250,6 @@ async def trigger_match_feedback(match_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/matches/confirmed")
-async def get_confirmed_matches(club_id: str = None):
-    """Get all confirmed/completable matches for feedback testing UI."""
-    from database import supabase
-    try:
-        # Query matches that are confirmed OR have 4 players
-        query = supabase.table("matches").select(
-            "match_id, scheduled_time, status, team_1_players, team_2_players, feedback_collected, club_id"
-        )
-        
-        if club_id:
-            query = query.eq("club_id", club_id)
-        
-        # Get confirmed matches or matches with players
-        result = query.in_("status", ["confirmed", "pending"]).order(
-            "scheduled_time", desc=True
-        ).limit(30).execute()
-        
-        matches = result.data or []
-        
-        # Filter to only matches with 4 players (for feedback eligibility)
-        matches = [
-            m for m in matches 
-            if len((m.get("team_1_players") or []) + (m.get("team_2_players") or [])) == 4
-            or m.get("status") == "confirmed"
-        ][:20]  # Limit after filtering
-        
-        # Get player names for each match
-        all_player_ids = set()
-        for match in matches:
-            for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
-                if pid:
-                    all_player_ids.add(pid)
-        
-        if all_player_ids:
-            players_result = supabase.table("players").select(
-                "player_id, name"
-            ).in_("player_id", list(all_player_ids)).execute()
-            player_map = {p["player_id"]: p["name"] for p in players_result.data}
-            
-            # Add player names to matches
-            for match in matches:
-                match["player_names"] = []
-
-                for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
-                    if pid and pid in player_map:
-                        match["player_names"].append(player_map[pid])
-        
-        return {"matches": matches}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 class ClubSettingsUpdate(BaseModel):
     feedback_delay_hours: Optional[float] = None
