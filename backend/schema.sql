@@ -102,7 +102,7 @@ CREATE TABLE match_invites (
   invite_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   match_id UUID NOT NULL REFERENCES matches(match_id),
   player_id UUID NOT NULL REFERENCES players(player_id),
-  status TEXT CHECK (status IN ('sent', 'accepted', 'declined', 'expired')),
+  status TEXT CHECK (status IN ('sent', 'accepted', 'declined', 'expired', 'maybe', 'removed')),
   sent_at TIMESTAMP DEFAULT NOW(),
   responded_at TIMESTAMP
 );
