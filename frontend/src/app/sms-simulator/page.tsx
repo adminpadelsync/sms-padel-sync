@@ -206,14 +206,37 @@ export default function SMSSimulatorPage() {
 
         setLoading(true)
         try {
-            // Get tomorrow's date
+            // Get tomorrow's date for the match
             const tomorrow = new Date()
             tomorrow.setDate(tomorrow.getDate() + 1)
+            tomorrow.setHours(15, 0, 0, 0) // 3:00 PM
             const dateStr = tomorrow.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-            // Create new match
+            // Get club_id from current club or first player
+            const clubId = currentClubId || selectedPlayers[0]?.player_id?.split('-')[0] || 'default'
+
+            // Create a REAL match in the database via API
+            const response = await fetch('/api/outreach', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    club_id: clubId,
+                    player_ids: selectedPlayers.map(p => p.player_id),
+                    scheduled_time: tomorrow.toISOString(),
+                    initial_player_ids: []
+                })
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to create match')
+            }
+
+            const data = await response.json()
+            const realMatchId = data.match?.match_id
+
+            // Create local match for UI simulation
             const newMatch: Match = {
-                id: `match_${Date.now()}`,
+                id: realMatchId || `match_${Date.now()}`,
                 number: nextMatchNumber,
                 time: '3:00 PM',
                 date: `Tomorrow (${dateStr})`,
@@ -234,65 +257,71 @@ export default function SMSSimulatorPage() {
             })
             setPlayerMatches(newPlayerMatches)
 
-            // Send invite messages
-            const newConversations = { ...conversations }
-            selectedPlayers.forEach(player => {
-                // Check how many pending invites this player will have
-                const playerPendingMatches = newPlayerMatches[player.player_id] || []
-                const hasSingleInvite = playerPendingMatches.length === 1
+            // Refresh confirmed matches list after a short delay to pick up the new match
+            setTimeout(() => fetchConfirmedMatches(), 1000)
 
-                let inviteMessage = ''
-                if (hasSingleInvite) {
-                    // Simple YES/NO for first invite
-                    inviteMessage = `🎾 Match invite!
+            // Send invite messages (local simulation only if not in test mode)
+            if (!testMode) {
+                const newConversations = { ...conversations }
+                selectedPlayers.forEach(player => {
+                    // Check how many pending invites this player will have
+                    const playerPendingMatches = newPlayerMatches[player.player_id] || []
+                    const hasSingleInvite = playerPendingMatches.length === 1
+
+                    let inviteMessage = ''
+                    if (hasSingleInvite) {
+                        // Simple YES/NO for first invite
+                        inviteMessage = `🎾 Match invite!
 📅 ${newMatch.date} ${newMatch.time}
 🏟️ ${newMatch.court}
 
-Reply YES to join or NO to decline`
-                } else {
-                    // Numbered format for multiple invites - show ALL pending matches
-                    inviteMessage = `🎾 You have ${playerPendingMatches.length} match invites:\n\n`
+Reply YES to join, NO to decline`
+                    } else {
+                        // Numbered format for multiple invites - show ALL pending matches
+                        inviteMessage = `🎾 You have ${playerPendingMatches.length} match invites:\n\n`
 
-                    // List all pending matches for this player
-                    const allPlayerMatches = matches
-                        .concat([newMatch]) // Include the new match
-                        .filter(m => playerPendingMatches.includes(m.number))
-                        .sort((a, b) => a.number - b.number)
+                        // List all pending matches for this player
+                        const allPlayerMatches = matches
+                            .concat([newMatch]) // Include the new match
+                            .filter(m => playerPendingMatches.includes(m.number))
+                            .sort((a, b) => a.number - b.number)
 
-                    allPlayerMatches.forEach(m => {
-                        const confirmedCount = m.confirmedPlayerIds.length
-                        const confirmedNames = m.confirmedPlayerIds
-                            .map(id => {
-                                const p = selectedPlayers.find(sp => sp.player_id === id)
-                                return p ? `${p.name} (${p.declared_skill_level})` : 'Unknown'
-                            })
-                            .join(', ')
+                        allPlayerMatches.forEach(m => {
+                            const confirmedCount = m.confirmedPlayerIds.length
+                            const confirmedNames = m.confirmedPlayerIds
+                                .map(id => {
+                                    const p = selectedPlayers.find(sp => sp.player_id === id)
+                                    return p ? `${p.name} (${p.declared_skill_level})` : 'Unknown'
+                                })
+                                .join(', ')
 
-                        inviteMessage += `${m.number} - ${m.date} ${m.time} (${confirmedCount}/4)\n`
-                        if (confirmedNames) {
-                            inviteMessage += `    ${confirmedNames}\n`
-                        }
-                        inviteMessage += '\n'
-                    })
+                            inviteMessage += `${m.number} - ${m.date} ${m.time} (${confirmedCount}/4)\n`
+                            if (confirmedNames) {
+                                inviteMessage += `    ${confirmedNames}\n`
+                            }
+                            inviteMessage += '\n'
+                        })
 
-                    inviteMessage += `Reply with match numbers to join\nExamples: 1 or 1 2 or 1 2 3`
-                }
+                        inviteMessage += `Reply with match numbers to join\nExamples: 1 or 1 2 or 1 2 3`
+                    }
 
-                const message: Message = {
-                    id: Date.now().toString() + player.player_id,
-                    from: 'system',
-                    text: inviteMessage,
-                    timestamp: new Date()
-                }
-                newConversations[player.player_id] = [
-                    ...(newConversations[player.player_id] || []),
-                    message
-                ]
-            })
-            setConversations(newConversations)
+                    const message: Message = {
+                        id: Date.now().toString() + player.player_id,
+                        from: 'system',
+                        text: inviteMessage,
+                        timestamp: new Date()
+                    }
+                    newConversations[player.player_id] = [
+                        ...(newConversations[player.player_id] || []),
+                        message
+                    ]
+                })
+                setConversations(newConversations)
+            }
 
             // Increment match number for next invite
             setNextMatchNumber(prev => prev + 1)
+
         } catch (error) {
             console.error('Error sending invites:', error)
             alert('Failed to send invites')
