@@ -200,17 +200,31 @@ async def trigger_match_feedback(match_id: str):
 
 
 @router.get("/matches/confirmed")
-async def get_confirmed_matches(club_id: str):
-    """Get all confirmed matches for a club (for feedback testing UI)."""
+async def get_confirmed_matches(club_id: str = None):
+    """Get all confirmed/completable matches for feedback testing UI."""
     from database import supabase
     try:
-        result = supabase.table("matches").select(
-            "match_id, scheduled_time, status, team_1_players, team_2_players, feedback_collected"
-        ).eq("club_id", club_id).eq("status", "confirmed").order(
+        # Query matches that are confirmed OR have 4 players
+        query = supabase.table("matches").select(
+            "match_id, scheduled_time, status, team_1_players, team_2_players, feedback_collected, club_id"
+        )
+        
+        if club_id:
+            query = query.eq("club_id", club_id)
+        
+        # Get confirmed matches or matches with players
+        result = query.in_("status", ["confirmed", "pending"]).order(
             "scheduled_time", desc=True
-        ).limit(20).execute()
+        ).limit(30).execute()
         
         matches = result.data or []
+        
+        # Filter to only matches with 4 players (for feedback eligibility)
+        matches = [
+            m for m in matches 
+            if len((m.get("team_1_players") or []) + (m.get("team_2_players") or [])) == 4
+            or m.get("status") == "confirmed"
+        ][:20]  # Limit after filtering
         
         # Get player names for each match
         all_player_ids = set()
@@ -228,6 +242,7 @@ async def get_confirmed_matches(club_id: str):
             # Add player names to matches
             for match in matches:
                 match["player_names"] = []
+
                 for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
                     if pid and pid in player_map:
                         match["player_names"].append(player_map[pid])

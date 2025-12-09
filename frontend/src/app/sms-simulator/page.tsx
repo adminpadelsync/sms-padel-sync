@@ -126,16 +126,27 @@ export default function SMSSimulatorPage() {
 
     const fetchConfirmedMatches = async () => {
         try {
-            // Get club_id from first player or use a default
-            const clubResponse = await fetch('/api/clubs')
-            if (!clubResponse.ok) return
-            const clubData = await clubResponse.json()
-            const clubId = clubData.clubs?.[0]?.club_id
-            if (!clubId) return
+            // Try to get club_id, but fetch matches even if we can't
+            let clubId = null
+            try {
+                const clubResponse = await fetch('/api/clubs')
+                if (clubResponse.ok) {
+                    const clubData = await clubResponse.json()
+                    clubId = clubData.clubs?.[0]?.club_id
+                    if (clubId) {
+                        setCurrentClubId(clubId)
+                    }
+                }
+            } catch {
+                // Club fetch failed, continue without club filter
+            }
 
-            setCurrentClubId(clubId) // Store for settings panel
+            // Fetch matches - with or without club filter
+            const url = clubId
+                ? `/api/matches/confirmed?club_id=${clubId}`
+                : '/api/matches/confirmed'
 
-            const response = await fetch(`/api/matches/confirmed?club_id=${clubId}`)
+            const response = await fetch(url)
             if (response.ok) {
                 const data = await response.json()
                 setConfirmedMatches(data.matches || [])
@@ -144,6 +155,7 @@ export default function SMSSimulatorPage() {
             console.error('Error fetching confirmed matches:', error)
         }
     }
+
 
     const handleSendFeedback = async (matchId: string) => {
         setFeedbackLoading(matchId)
