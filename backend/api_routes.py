@@ -42,8 +42,56 @@ async def get_clubs():
     """Get all active clubs."""
     from database import supabase
     try:
-        result = supabase.table("clubs").select("club_id, name, settings").eq("active", True).execute()
+        result = supabase.table("clubs").select("club_id, name, phone_number, court_count, settings").eq("active", True).execute()
         return {"clubs": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ClubUpdate(BaseModel):
+    name: Optional[str] = None
+    phone_number: Optional[str] = None
+
+
+@router.get("/clubs/{club_id}")
+async def get_club(club_id: str):
+    """Get a single club by ID."""
+    from database import supabase
+    try:
+        result = supabase.table("clubs").select("club_id, name, phone_number, court_count, settings").eq("club_id", club_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Club not found")
+        return {"club": result.data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/clubs/{club_id}")
+async def update_club(club_id: str, updates: ClubUpdate):
+    """Update club fields (name, phone_number)."""
+    from database import supabase
+    try:
+        # Build updates dict from non-None fields
+        update_data = {}
+        if updates.name is not None:
+            update_data["name"] = updates.name
+        if updates.phone_number is not None:
+            update_data["phone_number"] = updates.phone_number
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        # Update the club
+        result = supabase.table("clubs").update(update_data).eq("club_id", club_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Club not found")
+        
+        return {"club": result.data[0], "message": "Club updated successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

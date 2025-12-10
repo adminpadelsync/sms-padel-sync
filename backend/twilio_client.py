@@ -15,6 +15,12 @@ test_mode = os.environ.get("SMS_TEST_MODE", "false").lower() == "true"
 sms_whitelist_raw = os.environ.get("SMS_WHITELIST", "")
 sms_whitelist = set(num.strip() for num in sms_whitelist_raw.split(",") if num.strip())
 
+# Debug logging for SMS configuration
+print(f"[SMS CONFIG] SMS_TEST_MODE: {test_mode}")
+print(f"[SMS CONFIG] SMS_WHITELIST raw: '{sms_whitelist_raw}'")
+print(f"[SMS CONFIG] SMS_WHITELIST parsed: {sms_whitelist}")
+print(f"[SMS CONFIG] Whitelist is empty: {len(sms_whitelist) == 0}")
+
 
 def is_whitelisted(phone_number: str) -> bool:
     """Check if a phone number is whitelisted for real SMS."""
@@ -56,14 +62,24 @@ def get_twilio_client():
 
 
 def send_sms(to_number: str, body: str) -> bool:
+    # Debug: log every SMS attempt
+    print(f"[SMS DEBUG] send_sms called: to={to_number}")
+    print(f"[SMS DEBUG] test_mode={test_mode}, whitelist_empty={len(sms_whitelist)==0}")
+    
     # Full test mode: store all messages in outbox
     if test_mode:
+        print(f"[SMS DEBUG] Routing to outbox (test_mode=True)")
         return store_in_outbox(to_number, body)
     
     # Whitelist mode: only send real SMS to whitelisted numbers
-    if sms_whitelist and not is_whitelisted(to_number):
-        print(f"[WHITELIST] Number {to_number} not whitelisted, routing to simulator")
-        return store_in_outbox(to_number, body)
+    if sms_whitelist:
+        is_wl = is_whitelisted(to_number)
+        print(f"[SMS DEBUG] Whitelist check: is_whitelisted({to_number})={is_wl}")
+        if not is_wl:
+            print(f"[WHITELIST] Number {to_number} not whitelisted, routing to simulator")
+            return store_in_outbox(to_number, body)
+    else:
+        print(f"[SMS DEBUG] No whitelist configured, proceeding to Twilio")
     
     # Production mode: send via Twilio
     client = get_twilio_client()
