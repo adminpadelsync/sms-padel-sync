@@ -9,7 +9,36 @@ from handlers.feedback_handler import handle_feedback_response
 from datetime import datetime
 import re
 
-def handle_incoming_sms(from_number: str, body: str):
+def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
+    """
+    Handle incoming SMS messages.
+    
+    Args:
+        from_number: The sender's phone number
+        body: The message content
+        to_number: The Twilio number that received the SMS (determines which club)
+    """
+    # 0. Look up which club this Twilio number belongs to
+    club_id = None
+    if to_number:
+        club_res = supabase.table("clubs").select("club_id, name").eq("phone_number", to_number).execute()
+        if club_res.data:
+            club_id = club_res.data[0]["club_id"]
+        else:
+            # Unknown Twilio number - try first club as fallback
+            fallback = supabase.table("clubs").select("club_id").limit(1).execute()
+            if fallback.data:
+                club_id = fallback.data[0]["club_id"]
+                print(f"[WARNING] Unknown Twilio number {to_number}, using fallback club")
+            else:
+                send_sms(from_number, "Sorry, this number is not configured for any club.")
+                return
+    else:
+        # No to_number provided (e.g., old test code) - use first club
+        fallback = supabase.table("clubs").select("club_id").limit(1).execute()
+        if fallback.data:
+            club_id = fallback.data[0]["club_id"]
+
     # 1. Check if user exists in DB
     response = supabase.table("players").select("*").eq("phone_number", from_number).execute()
     player = response.data[0] if response.data else None
@@ -257,14 +286,14 @@ def handle_incoming_sms(from_number: str, body: str):
         if player:
              return
         
-        # Start onboarding
+        # Start onboarding - store club_id in state for later
         send_sms(from_number, msg.MSG_WELCOME_NEW)
-        set_user_state(from_number, msg.STATE_WAITING_NAME)
+        set_user_state(from_number, msg.STATE_WAITING_NAME, {"club_id": club_id})
         return
 
     # Handle States
     if current_state in [msg.STATE_WAITING_NAME, msg.STATE_WAITING_LEVEL, msg.STATE_WAITING_AVAILABILITY]:
-        handle_onboarding(from_number, body, current_state, state_data)
+        handle_onboarding(from_number, body, current_state, state_data, club_id)
 
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:

@@ -60,12 +60,13 @@ async def health_check():
 from sms_handler import handle_incoming_sms
 
 @app.post("/webhook/sms")
-async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
+async def sms_webhook(From: str = Form(...), Body: str = Form(...), To: str = Form(...)):
     """
     Handle incoming SMS from Twilio.
     Twilio sends data as form-encoded.
+    To = the Twilio number that received the SMS (determines which club)
     """
-    handle_incoming_sms(From, Body)
+    handle_incoming_sms(From, Body, To)
     return {"status": "success"}
 
 # --- SMS Test Mode Endpoints ---
@@ -77,6 +78,7 @@ from datetime import datetime
 class InboxMessage(BaseModel):
     from_number: str
     body: str
+    to_number: Optional[str] = None  # Club's Twilio number (optional for backward compat)
 
 # SMS test mode routes - path depends on environment
 sms_prefix = "" if os.environ.get('VERCEL', False) else "/api"
@@ -105,6 +107,12 @@ async def post_sms_inbox(message: InboxMessage):
     Simulate an incoming SMS (test mode).
     Calls the same handler as the Twilio webhook.
     """
-    handle_incoming_sms(message.from_number, message.body)
+    # Default to first club's number if not specified (backward compat)
+    to_number = message.to_number
+    if not to_number:
+        club_res = supabase.table("clubs").select("phone_number").limit(1).execute()
+        to_number = club_res.data[0]["phone_number"] if club_res.data else None
+    
+    handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
 
