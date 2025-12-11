@@ -1,4 +1,5 @@
 import os
+from contextvars import ContextVar
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from dotenv import load_dotenv
@@ -14,6 +15,21 @@ test_mode = os.environ.get("SMS_TEST_MODE", "false").lower() == "true"
 # Numbers not on this list will be routed to the simulator outbox
 sms_whitelist_raw = os.environ.get("SMS_WHITELIST", "")
 sms_whitelist = set(num.strip() for num in sms_whitelist_raw.split(",") if num.strip())
+
+# Context variable to store the current club's phone number for replies
+# This is set at the start of handling an incoming SMS and used by send_sms
+_reply_from_context: ContextVar[str] = ContextVar('reply_from', default=None)
+
+
+def set_reply_from(phone_number: str):
+    """Set the reply-from phone number for the current request context."""
+    _reply_from_context.set(phone_number)
+
+
+def get_reply_from() -> str:
+    """Get the reply-from phone number for the current request context."""
+    return _reply_from_context.get()
+
 
 # Debug logging for SMS configuration
 print(f"[SMS CONFIG] SMS_TEST_MODE: {test_mode}")
@@ -61,9 +77,21 @@ def get_twilio_client():
     return Client(account_sid, auth_token)
 
 
-def send_sms(to_number: str, body: str) -> bool:
+def send_sms(to_number: str, body: str, reply_from: str = None) -> bool:
+    """
+    Send an SMS message.
+    
+    Args:
+        to_number: The recipient's phone number
+        body: The message content
+        reply_from: Optional - the Twilio number to send from (for multi-club support)
+                   If not provided, uses the context variable or falls back to TWILIO_PHONE_NUMBER
+    """
+    # Priority: explicit reply_from > context variable > default from env
+    send_from = reply_from or get_reply_from() or from_number
+    
     # Debug: log every SMS attempt
-    print(f"[SMS DEBUG] send_sms called: to={to_number}")
+    print(f"[SMS DEBUG] send_sms called: to={to_number}, from={send_from}")
     print(f"[SMS DEBUG] test_mode={test_mode}, whitelist_empty={len(sms_whitelist)==0}")
     
     # Full test mode: store all messages in outbox
@@ -89,10 +117,10 @@ def send_sms(to_number: str, body: str) -> bool:
     try:
         message = client.messages.create(
             body=body,
-            from_=from_number,
+            from_=send_from,
             to=to_number
         )
-        print(f"[TWILIO] Sent SMS to {to_number}")
+        print(f"[TWILIO] Sent SMS to {to_number} from {send_from}")
         return True
     except TwilioRestException as e:
         print(f"Twilio Error: {e}")

@@ -1,4 +1,4 @@
-from twilio_client import send_sms
+from twilio_client import send_sms, set_reply_from
 from redis_client import get_user_state, set_user_state, clear_user_state
 from database import supabase
 import sms_constants as msg
@@ -18,6 +18,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         body: The message content
         to_number: The Twilio number that received the SMS (determines which club)
     """
+    # Set the reply-from number in context so all send_sms calls use the correct club number
+    if to_number:
+        set_reply_from(to_number)
+    
     # 0. Look up which club this Twilio number belongs to
     club_id = None
     if to_number:
