@@ -1,7 +1,7 @@
 import re
 from datetime import datetime, timedelta
 from database import supabase
-from twilio_client import send_sms
+from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
 from handlers.date_parser import parse_natural_date
@@ -59,6 +59,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
     
     # Format for display
     confirm_msg = msg.MSG_CONFIRM_DATE_WITH_PREFS.format(
+        club_name=get_club_name(),
         time=human_readable,
         level=player_level,
         range=DEFAULT_LEVEL_RANGE,
@@ -131,6 +132,7 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         gender_display = {"mixed": "Mixed", "male": "Male-only", "female": "Female-only"}.get(gender_preference, "Mixed")
         
         confirm_msg = msg.MSG_CONFIRM_DATE_WITH_PREFS.format(
+            club_name=get_club_name(),
             time=scheduled_time_human,
             level=player_level,
             range=range_display,
@@ -280,7 +282,7 @@ def _create_match(
             from matchmaker import find_and_invite_players
             count = find_and_invite_players(match_id)
             send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
-                time=scheduled_time_human, count=count
+                club_name=get_club_name(), time=scheduled_time_human, count=count
             ))
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)

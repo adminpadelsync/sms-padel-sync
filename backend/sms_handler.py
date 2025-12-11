@@ -1,4 +1,4 @@
-from twilio_client import send_sms, set_reply_from, set_club_name
+from twilio_client import send_sms, set_reply_from, set_club_name, get_club_name
 from redis_client import get_user_state, set_user_state, clear_user_state
 from database import supabase
 import sms_constants as msg
@@ -133,7 +133,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
              # Debugging tool to restart flow
              pass
         elif cmd == "play":
-            send_sms(from_number, msg.MSG_REQUEST_DATE)
+            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=club_name))
             set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
             return
         elif cmd == "mute":

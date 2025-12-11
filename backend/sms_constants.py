@@ -17,8 +17,9 @@ MSG_PROFILE_SETUP_DONE = "You're all set with {club_name}! We'll text you when m
 MSG_PROFILE_ERROR = "Something went wrong saving your profile. Please try again later."
 MSG_SYSTEM_ERROR = "System Error: No clubs configured. Please contact admin."
 
-MSG_REQUEST_DATE = "Awesome! When do you want to play? (e.g., 'tomorrow at 6pm', 'Saturday 2pm')"
-MSG_CONFIRM_DATE_WITH_PREFS = """📅 {time}
+MSG_REQUEST_DATE = "🎾 {club_name}: When do you want to play? (e.g., 'tomorrow at 6pm', 'Saturday 2pm')"
+MSG_CONFIRM_DATE_WITH_PREFS = """🎾 {club_name}
+📅 {time}
 
 Looking for:
 • Level: {level} (± {range})
@@ -34,7 +35,7 @@ MSG_INVALID_DATE_FORMAT = "Invalid format. Please use YYYY-MM-DD HH:MM (e.g., 20
 MSG_RANGE_TOO_SHORT = "Range too short for a 120-min match."
 MSG_PLAYER_NOT_FOUND = "Error: Player profile not found."
 MSG_MATCH_REQUESTED_VOTING = "Voting match created! We found {count} players to invite to vote on times."
-MSG_MATCH_REQUESTED_CONFIRMED = "🎾 Match requested for {time}! Inviting {count} players now. We'll let you know when they respond."
+MSG_MATCH_REQUESTED_CONFIRMED = "🎾 {club_name}: Match requested for {time}! Inviting {count} players now. We'll let you know when they respond."
 MSG_MATCH_CREATION_ERROR = "Something went wrong creating your match request."
 MSG_MATCH_FULL = "Sorry, this match just filled up! We'll let you know about the next one."
 MSG_MATCH_ALREADY_FULL = "Sorry, this match is already full or cancelled."
