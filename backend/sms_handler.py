@@ -196,23 +196,9 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             return
         elif cmd == "matches":
             try:
-                # Show player's matches with numbered pending invites
+                # Show player's matches - includes both matches they requested AND matches they were invited to
                 player_id = player["player_id"]
                 print(f"[DEBUG] MATCHES for player {player_id} ({from_number})")
-                
-                # Get all invites for this player, ordered by sent_at DESC for consistent numbering
-                all_invites = supabase.table("match_invites").select("match_id, status, invite_id").eq("player_id", player_id).order("sent_at", desc=True).execute().data
-                print(f"[DEBUG] Found {len(all_invites) if all_invites else 0} invites")
-                
-                if not all_invites:
-                    send_sms(from_number, "📅 You have no match invites. Text PLAY to request a match!")
-                    return
-                
-                # Get match details for each invite
-                match_ids = [i["match_id"] for i in all_invites]
-                matches_data = supabase.table("matches").select("*").in_("match_id", match_ids).execute().data
-                matches_by_id = {m["match_id"]: m for m in matches_data}
-                print(f"[DEBUG] Found {len(matches_data) if matches_data else 0} matches")
                 
                 # Get current time for filtering past matches
                 now = datetime.utcnow()
@@ -221,34 +207,62 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                     """Check if match scheduled_time is in the future."""
                     try:
                         scheduled = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
-                        # Remove timezone info for comparison
                         scheduled = scheduled.replace(tzinfo=None)
                         return scheduled > now
                     except:
-                        return True  # If can't parse, include it
+                        return True
                 
-                # Only show CONFIRMED matches where player is actually in the teams AND match is in the future
+                # 1. Get matches where player is already in teams (as requester or confirmed)
+                # Query matches where player is in team_1_players OR team_2_players
+                matches_as_player = supabase.table("matches").select("*").or_(
+                    f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
+                ).execute().data or []
+                
+                # 2. Get matches where player has invites (pending/maybe invites)
+                all_invites = supabase.table("match_invites").select("match_id, status").eq("player_id", player_id).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute().data or []
+                invite_match_ids = [i["match_id"] for i in all_invites]
+                
+                # Get match data for invites
+                matches_from_invites = []
+                if invite_match_ids:
+                    matches_from_invites = supabase.table("matches").select("*").in_("match_id", invite_match_ids).execute().data or []
+                
+                # Combine and dedupe matches
+                all_matches_by_id = {}
+                for m in matches_as_player:
+                    all_matches_by_id[m["match_id"]] = m
+                for m in matches_from_invites:
+                    all_matches_by_id[m["match_id"]] = m
+                
+                # Categorize matches
                 confirmed = []
-                for m in matches_data:
-                    if m["status"] == "confirmed" and is_future_match(m):
-                        all_players = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
+                pending_as_requester = []  # Matches player requested, still pending
+                pending_invites = []  # Matches player was invited to (from invites)
+                
+                for m in all_matches_by_id.values():
+                    if not is_future_match(m):
+                        continue
+                    
+                    all_players = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
+                    
+                    if m["status"] == "confirmed" and player_id in all_players:
+                        confirmed.append(m)
+                    elif m["status"] == "pending":
+                        # Player is the requester (in team already) vs invited
                         if player_id in all_players:
-                            confirmed.append(m)
+                            pending_as_requester.append(m)
+                        elif m["match_id"] in invite_match_ids:
+                            pending_invites.append(m)
                 
-                # Get pending invites in order (newest first = index 0 = number 1)
-                # Include BOTH 'sent' AND 'maybe' so players can see and respond to matches they said maybe to
-                # Filter out past matches
-                pending_invites = [inv for inv in all_invites if inv["status"] in ["sent", "maybe"]]
-                pending_matches = []
-                for inv in pending_invites:
-                    m = matches_by_id.get(inv["match_id"])
-                    if m and m["status"] == "pending" and is_future_match(m):
-                        pending_matches.append(m)
+                print(f"[DEBUG] Confirmed: {len(confirmed)}, Pending (requester): {len(pending_as_requester)}, Pending (invites): {len(pending_invites)}")
                 
-                print(f"[DEBUG] Confirmed: {len(confirmed)}, Pending: {len(pending_matches)}")
+                if not confirmed and not pending_as_requester and not pending_invites:
+                    send_sms(from_number, "📅 You have no match invites. Text PLAY to request a match!")
+                    return
                 
                 response = "📅 Your matches:\n\n"
                 
+                # Show confirmed matches
                 if confirmed:
                     response += "✅ CONFIRMED:\n"
                     for m in confirmed:
@@ -259,7 +273,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                             time_str = m['scheduled_time']
                         response += f"• {time_str}\n"
                         
-                        # Add player names with levels
+                        # Add player names
                         all_pids = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
                         for pid in all_pids:
                             p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
@@ -268,31 +282,47 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                                 response += f"  - {p['name']} ({p['declared_skill_level']})\n"
                         response += "\n"
                 
-                if pending_matches:
-                    response += "⏳ PENDING (reply with #):\n"
-                    for i, m in enumerate(pending_matches, 1):
+                # Show pending matches where player is requester
+                if pending_as_requester:
+                    response += "⏳ YOUR PENDING REQUESTS:\n"
+                    for m in pending_as_requester:
                         try:
                             dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
                             time_str = dt.strftime("%a, %b %d at %I:%M %p")
                         except:
                             time_str = m['scheduled_time']
-                        # Count confirmed players
+                        all_pids = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
+                        count = len(all_pids)
+                        response += f"• {time_str} ({count}/4 confirmed)\n"
+                        
+                        # Show who's in
+                        for pid in all_pids:
+                            p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+                            if p_res.data:
+                                p = p_res.data[0]
+                                response += f"  - {p['name']} ({p['declared_skill_level']})\n"
+                        response += "\n"
+                
+                # Show pending invites (from others)
+                if pending_invites:
+                    response += "📩 PENDING INVITES (reply with #):\n"
+                    for i, m in enumerate(pending_invites, 1):
+                        try:
+                            dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                            time_str = dt.strftime("%a, %b %d at %I:%M %p")
+                        except:
+                            time_str = m['scheduled_time']
                         all_pids = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
                         count = len(all_pids)
                         response += f"{i}. {time_str} ({count}/4)\n"
                         
-                        # Show who's already in
-                        if all_pids:
-                            for pid in all_pids:
-                                p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
-                                if p_res.data:
-                                    p = p_res.data[0]
-                                    response += f"  - {p['name']} ({p['declared_skill_level']})\n"
+                        for pid in all_pids:
+                            p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+                            if p_res.data:
+                                p = p_res.data[0]
+                                response += f"  - {p['name']} ({p['declared_skill_level']})\n"
                         response += "\n"
                     response += "Reply 1Y to join, 1N to decline, etc."
-                
-                if not confirmed and not pending_matches:
-                    response = "📅 No active matches. Text PLAY to request a match!"
                 
                 send_sms(from_number, response)
             except Exception as e:
