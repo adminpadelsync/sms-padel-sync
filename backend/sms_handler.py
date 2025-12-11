@@ -61,6 +61,18 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     state_data = get_user_state(from_number)
     current_state = state_data.get("state") if state_data else None
 
+    # 3. Check for keyword interrupts - if user sends a command while in a flow, reset and process the command
+    # This allows users to escape stuck states by texting a keyword like PLAY, HELP, MATCHES, etc.
+    INTERRUPT_KEYWORDS = {"play", "help", "?", "matches", "next", "status", "cancel", "stop", "reset", "mute", "unmute"}
+    cmd_lower = body.lower().strip()
+    
+    if current_state and cmd_lower in INTERRUPT_KEYWORDS:
+        # User is interrupting an active flow with a keyword - clear state and let command processing handle it
+        print(f"[SMS] Keyword interrupt: '{cmd_lower}' while in state '{current_state}' - clearing state")
+        clear_user_state(from_number)
+        current_state = None
+        state_data = None
+
     # If player exists and no active conversation, check for commands
     if player and not current_state:
         cmd = body.lower().strip()
@@ -123,6 +135,46 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             send_sms(from_number, msg.MSG_REQUEST_DATE)
             set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
             return
+        elif cmd == "mute":
+            # Mute player for rest of day
+            from datetime import timedelta
+            tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            muted_until = player.get("muted_until")
+            
+            if muted_until:
+                try:
+                    muted_dt = datetime.fromisoformat(muted_until.replace('Z', '+00:00')).replace(tzinfo=None)
+                    if muted_dt > datetime.now():
+                        send_sms(from_number, msg.MSG_ALREADY_MUTED)
+                        return
+                except:
+                    pass
+            
+            supabase.table("players").update({
+                "muted_until": tomorrow.isoformat()
+            }).eq("player_id", player["player_id"]).execute()
+            send_sms(from_number, msg.MSG_MUTED)
+            return
+        elif cmd == "unmute":
+            # Clear mute
+            muted_until = player.get("muted_until")
+            if not muted_until:
+                send_sms(from_number, msg.MSG_NOT_MUTED)
+                return
+            
+            try:
+                muted_dt = datetime.fromisoformat(muted_until.replace('Z', '+00:00')).replace(tzinfo=None)
+                if muted_dt <= datetime.now():
+                    send_sms(from_number, msg.MSG_NOT_MUTED)
+                    return
+            except:
+                pass
+            
+            supabase.table("players").update({
+                "muted_until": None
+            }).eq("player_id", player["player_id"]).execute()
+            send_sms(from_number, msg.MSG_UNMUTED)
+            return
         elif cmd == "help" or cmd == "?":
             help_text = (
                 "🎾 PADEL SYNC COMMANDS\n\n"
@@ -135,6 +187,8 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 "• NEXT - Next confirmed match\n\n"
                 "OTHER:\n"
                 "• PLAY - Request a match\n"
+                "• MUTE - Pause invites for today\n"
+                "• UNMUTE - Resume invites\n"
                 "• HELP - Show this message"
             )
             send_sms(from_number, help_text)
