@@ -18,6 +18,15 @@ MSG_PROFILE_ERROR = "Something went wrong saving your profile. Please try again 
 MSG_SYSTEM_ERROR = "System Error: No clubs configured. Please contact admin."
 
 MSG_REQUEST_DATE = "Awesome! When do you want to play? (e.g., 'tomorrow at 6pm', 'Saturday 2pm')"
+MSG_CONFIRM_DATE_WITH_PREFS = """📅 {time}
+
+Looking for:
+• Level: {level} (± {range})
+• Gender: {gender} (reply M or F for Male/Female-only)
+
+Reply YES to confirm, or adjust:
+• Enter level range like "3.0-4.0"
+• Text MUTE to skip invites today"""
 MSG_CONFIRM_DATE = "📅 {time} - is that right? Reply YES to confirm or try a different time."
 MSG_DATE_NOT_UNDERSTOOD = "Hmm, I didn't understand that. Try something like 'tomorrow at 6pm' or 'Saturday 2pm'."
 MSG_DATE_CANCELLED = "No problem! Text PLAY anytime to request a match."
@@ -25,7 +34,7 @@ MSG_INVALID_DATE_FORMAT = "Invalid format. Please use YYYY-MM-DD HH:MM (e.g., 20
 MSG_RANGE_TOO_SHORT = "Range too short for a 120-min match."
 MSG_PLAYER_NOT_FOUND = "Error: Player profile not found."
 MSG_MATCH_REQUESTED_VOTING = "Voting match created! We found {count} players to invite to vote on times."
-MSG_MATCH_REQUESTED_CONFIRMED = "Match requested for {time}! We found {count} players to invite. We'll let you know when they join."
+MSG_MATCH_REQUESTED_CONFIRMED = "🎾 Match requested for {time}! Inviting {count} players now. We'll let you know when they respond."
 MSG_MATCH_CREATION_ERROR = "Something went wrong creating your match request."
 MSG_MATCH_FULL = "Sorry, this match just filled up! We'll let you know about the next one."
 MSG_MATCH_ALREADY_FULL = "Sorry, this match is already full or cancelled."
@@ -39,6 +48,12 @@ MSG_MAYBE = "Got it, we'll keep you updated as this match comes together and fol
 
 MSG_INVALID_RANGE_FORMAT = "Invalid range format. Use YYYY-MM-DD HH:MM-HH:MM (e.g., 2023-12-01 14:00-18:00)."
 MSG_MATCH_TRIGGER_FAIL = "Match requested, but we couldn't trigger invites right now."
+
+# MUTE Command
+MSG_MUTED = "Got it! You won't receive match invites until tomorrow. Text UNMUTE anytime to opt back in."
+MSG_UNMUTED = "Welcome back! You'll now receive match invites again."
+MSG_ALREADY_MUTED = "You're already muted for today. Text UNMUTE to receive invites again."
+MSG_NOT_MUTED = "You're not currently muted. Text MUTE if you'd like to pause invites for today."
 
 # States
 STATE_NEW = "NEW"

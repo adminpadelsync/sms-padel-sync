@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import supabase
 from twilio_client import send_sms, get_club_name
 import sms_constants as msg
@@ -31,11 +31,24 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
     cmd = body.lower().strip()
     match_id = invite["match_id"]
     
+    # Handle MUTE command during invite flow
+    if cmd == "mute":
+        _handle_mute_from_invite(from_number, player)
+        return
+    
     if cmd == "no":
         # Decline
-        supabase.table("match_invites").update({"status": "declined", "responded_at": datetime.utcnow().isoformat()}).eq("invite_id", invite["invite_id"]).execute()
+        supabase.table("match_invites").update({
+            "status": "declined", 
+            "responded_at": datetime.utcnow().isoformat()
+        }).eq("invite_id", invite["invite_id"]).execute()
         send_sms(from_number, msg.MSG_DECLINE)
+        
+        # Immediately invite a replacement player
+        from matchmaker import invite_replacement_player
+        invite_replacement_player(match_id, count=1)
         return
+
 
     if cmd == "maybe" or cmd.startswith("maybe "):
         # Mark as MAYBE
@@ -249,3 +262,18 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 "Text PLAY to request a new match, or reply MATCHES to see your invites."
             )
         return
+
+
+def _handle_mute_from_invite(from_number: str, player: dict):
+    """Handle MUTE command from invite response context."""
+    if not player:
+        return
+    
+    # Set muted_until to end of today (midnight)
+    tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    
+    supabase.table("players").update({
+        "muted_until": tomorrow.isoformat()
+    }).eq("player_id", player["player_id"]).execute()
+    
+    send_sms(from_number, msg.MSG_MUTED)

@@ -285,6 +285,17 @@ async def trigger_feedback_collection():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/cron/invite-timeout")
+async def process_invite_timeouts():
+    """Cron endpoint to process expired invites and send replacements."""
+    from matchmaker import process_expired_invites
+    try:
+        new_invites = process_expired_invites()
+        return {"message": f"Processed expired invites, sent {new_invites} replacement(s)"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/matches/{match_id}/feedback")
 async def trigger_match_feedback(match_id: str):
     """Manually trigger feedback SMS for a specific match (for testing)."""

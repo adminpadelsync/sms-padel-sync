@@ -9,6 +9,10 @@
         {
             "path": "/api/cron/feedback",
             "schedule": "*/10 * * * *"
+        },
+        {
+            "path": "/api/cron/invite-timeout",
+            "schedule": "*/5 * * * *"
         }
     ]
 }
