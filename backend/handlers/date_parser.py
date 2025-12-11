@@ -4,7 +4,14 @@ Uses dateparser library to handle inputs like "tomorrow at 6pm", "next Saturday 
 """
 from datetime import datetime
 from typing import Tuple, Optional
-import dateparser
+
+try:
+    import dateparser
+    DATEPARSER_AVAILABLE = True
+except ImportError:
+    DATEPARSER_AVAILABLE = False
+    print("[WARNING] dateparser not installed - NLP date parsing disabled")
+
 
 
 def parse_natural_date(
@@ -25,6 +32,10 @@ def parse_natural_date(
             - ISO format string for storage (or None)
     """
     if not text or not text.strip():
+        return None, None, None
+    
+    # If dateparser is not available, return None to fall back to strict format
+    if not DATEPARSER_AVAILABLE:
         return None, None, None
     
     # Configure dateparser to prefer future dates
