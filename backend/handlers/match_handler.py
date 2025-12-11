@@ -88,8 +88,9 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
     # Extract current state
     scheduled_time_iso = state_data.get("scheduled_time_iso")
     scheduled_time_human = state_data.get("scheduled_time_human")
-    level_min = state_data.get("level_min", 3.0)
-    level_max = state_data.get("level_max", 4.0)
+    # Convert to float since Redis stores as strings in JSON
+    level_min = float(state_data.get("level_min", 3.0))
+    level_max = float(state_data.get("level_max", 4.0))
     gender_preference = state_data.get("gender_preference", "mixed")
     
     if not scheduled_time_iso:
