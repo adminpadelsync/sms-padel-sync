@@ -1,4 +1,4 @@
-from twilio_client import send_sms, set_reply_from
+from twilio_client import send_sms, set_reply_from, set_club_name
 from redis_client import get_user_state, set_user_state, clear_user_state
 from database import supabase
 import sms_constants as msg
@@ -24,24 +24,31 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     
     # 0. Look up which club this Twilio number belongs to
     club_id = None
+    club_name = "the club"  # Default fallback
     if to_number:
         club_res = supabase.table("clubs").select("club_id, name").eq("phone_number", to_number).execute()
         if club_res.data:
             club_id = club_res.data[0]["club_id"]
+            club_name = club_res.data[0]["name"]
         else:
             # Unknown Twilio number - try first club as fallback
-            fallback = supabase.table("clubs").select("club_id").limit(1).execute()
+            fallback = supabase.table("clubs").select("club_id, name").limit(1).execute()
             if fallback.data:
                 club_id = fallback.data[0]["club_id"]
+                club_name = fallback.data[0].get("name", "the club")
                 print(f"[WARNING] Unknown Twilio number {to_number}, using fallback club")
             else:
                 send_sms(from_number, "Sorry, this number is not configured for any club.")
                 return
     else:
         # No to_number provided (e.g., old test code) - use first club
-        fallback = supabase.table("clubs").select("club_id").limit(1).execute()
+        fallback = supabase.table("clubs").select("club_id, name").limit(1).execute()
         if fallback.data:
             club_id = fallback.data[0]["club_id"]
+            club_name = fallback.data[0].get("name", "the club")
+
+    # Set club name in context so all handlers can access it
+    set_club_name(club_name)
 
     # 1. Check if user exists in DB for THIS CLUB
     # Note: A player can be registered at multiple clubs with the same phone number
@@ -285,7 +292,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             send_sms(from_number, "📊 Reply MATCHES to see your match invites with details.")
             return
         else:
-            send_sms(from_number, msg.MSG_WELCOME_BACK.format(name=player['name']))
+            send_sms(from_number, msg.MSG_WELCOME_BACK.format(club_name=club_name, name=player['name']))
             return
 
     # If no state and no player, start onboarding
@@ -294,8 +301,8 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
              return
         
         # Start onboarding - store club_id in state for later
-        send_sms(from_number, msg.MSG_WELCOME_NEW)
-        set_user_state(from_number, msg.STATE_WAITING_NAME, {"club_id": club_id})
+        send_sms(from_number, msg.MSG_WELCOME_NEW.format(club_name=club_name))
+        set_user_state(from_number, msg.STATE_WAITING_NAME, {"club_id": club_id, "club_name": club_name})
         return
 
     # Handle States

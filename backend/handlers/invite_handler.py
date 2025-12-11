@@ -1,6 +1,6 @@
 from datetime import datetime
 from database import supabase
-from twilio_client import send_sms
+from twilio_client import send_sms, get_club_name
 import sms_constants as msg
 
 def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
@@ -117,7 +117,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
-                        send_sms(p_res.data[0]["phone_number"], msg.MSG_MATCH_CONFIRMED.format(time=opt))
+                        send_sms(p_res.data[0]["phone_number"], msg.MSG_MATCH_CONFIRMED.format(club_name=get_club_name(), time=opt))
                 return
 
     elif match["status"] == "pending":
@@ -227,7 +227,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
                         confirmation_msg = (
-                            f"🎾 MATCH CONFIRMED!\n\n"
+                            f"🎾 MATCH CONFIRMED at {get_club_name()}!\n\n"
                             f"📅 {formatted_time}\n\n"
                             f"👥 Players:\n{players_text}\n\n"
                             f"See you on the court! 🏸"

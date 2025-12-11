@@ -19,6 +19,7 @@ sms_whitelist = set(num.strip() for num in sms_whitelist_raw.split(",") if num.s
 # Context variable to store the current club's phone number for replies
 # This is set at the start of handling an incoming SMS and used by send_sms
 _reply_from_context: ContextVar[str] = ContextVar('reply_from', default=None)
+_club_name_context: ContextVar[str] = ContextVar('club_name', default=None)
 
 
 def set_reply_from(phone_number: str):
@@ -29,6 +30,16 @@ def set_reply_from(phone_number: str):
 def get_reply_from() -> str:
     """Get the reply-from phone number for the current request context."""
     return _reply_from_context.get()
+
+
+def set_club_name(name: str):
+    """Set the club name for the current request context."""
+    _club_name_context.set(name)
+
+
+def get_club_name() -> str:
+    """Get the club name for the current request context."""
+    return _club_name_context.get() or "the club"
 
 
 # Debug logging for SMS configuration

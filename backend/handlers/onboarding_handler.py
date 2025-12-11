@@ -1,5 +1,5 @@
 from database import supabase
-from twilio_client import send_sms
+from twilio_client import send_sms, get_club_name
 from redis_client import set_user_state, clear_user_state
 import sms_constants as msg
 
@@ -77,7 +77,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         try:
             supabase.table("players").insert(new_player).execute()
             clear_user_state(from_number)
-            send_sms(from_number, msg.MSG_PROFILE_SETUP_DONE)
+            send_sms(from_number, msg.MSG_PROFILE_SETUP_DONE.format(club_name=get_club_name()))
         except Exception as e:
             print(f"Error creating player: {e}")
             send_sms(from_number, msg.MSG_PROFILE_ERROR)
