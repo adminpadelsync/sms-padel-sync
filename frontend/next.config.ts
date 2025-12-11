@@ -55,6 +55,20 @@ const nextConfig: NextConfig = {
             ? 'http://localhost:8001/api/players/:path*'
             : `${apiUrl || ''}/api/players/:path*`,
       },
+      {
+        source: '/api/clubs/:path*',
+        destination:
+          process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8001/api/clubs/:path*'
+            : `${apiUrl || ''}/api/clubs/:path*`,
+      },
+      {
+        source: '/api/clubs',
+        destination:
+          process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8001/api/clubs'
+            : `${apiUrl || ''}/api/clubs`,
+      },
     ]
   },
 };
