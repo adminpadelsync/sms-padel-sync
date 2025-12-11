@@ -102,10 +102,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             if gender_preference == "female" and player_gender != "female":
                 continue
         
-        # Check availability (Simple text match for MVP)
-        if not p.get("availability_preferences"):
-            continue
-            
+        # Note: availability_preferences check removed - was blocking players without this set
         candidates.append(p)
     
     print(f"Found {len(candidates)} eligible candidates.")
