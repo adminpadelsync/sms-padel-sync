@@ -25,7 +25,7 @@ CREATE TABLE courts (
 -- Players (Depends on clubs)
 CREATE TABLE players (
   player_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  phone_number TEXT UNIQUE NOT NULL, -- encrypted
+  phone_number TEXT NOT NULL, -- same phone can be at multiple clubs
   name TEXT NOT NULL,
   declared_skill_level DECIMAL(2,1) CHECK (declared_skill_level IN (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)),
   adjusted_skill_level DECIMAL(2,1) CHECK (adjusted_skill_level IN (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)),
@@ -40,7 +40,9 @@ CREATE TABLE players (
   private_groups UUID[], -- array of group_ids
   created_at TIMESTAMP DEFAULT NOW(),
   last_active TIMESTAMP,
-  total_matches_played INTEGER DEFAULT 0
+  total_matches_played INTEGER DEFAULT 0,
+  -- Unique constraint allows same phone at multiple clubs
+  UNIQUE (phone_number, club_id)
 );
 
 -- Matches (Depends on clubs, courts)
