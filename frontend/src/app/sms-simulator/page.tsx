@@ -44,6 +44,12 @@ interface ConfirmedMatch {
     player_names: string[]
 }
 
+interface Club {
+    club_id: string
+    name: string
+    phone_number: string
+}
+
 export default function SMSSimulatorPage() {
     const [players, setPlayers] = useState<Player[]>([])
     const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([])
@@ -56,10 +62,14 @@ export default function SMSSimulatorPage() {
     const [confirmedMatches, setConfirmedMatches] = useState<ConfirmedMatch[]>([])
     const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null)
     const [currentClubId, setCurrentClubId] = useState<string | null>(null)
+    const [clubs, setClubs] = useState<Club[]>([])
+    // Track selected club per player (player_id -> club_id)
+    const [playerClubSelection, setPlayerClubSelection] = useState<Record<string, string>>({})
 
-    // Fetch players and confirmed matches on mount
+    // Fetch players, clubs, and confirmed matches on mount
     useEffect(() => {
         fetchPlayers()
+        fetchClubs()
         fetchConfirmedMatches()
     }, [])
 
@@ -121,6 +131,23 @@ export default function SMSSimulatorPage() {
             }
         } catch (error) {
             console.error('Error fetching players:', error)
+        }
+    }
+
+    const fetchClubs = async () => {
+        try {
+            const response = await fetch('/api/clubs')
+            if (response.ok) {
+                const data = await response.json()
+                const clubList = data.clubs || []
+                setClubs(clubList)
+                // Set default club for currentClubId if not already set
+                if (clubList.length > 0 && !currentClubId) {
+                    setCurrentClubId(clubList[0].club_id)
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching clubs:', error)
         }
     }
 
@@ -349,12 +376,18 @@ Reply YES to join, NO to decline`
         // Test mode: POST to backend, response will come via outbox polling
         if (testMode) {
             try {
+                // Get the selected club for this player, or default to first club
+                const selectedClubId = playerClubSelection[playerId] || clubs[0]?.club_id
+                const selectedClub = clubs.find(c => c.club_id === selectedClubId)
+                const toNumber = selectedClub?.phone_number
+
                 await fetch('/api/sms-inbox', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         from_number: player.phone_number,
-                        body: messageText
+                        body: messageText,
+                        to_number: toNumber
                     })
                 })
             } catch (error) {
@@ -825,6 +858,12 @@ Example: MAYBE 1`
                                     player={player}
                                     messages={conversations[player.player_id] || []}
                                     onSendMessage={(msg) => handlePlayerMessage(player.player_id, msg)}
+                                    clubs={clubs}
+                                    selectedClubId={playerClubSelection[player.player_id] || clubs[0]?.club_id}
+                                    onClubChange={(clubId) => setPlayerClubSelection(prev => ({
+                                        ...prev,
+                                        [player.player_id]: clubId
+                                    }))}
                                 />
                             </div>
                         ))}

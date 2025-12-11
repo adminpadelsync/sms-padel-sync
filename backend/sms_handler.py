@@ -3,7 +3,7 @@ from redis_client import get_user_state, set_user_state, clear_user_state
 from database import supabase
 import sms_constants as msg
 from handlers.invite_handler import handle_invite_response
-from handlers.match_handler import handle_match_request
+from handlers.match_handler import handle_match_request, handle_match_confirmation
 from handlers.onboarding_handler import handle_onboarding
 from handlers.feedback_handler import handle_feedback_response
 from datetime import datetime
@@ -312,6 +312,9 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:
         handle_match_request(from_number, body, player)
+    
+    elif current_state == msg.STATE_MATCH_REQUEST_CONFIRM:
+        handle_match_confirmation(from_number, body, player, state_data)
 
     # --- Feedback Collection Flow ---
     elif current_state == msg.STATE_WAITING_FEEDBACK:

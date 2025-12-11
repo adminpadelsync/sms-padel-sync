@@ -9,6 +9,12 @@ interface Message {
     timestamp: Date
 }
 
+interface Club {
+    club_id: string
+    name: string
+    phone_number: string
+}
+
 interface PlayerColumnProps {
     player: {
         player_id: string
@@ -17,9 +23,12 @@ interface PlayerColumnProps {
     }
     messages: Message[]
     onSendMessage: (message: string) => void
+    clubs?: Club[]
+    selectedClubId?: string
+    onClubChange?: (clubId: string) => void
 }
 
-export function PlayerColumn({ player, messages, onSendMessage }: PlayerColumnProps) {
+export function PlayerColumn({ player, messages, onSendMessage, clubs = [], selectedClubId, onClubChange }: PlayerColumnProps) {
     const [inputText, setInputText] = useState('')
 
     const handleSend = () => {
@@ -33,13 +42,40 @@ export function PlayerColumn({ player, messages, onSendMessage }: PlayerColumnPr
         onSendMessage(action)
     }
 
+    // Get selected club name for display
+    const selectedClub = clubs.find(c => c.club_id === selectedClubId)
+
     return (
         <div className="flex flex-col h-full border border-gray-300 rounded-lg bg-white">
             {/* Player Header */}
             <div className="p-3 border-b border-gray-200 bg-gray-50">
                 <div className="font-medium text-gray-900">{player.name}</div>
                 <div className="text-xs text-gray-500">{player.phone_number}</div>
+                {/* Club Selector - only show if multiple clubs */}
+                {clubs.length > 1 && (
+                    <div className="mt-2">
+                        <label className="text-xs text-gray-600 block mb-1">Texting to:</label>
+                        <select
+                            value={selectedClubId || clubs[0]?.club_id || ''}
+                            onChange={(e) => onClubChange?.(e.target.value)}
+                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                        >
+                            {clubs.map(club => (
+                                <option key={club.club_id} value={club.club_id}>
+                                    {club.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+                {/* Show single club name if only one */}
+                {clubs.length === 1 && (
+                    <div className="mt-1 text-xs text-indigo-600">
+                        → {clubs[0].name}
+                    </div>
+                )}
             </div>
+
 
             {/* Message Thread */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
