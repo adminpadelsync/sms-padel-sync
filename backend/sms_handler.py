@@ -6,6 +6,7 @@ from handlers.invite_handler import handle_invite_response
 from handlers.match_handler import handle_match_request, handle_match_confirmation
 from handlers.onboarding_handler import handle_onboarding
 from handlers.feedback_handler import handle_feedback_response
+from error_logger import log_sms_error
 from datetime import datetime
 import re
 

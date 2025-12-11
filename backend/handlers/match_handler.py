@@ -5,6 +5,7 @@ from twilio_client import send_sms
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
 from handlers.date_parser import parse_natural_date
+from error_logger import log_match_error
 
 
 # Default match preferences
@@ -284,7 +285,18 @@ def _create_match(
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
             
     except Exception as e:
-        print(f"Error creating match: {e}")
+        log_match_error(
+            error_message=str(e),
+            phone_number=from_number,
+            player=player,
+            exception=e,
+            context={
+                "scheduled_time_iso": scheduled_time_iso,
+                "level_min": level_min,
+                "level_max": level_max,
+                "gender_preference": gender_preference
+            }
+        )
         send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR)
 
 
