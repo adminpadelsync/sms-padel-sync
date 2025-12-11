@@ -43,9 +43,12 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         if fallback.data:
             club_id = fallback.data[0]["club_id"]
 
-    # 1. Check if user exists in DB
-    response = supabase.table("players").select("*").eq("phone_number", from_number).execute()
-    player = response.data[0] if response.data else None
+    # 1. Check if user exists in DB for THIS CLUB
+    # Note: A player can be registered at multiple clubs with the same phone number
+    player = None
+    if club_id:
+        response = supabase.table("players").select("*").eq("phone_number", from_number).eq("club_id", club_id).execute()
+        player = response.data[0] if response.data else None
 
     # 2. Get current conversation state from Redis
     state_data = get_user_state(from_number)
