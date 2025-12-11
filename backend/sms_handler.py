@@ -366,11 +366,29 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
 
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:
-        handle_match_request(from_number, body, player)
+        try:
+            handle_match_request(from_number, body, player)
+        except Exception as e:
+            print(f"[ERROR] handle_match_request failed: {e}")
+            log_sms_error(f"Match request handler failed: {e}", from_number, body, e)
+            send_sms(from_number, "Sorry, something went wrong processing your request. Please try again.")
+            clear_user_state(from_number)
     
     elif current_state == msg.STATE_MATCH_REQUEST_CONFIRM:
-        handle_match_confirmation(from_number, body, player, state_data)
+        try:
+            handle_match_confirmation(from_number, body, player, state_data)
+        except Exception as e:
+            print(f"[ERROR] handle_match_confirmation failed: {e}")
+            log_sms_error(f"Match confirmation handler failed: {e}", from_number, body, e)
+            send_sms(from_number, "Sorry, something went wrong confirming your match. Please text PLAY to try again.")
+            clear_user_state(from_number)
 
     # --- Feedback Collection Flow ---
     elif current_state == msg.STATE_WAITING_FEEDBACK:
-        handle_feedback_response(from_number, body, player, state_data)
+        try:
+            handle_feedback_response(from_number, body, player, state_data)
+        except Exception as e:
+            print(f"[ERROR] handle_feedback_response failed: {e}")
+            log_sms_error(f"Feedback handler failed: {e}", from_number, body, e)
+            clear_user_state(from_number)
+
