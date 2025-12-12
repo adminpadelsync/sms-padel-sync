@@ -1,14 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { QrCode } from 'lucide-react'
 
 interface Club {
     club_id: string
     name: string
     phone_number: string | null
     court_count: number
+    address?: string
+    poc_name?: string
+    poc_phone?: string
+    main_phone?: string
+    booking_system?: string
     settings: {
         feedback_delay_hours?: number
         feedback_reminder_delay_hours?: number
@@ -16,17 +21,39 @@ interface Club {
 }
 
 export default function SettingsPage() {
-    const router = useRouter()
     const [club, setClub] = useState<Club | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
     // Form state
-    const [name, setName] = useState('')
-    const [phoneNumber, setPhoneNumber] = useState('')
-    const [feedbackDelayHours, setFeedbackDelayHours] = useState(3)
-    const [feedbackReminderDelayHours, setFeedbackReminderDelayHours] = useState(4)
+    const [formData, setFormData] = useState({
+        name: '',
+        poc_name: '',
+        poc_phone: '',
+        main_phone: '',
+        booking_system: 'playtomic',
+        twilio_phone_number: '',
+    })
+
+    // Address broken down
+    const [addressFields, setAddressFields] = useState({
+        street: '',
+        city: '',
+        state: '',
+        zip: ''
+    })
+
+    const [feedbackSettings, setFeedbackSettings] = useState({
+        feedback_delay_hours: 3.0,
+        feedback_reminder_delay_hours: 4.0
+    })
+
+    const bookingSystems = [
+        { id: 'playtomic', name: 'Playtomic' },
+        { id: 'playbypoint', name: 'PlayByPoint' },
+        { id: 'other', name: 'Other' }
+    ]
 
     useEffect(() => {
         fetchClub()
@@ -40,10 +67,42 @@ export default function SettingsPage() {
                 if (data.clubs && data.clubs.length > 0) {
                     const clubData = data.clubs[0]
                     setClub(clubData)
-                    setName(clubData.name || '')
-                    setPhoneNumber(clubData.phone_number || '')
-                    setFeedbackDelayHours(clubData.settings?.feedback_delay_hours ?? 3)
-                    setFeedbackReminderDelayHours(clubData.settings?.feedback_reminder_delay_hours ?? 4)
+
+                    // Populate form
+                    setFormData({
+                        name: clubData.name || '',
+                        poc_name: clubData.poc_name || '',
+                        poc_phone: clubData.poc_phone || '',
+                        main_phone: clubData.main_phone || '',
+                        booking_system: clubData.booking_system || 'playtomic',
+                        twilio_phone_number: clubData.phone_number || '',
+                    })
+
+                    // Parse address
+                    if (clubData.address) {
+                        // Simple parsing strategy: assume "Street, City, State Zip"
+                        // This is a best-effort parse
+                        const parts = clubData.address.split(',').map((s: string) => s.trim())
+                        if (parts.length >= 3) {
+                            const street = parts[0]
+                            const city = parts[1]
+                            const stateZip = parts[2]
+                            const stateZipParts = stateZip.split(' ')
+                            const state = stateZipParts[0]
+                            const zip = stateZipParts.slice(1).join(' ')
+
+                            setAddressFields({ street, city, state, zip })
+                        } else {
+                            // Fallback
+                            setAddressFields({ street: clubData.address, city: '', state: '', zip: '' })
+                        }
+                    }
+
+                    // Populate settings
+                    setFeedbackSettings({
+                        feedback_delay_hours: clubData.settings?.feedback_delay_hours ?? 3.0,
+                        feedback_reminder_delay_hours: clubData.settings?.feedback_reminder_delay_hours ?? 4.0
+                    })
                 }
             }
         } catch (error) {
@@ -56,38 +115,37 @@ export default function SettingsPage() {
 
     const handleSave = async () => {
         if (!club) return
-
         setSaving(true)
         setMessage(null)
 
+        const fullAddress = `${addressFields.street}, ${addressFields.city}, ${addressFields.state} ${addressFields.zip}`
+
         try {
-            // Update club info (name, phone_number)
+            // Update club info
             const clubResponse = await fetch(`/api/clubs/${club.club_id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name,
-                    phone_number: phoneNumber || null
+                    name: formData.name,
+                    phone_number: formData.twilio_phone_number || null,
+                    address: fullAddress,
+                    poc_name: formData.poc_name || null,
+                    poc_phone: formData.poc_phone || null,
+                    main_phone: formData.main_phone || null,
+                    booking_system: formData.booking_system || null
                 })
             })
 
-            if (!clubResponse.ok) {
-                throw new Error('Failed to update club info')
-            }
+            if (!clubResponse.ok) throw new Error('Failed to update club info')
 
-            // Update club settings (feedback settings)
+            // Update club settings
             const settingsResponse = await fetch(`/api/clubs/${club.club_id}/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    feedback_delay_hours: feedbackDelayHours,
-                    feedback_reminder_delay_hours: feedbackReminderDelayHours
-                })
+                body: JSON.stringify(feedbackSettings)
             })
 
-            if (!settingsResponse.ok) {
-                throw new Error('Failed to update settings')
-            }
+            if (!settingsResponse.ok) throw new Error('Failed to update settings')
 
             setMessage({ type: 'success', text: 'Settings saved successfully!' })
             setTimeout(() => setMessage(null), 3000)
@@ -100,146 +158,169 @@ export default function SettingsPage() {
         }
     }
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-                <div className="text-gray-500">Loading settings...</div>
-            </div>
-        )
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target
+        setFormData(prev => ({ ...prev, [name]: value }))
     }
 
-    if (!club) {
-        return (
-            <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-                <div className="text-gray-500">No club found</div>
-            </div>
-        )
+    const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target
+        setAddressFields(prev => ({ ...prev, [name]: value }))
     }
+
+    if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading settings...</div>
+    if (!club) return <div className="min-h-screen flex items-center justify-center text-gray-500">No club found</div>
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-2xl mx-auto">
+        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
+            <div className="max-w-4xl mx-auto">
                 {/* Header */}
-                <div className="mb-6">
-                    <Link
-                        href="/dashboard"
-                        className="text-indigo-600 hover:text-indigo-800 text-sm mb-2 inline-block"
-                    >
-                        ← Back to Dashboard
-                    </Link>
-                    <h1 className="text-2xl font-bold text-gray-900">⚙️ Club Settings</h1>
-                    <p className="text-gray-600">Configure your club&apos;s SMS and notification settings</p>
+                <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center">
+                            ← Back to Dashboard
+                        </Link>
+                        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Club Settings</h1>
+                        <p className="mt-2 text-lg text-gray-600">Manage your club profile and configurations.</p>
+                    </div>
+
+                    {/* Poster Link */}
+                    <div className="mt-4 sm:mt-0">
+                        <Link
+                            href={`/dashboard/clubs/${club.club_id}/poster`}
+                            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                        >
+                            <QrCode className="mr-2 h-5 w-5 text-indigo-600" />
+                            View QR Poster
+                        </Link>
+                    </div>
                 </div>
 
-                {/* Settings Form */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-200">
-                    {/* Club Information Section */}
-                    <div className="p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Club Information</h2>
+                <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100 p-8 sm:p-10 space-y-10">
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Club Name
-                                </label>
+                    {/* 1. General Info */}
+                    <section>
+                        <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                            <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">1</span>
+                            General Information
+                        </h3>
+                        <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
+                            <div className="sm:col-span-2">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Club Name</label>
                                 <input
                                     type="text"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="e.g., Miami Padel Club"
+                                    name="name"
+                                    value={formData.name}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
                                 />
                             </div>
 
+                            {/* Address Breakdown */}
+                            <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-6 gap-6">
+                                <div className="sm:col-span-6">
+                                    <label className="block text-base font-bold text-gray-800 mb-2">Address</label>
+                                    <input type="text" name="street" placeholder="Street" value={addressFields.street} onChange={handleAddressChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4 mb-4" />
+                                </div>
+                                <div className="sm:col-span-3">
+                                    <input type="text" name="city" placeholder="City" value={addressFields.city} onChange={handleAddressChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4" />
+                                </div>
+                                <div className="sm:col-span-1">
+                                    <input type="text" name="state" placeholder="State" value={addressFields.state} onChange={handleAddressChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4" />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <input type="text" name="zip" placeholder="Zip" value={addressFields.zip} onChange={handleAddressChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4" />
+                                </div>
+                            </div>
+
+                            <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Booking System</label>
+                                <select
+                                    name="booking_system"
+                                    value={formData.booking_system}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4 bg-white"
+                                >
+                                    {bookingSystems.map(sys => (
+                                        <option key={sys.id} value={sys.id}>{sys.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 2. Contact Info */}
+                    <section>
+                        <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                            <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">2</span>
+                            Contact Information
+                        </h3>
+                        <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
+                            <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">POC Name</label>
+                                <input type="text" name="poc_name" value={formData.poc_name} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
+                            </div>
+                            <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">POC Phone</label>
+                                <input type="text" name="poc_phone" value={formData.poc_phone} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
+                            </div>
+                            <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Main Club Phone</label>
+                                <input type="text" name="main_phone" value={formData.main_phone} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 3. System Integration & Settings */}
+                    <section>
+                        <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                            <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">3</span>
+                            System Settings
+                        </h3>
+
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sm:col-span-2 mb-6">
+                            <label className="block text-base font-bold text-blue-900 mb-2">Twilio Phone Number</label>
+                            <input type="text" name="twilio_phone_number" value={formData.twilio_phone_number} onChange={handleChange} className="block w-full rounded-lg border-blue-200 text-blue-900 placeholder-blue-300 focus:ring-blue-500 focus:border-blue-500 text-lg py-3 px-4" />
+                            <p className="mt-2 text-sm text-blue-700">ℹ️ Active SMS number (+1XXXXXXXXXX).</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    SMS Phone Number
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Request Delay (Hours)</label>
                                 <input
-                                    type="tel"
-                                    value={phoneNumber}
-                                    onChange={(e) => setPhoneNumber(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="+18885550123"
+                                    type="number" step="0.5"
+                                    value={feedbackSettings.feedback_delay_hours}
+                                    onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_delay_hours: parseFloat(e.target.value) || 0 }))}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    📱 Your Twilio phone number. Players who text this number will be registered with this club.
-                                </p>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Feedback Settings Section */}
-                    <div className="p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Feedback Settings</h2>
-
-                        <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Hours after match begins to send feedback request
-                                </label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        step="0.5"
-                                        min="0.5"
-                                        max="24"
-                                        value={feedbackDelayHours}
-                                        onChange={(e) => setFeedbackDelayHours(parseFloat(e.target.value) || 3)}
-                                        className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                    <span className="text-sm text-gray-500">hours</span>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Hours after initial request to send reminder
-                                </label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        step="0.5"
-                                        min="0.5"
-                                        max="48"
-                                        value={feedbackReminderDelayHours}
-                                        onChange={(e) => setFeedbackReminderDelayHours(parseFloat(e.target.value) || 4)}
-                                        className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                    <span className="text-sm text-gray-500">hours (if no response)</span>
-                                </div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Reminder Delay (Hours)</label>
+                                <input
+                                    type="number" step="0.5"
+                                    value={feedbackSettings.feedback_reminder_delay_hours}
+                                    onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_reminder_delay_hours: parseFloat(e.target.value) || 0 }))}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                />
                             </div>
                         </div>
+                    </section>
+
+                    <div className="flex justify-end pt-6 border-t border-gray-100">
+                        <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={saving}
+                            className={`inline-flex items-center px-8 py-3 border border-transparent text-base font-bold rounded-xl shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all ${saving ? 'opacity-70' : ''}`}
+                        >
+                            {saving ? 'Saving...' : 'Save Changes'}
+                        </button>
                     </div>
-
-                    {/* Save Button */}
-                    <div className="p-6 bg-gray-50">
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 font-medium"
-                            >
-                                {saving ? 'Saving...' : 'Save Settings'}
-                            </button>
-
-                            {message && (
-                                <span className={`text-sm ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                                    {message.text}
-                                </span>
-                            )}
+                    {message && (
+                        <div className={`mt-4 p-4 rounded-lg text-center ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                            {message.text}
                         </div>
-                    </div>
-                </div>
-
-                {/* Help Text */}
-                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-1">💡 About SMS Phone Numbers</h3>
-                    <p className="text-sm text-blue-800">
-                        Each club should have its own dedicated Twilio phone number. When players text that number,
-                        they&apos;ll automatically be registered with this club. You can get additional phone numbers from
-                        your <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer" className="underline">Twilio Console</a>.
-                    </p>
+                    )}
                 </div>
             </div>
         </div>

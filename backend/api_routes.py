@@ -44,7 +44,7 @@ async def get_clubs():
     """Get all active clubs."""
     from database import supabase
     try:
-        result = supabase.table("clubs").select("club_id, name, phone_number, court_count, settings").eq("active", True).execute()
+        result = supabase.table("clubs").select("*").eq("active", True).execute()
         return {"clubs": result.data or []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
