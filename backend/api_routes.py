@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
+import uuid
+from database import supabase
 from match_organizer import (
     get_player_recommendations, 
     initiate_match_outreach,
@@ -48,17 +50,71 @@ async def get_clubs():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class CreateClubRequest(BaseModel):
+    name: str
+    phone_number: str
+    court_count: int = 4
+    address: Optional[str] = None
+    poc_name: Optional[str] = None
+    poc_phone: Optional[str] = None
+    main_phone: Optional[str] = None
+    booking_system: Optional[str] = None
+
 class ClubUpdate(BaseModel):
     name: Optional[str] = None
     phone_number: Optional[str] = None
+    address: Optional[str] = None
+    poc_name: Optional[str] = None
+    poc_phone: Optional[str] = None
+    main_phone: Optional[str] = None
+    booking_system: Optional[str] = None
 
+@router.post("/clubs")
+async def create_club(request: CreateClubRequest):
+    """Create a new club and its courts."""
+    try:
+        # 1. Create Club
+        club_data = {
+            "name": request.name,
+            "phone_number": request.phone_number,
+            "court_count": request.court_count,
+            "address": request.address,
+            "poc_name": request.poc_name,
+            "poc_phone": request.poc_phone,
+            "main_phone": request.main_phone,
+            "booking_system": request.booking_system,
+            "active": True
+        }
+        
+        result = supabase.table("clubs").insert(club_data).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create club")
+        
+        new_club = result.data[0]
+        club_id = new_club["club_id"]
+        
+        # 2. Create Courts
+        courts_data = []
+        for i in range(request.court_count):
+            courts_data.append({
+                "club_id": club_id,
+                "name": f"Court {i+1}",
+                "settings": {}
+            })
+            
+        if courts_data:
+            supabase.table("courts").insert(courts_data).execute()
+            
+        return {"club": new_club, "message": f"Club created with {request.court_count} courts"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clubs/{club_id}")
 async def get_club(club_id: str):
     """Get a single club by ID."""
-    from database import supabase
     try:
-        result = supabase.table("clubs").select("club_id, name, phone_number, court_count, settings").eq("club_id", club_id).execute()
+        result = supabase.table("clubs").select("*").eq("club_id", club_id).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="Club not found")
         return {"club": result.data[0]}
@@ -79,6 +135,16 @@ async def update_club(club_id: str, updates: ClubUpdate):
             update_data["name"] = updates.name
         if updates.phone_number is not None:
             update_data["phone_number"] = updates.phone_number
+        if updates.address is not None:
+            update_data["address"] = updates.address
+        if updates.poc_name is not None:
+            update_data["poc_name"] = updates.poc_name
+        if updates.poc_phone is not None:
+            update_data["poc_phone"] = updates.poc_phone
+        if updates.main_phone is not None:
+            update_data["main_phone"] = updates.main_phone
+        if updates.booking_system is not None:
+            update_data["booking_system"] = updates.booking_system
         
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")

@@ -273,6 +273,14 @@ export function DashboardClient({
                         >
                             ⚙️ Settings
                         </a>
+                        {isSuperuser && (
+                            <a
+                                href="/dashboard/clubs/new"
+                                className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-800 border border-green-600 rounded-md hover:bg-green-50 transition-colors"
+                            >
+                                ➕ Create Club
+                            </a>
+                        )}
                         {isSuperuser && clubs.length > 0 && (
                             <ClubSelector
                                 clubs={clubs}
