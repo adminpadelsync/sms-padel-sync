@@ -3,15 +3,23 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClub } from '../actions'
+import { ChevronRight } from 'lucide-react'
 
 export default function NewClubPage() {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState('')
 
+    // Address broken down
+    const [addressFields, setAddressFields] = useState({
+        street: '',
+        city: '',
+        state: '',
+        zip: ''
+    })
+
     const [formData, setFormData] = useState({
         name: '',
-        address: '',
         poc_name: '',
         poc_phone: '',
         main_phone: '',
@@ -31,10 +39,15 @@ export default function NewClubPage() {
         setIsLoading(true)
         setError('')
 
+        // Concatenate address
+        const fullAddress = `${addressFields.street}, ${addressFields.city}, ${addressFields.state} ${addressFields.zip}`
+
         try {
-            const result = await createClub(formData)
+            const result = await createClub({
+                ...formData,
+                address: fullAddress
+            })
             if (result.success && result.clubId) {
-                // Redirect to the poster page
                 router.push(`/dashboard/clubs/${result.clubId}/poster`)
             }
         } catch (err) {
@@ -45,7 +58,7 @@ export default function NewClubPage() {
         }
     }
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         setFormData(prev => ({
             ...prev,
@@ -53,31 +66,44 @@ export default function NewClubPage() {
         }))
     }
 
-    return (
-        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl mx-auto">
-                <div className="bg-white shadow sm:rounded-lg overflow-hidden">
-                    <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-                        <h3 className="text-lg leading-6 font-medium text-gray-900">
-                            Provision New Club
-                        </h3>
-                        <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                            Create a new club entity, setup courts, and configure admin details.
-                        </p>
-                    </div>
+    const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target
+        setAddressFields(prev => ({
+            ...prev,
+            [name]: value
+        }))
+    }
 
-                    <form onSubmit={handleSubmit} className="px-4 py-5 sm:p-6 space-y-6">
+    return (
+        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
+            <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <button
+                        onClick={() => router.back()}
+                        className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center"
+                    >
+                        ← Back to Dashboard
+                    </button>
+                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Provision New Club</h1>
+                    <p className="mt-2 text-lg text-gray-600">
+                        Configure a new club entity, setup courts, and establish admin credentials.
+                    </p>
+                </div>
+
+                <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+                    <form onSubmit={handleSubmit} className="p-8 sm:p-10 space-y-10">
                         {error && (
-                            <div className="rounded-md bg-red-50 p-4">
+                            <div className="rounded-xl bg-red-50 p-4 border border-red-100">
                                 <div className="flex">
                                     <div className="flex-shrink-0">
-                                        <span className="text-red-400">⚠️</span>
+                                        <span className="text-red-500 text-xl">⚠️</span>
                                     </div>
                                     <div className="ml-3">
-                                        <h3 className="text-sm font-medium text-red-800">
-                                            Error creating club
+                                        <h3 className="text-sm font-bold text-red-800">
+                                            Creation Failed
                                         </h3>
-                                        <div className="mt-2 text-sm text-red-700">
+                                        <div className="mt-1 text-sm text-red-700">
                                             <p>{error}</p>
                                         </div>
                                     </div>
@@ -85,147 +111,97 @@ export default function NewClubPage() {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                            {/* Club Name */}
-                            <div className="sm:col-span-4">
-                                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                                    Club Name
-                                </label>
-                                <div className="mt-1">
+                        {/* Section: Club Details */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                                <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">1</span>
+                                Club Details
+                            </h3>
+                            <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="name" className="block text-base font-bold text-gray-800 mb-2">
+                                        Club Name
+                                    </label>
                                     <input
                                         type="text"
                                         name="name"
                                         id="name"
                                         required
+                                        placeholder="e.g. Miami Padel Club"
                                         value={formData.name}
                                         onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
                                     />
                                 </div>
-                            </div>
 
-                            {/* Booking System */}
-                            <div className="sm:col-span-2">
-                                <label htmlFor="booking_system" className="block text-sm font-medium text-gray-700">
-                                    Booking System
-                                </label>
-                                <div className="mt-1">
+                                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-6 gap-6">
+                                    <div className="sm:col-span-6">
+                                        <label className="block text-base font-bold text-gray-800 mb-2">Address</label>
+                                        <input
+                                            type="text"
+                                            name="street"
+                                            placeholder="Street Address"
+                                            required
+                                            value={addressFields.street}
+                                            onChange={handleAddressChange}
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4 mb-4"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-3">
+                                        <input
+                                            type="text"
+                                            name="city"
+                                            placeholder="City"
+                                            required
+                                            value={addressFields.city}
+                                            onChange={handleAddressChange}
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-1">
+                                        <input
+                                            type="text"
+                                            name="state"
+                                            placeholder="State"
+                                            required
+                                            value={addressFields.state}
+                                            onChange={handleAddressChange}
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <input
+                                            type="text"
+                                            name="zip"
+                                            placeholder="ZIP Code"
+                                            required
+                                            value={addressFields.zip}
+                                            onChange={handleAddressChange}
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-3 px-4"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="booking_system" className="block text-base font-bold text-gray-800 mb-2">
+                                        Booking System
+                                    </label>
                                     <select
                                         id="booking_system"
                                         name="booking_system"
                                         value={formData.booking_system}
                                         onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4 bg-white"
                                     >
                                         {bookingSystems.map(sys => (
                                             <option key={sys.id} value={sys.id}>{sys.name}</option>
                                         ))}
                                     </select>
                                 </div>
-                            </div>
-
-                            {/* Address */}
-                            <div className="sm:col-span-6">
-                                <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                                    Address
-                                </label>
-                                <div className="mt-1">
-                                    <textarea
-                                        id="address"
-                                        name="address"
-                                        rows={3}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md"
-                                        value={formData.address}
-                                        onChange={handleChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="sm:col-span-6 border-t border-gray-200 pt-6">
-                                <h4 className="text-sm font-medium text-gray-900 mb-4">Contact Information</h4>
-                            </div>
-
-                            {/* Main Phone */}
-                            <div className="sm:col-span-3">
-                                <label htmlFor="main_phone" className="block text-sm font-medium text-gray-700">
-                                    Main Club Phone
-                                </label>
-                                <div className="mt-1">
-                                    <input
-                                        type="tel"
-                                        name="main_phone"
-                                        id="main_phone"
-                                        value={formData.main_phone}
-                                        onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* POC Name */}
-                            <div className="sm:col-span-3">
-                                <label htmlFor="poc_name" className="block text-sm font-medium text-gray-700">
-                                    Point of Contact Name
-                                </label>
-                                <div className="mt-1">
-                                    <input
-                                        type="text"
-                                        name="poc_name"
-                                        id="poc_name"
-                                        value={formData.poc_name}
-                                        onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* POC Phone */}
-                            <div className="sm:col-span-3">
-                                <label htmlFor="poc_phone" className="block text-sm font-medium text-gray-700">
-                                    POC Phone
-                                </label>
-                                <div className="mt-1">
-                                    <input
-                                        type="tel"
-                                        name="poc_phone"
-                                        id="poc_phone"
-                                        value={formData.poc_phone}
-                                        onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="sm:col-span-6 border-t border-gray-200 pt-6">
-                                <h4 className="text-sm font-medium text-gray-900 mb-4">System Integration</h4>
-                            </div>
-
-                            {/* Twilio Number */}
-                            <div className="sm:col-span-3">
-                                <label htmlFor="twilio_phone_number" className="block text-sm font-medium text-gray-700">
-                                    Twilio Phone Number (Active)
-                                </label>
-                                <div className="mt-1">
-                                    <input
-                                        type="tel"
-                                        name="twilio_phone_number"
-                                        id="twilio_phone_number"
-                                        required
-                                        placeholder="+1..."
-                                        value={formData.twilio_phone_number}
-                                        onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                    />
-                                </div>
-                                <p className="mt-1 text-xs text-gray-500">Must be an active Twilio number configured with the webhook.</p>
-                            </div>
-
-                            {/* Court Count */}
-                            <div className="sm:col-span-3">
-                                <label htmlFor="court_count" className="block text-sm font-medium text-gray-700">
-                                    Number of Courts
-                                </label>
-                                <div className="mt-1">
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="court_count" className="block text-base font-bold text-gray-800 mb-2">
+                                        Number of Courts
+                                    </label>
                                     <input
                                         type="number"
                                         name="court_count"
@@ -234,26 +210,121 @@ export default function NewClubPage() {
                                         required
                                         value={formData.court_count}
                                         onChange={handleChange}
-                                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
                                     />
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
-                        <div className="pt-5 border-t border-gray-200 flex justify-end gap-3">
+                        {/* Section: Contact Details */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                                <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">2</span>
+                                Contact Information
+                            </h3>
+                            <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="poc_name" className="block text-base font-bold text-gray-800 mb-2">
+                                        Point of Contact Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="poc_name"
+                                        id="poc_name"
+                                        placeholder="Full Name"
+                                        value={formData.poc_name}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="poc_phone" className="block text-base font-bold text-gray-800 mb-2">
+                                        POC Phone
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        name="poc_phone"
+                                        id="poc_phone"
+                                        placeholder="(555) 123-4567"
+                                        value={formData.poc_phone}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="main_phone" className="block text-base font-bold text-gray-800 mb-2">
+                                        Main Club Phone
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        name="main_phone"
+                                        id="main_phone"
+                                        placeholder="(555) 999-8888"
+                                        value={formData.main_phone}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section: System Integration */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                                <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">3</span>
+                                Integration
+                            </h3>
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sm:col-span-2 mb-6">
+                                <label htmlFor="twilio_phone_number" className="block text-base font-bold text-blue-900 mb-2">
+                                    Twilio Phone Number (Active)
+                                </label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
+                                    <input
+                                        type="tel"
+                                        name="twilio_phone_number"
+                                        id="twilio_phone_number"
+                                        required
+                                        placeholder="+1..."
+                                        value={formData.twilio_phone_number}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-blue-200 text-blue-900 placeholder-blue-300 focus:ring-blue-500 focus:border-blue-500 text-lg py-3 px-4"
+                                    />
+                                </div>
+                                <p className="mt-2 text-sm text-blue-700 flex items-center">
+                                    ℹ️ Must be formatted as <span className="font-mono font-bold mx-1">+1XXXXXXXXXX</span> (e.g., +13051234567).
+                                </p>
+                            </div>
+                        </section>
+
+                        <div className="pt-6 flex justify-end gap-4 border-t border-gray-100">
                             <button
                                 type="button"
                                 onClick={() => router.back()}
-                                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                className="px-6 py-3 border border-gray-300 rounded-xl shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`inline-flex items-center px-8 py-3 border border-transparent text-base font-bold rounded-xl shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:-translate-y-0.5 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
-                                {isLoading ? 'Creating...' : 'Create Club'}
+                                {isLoading ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>
+                                        Create Club
+                                        <ChevronRight className="ml-2 h-5 w-5" />
+                                    </>
+                                )}
                             </button>
                         </div>
                     </form>
