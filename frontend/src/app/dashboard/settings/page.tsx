@@ -56,16 +56,23 @@ export default function SettingsPage() {
     ]
 
     useEffect(() => {
-        fetchClub()
+        const storedClubId = localStorage.getItem('selectedClubId')
+        fetchClub(storedClubId)
     }, [])
 
-    const fetchClub = async () => {
+    const fetchClub = async (targetId: string | null) => {
         try {
             const response = await fetch('/api/clubs')
             if (response.ok) {
                 const data = await response.json()
                 if (data.clubs && data.clubs.length > 0) {
-                    const clubData = data.clubs[0]
+                    // Find target club or default to first
+                    let clubData = data.clubs[0]
+                    if (targetId) {
+                        const found = data.clubs.find((c: Club) => c.club_id === targetId)
+                        if (found) clubData = found
+                    }
+
                     setClub(clubData)
 
                     // Populate form
@@ -96,6 +103,8 @@ export default function SettingsPage() {
                             // Fallback
                             setAddressFields({ street: clubData.address, city: '', state: '', zip: '' })
                         }
+                    } else {
+                        setAddressFields({ street: '', city: '', state: '', zip: '' })
                     }
 
                     // Populate settings
