@@ -267,12 +267,7 @@ export function DashboardClient({
                         >
                             📱 SMS Simulator
                         </a>
-                        <a
-                            href="/dashboard/settings"
-                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                        >
-                            ⚙️ Settings
-                        </a>
+
                         {isSuperuser && (
                             <a
                                 href="/dashboard/clubs/new"
@@ -288,6 +283,12 @@ export function DashboardClient({
                                 onClubChange={setSelectedClubId}
                             />
                         )}
+                        <a
+                            href="/dashboard/settings"
+                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                        >
+                            ⚙️ Settings
+                        </a>
                         <LogoutButton />
                     </div>
                 </div>
