@@ -110,7 +110,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
                 pass
         
         # Check skill range
-        player_level = p.get("adjusted_skill_level", 3.5)
+        player_level = p.get("adjusted_skill_level") or p.get("declared_skill_level") or 3.5
         if player_level < level_min or player_level > level_max:
             continue
         
