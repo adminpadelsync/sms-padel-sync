@@ -8,7 +8,7 @@ BATCH_SIZE = 6  # Number of invites to send at a time
 INVITE_TIMEOUT_MINUTES = 15  # Time before invite expires
 
 
-def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None):
+def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False):
     """
     Finds compatible players for a match and sends SMS invites in batches.
     
@@ -16,11 +16,12 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         match_id: The match to find players for
         batch_number: Which batch this is (for tracking)
         max_invites: Override for number of invites (used for replacements)
+        skip_filters: If True, skip level/gender filtering (used for group invites)
     
     Returns:
         Number of invites sent
     """
-    print(f"Finding players for match {match_id} (batch {batch_number})...")
+    print(f"Finding players for match {match_id} (batch {batch_number}, skip_filters={skip_filters})...")
     
     # 1. Fetch the match details
     match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
@@ -44,13 +45,13 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     club_id = match["club_id"]
     
-    # Get match preferences (or use defaults)
+    # Get match preferences (or use defaults) - only used if not skipping filters
     level_min = match.get("level_range_min")
     level_max = match.get("level_range_max")
     gender_preference = match.get("gender_preference", "mixed")
     
-    # If no level range set, use requester's level ± 0.25
-    if level_min is None or level_max is None:
+    # If no level range set and not skipping filters, use requester's level ± 0.25
+    if not skip_filters and (level_min is None or level_max is None):
         target_level = requester["adjusted_skill_level"]
         level_min = target_level - 0.25
         level_max = target_level + 0.25
@@ -109,18 +110,20 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             except:
                 pass
         
-        # Check skill range
-        player_level = p.get("adjusted_skill_level") or p.get("declared_skill_level") or 3.5
-        if player_level < level_min or player_level > level_max:
-            continue
-        
-        # Check gender preference
-        if gender_preference != "mixed":
-            player_gender = p.get("gender", "").lower()
-            if gender_preference == "male" and player_gender != "male":
+        # Skip level/gender filtering if skip_filters is True
+        if not skip_filters:
+            # Check skill range
+            player_level = p.get("adjusted_skill_level") or p.get("declared_skill_level") or 3.5
+            if player_level < level_min or player_level > level_max:
                 continue
-            if gender_preference == "female" and player_gender != "female":
-                continue
+            
+            # Check gender preference
+            if gender_preference and gender_preference != "mixed":
+                player_gender = p.get("gender", "").lower()
+                if gender_preference == "male" and player_gender != "male":
+                    continue
+                if gender_preference == "female" and player_gender != "female":
+                    continue
         
         # Note: availability_preferences check removed - was blocking players without this set
         candidates.append(p)

@@ -23,11 +23,10 @@ MSG_CONFIRM_DATE_WITH_PREFS = """🎾 {club_name}
 
 Looking for:
 • Level: {level} (± {range})
-• Gender: {gender} (reply M or F for Male/Female-only)
+• Gender: {gender} (reply M, F, or E for Either)
 
 Reply YES to confirm, or adjust:
-• Enter level range like "3.0-4.0"
-• Text MUTE to skip invites today"""
+• Enter level range like "3.0-4.0" """
 MSG_CONFIRM_DATE = "📅 {time} - is that right? Reply YES to confirm or try a different time."
 MSG_DATE_NOT_UNDERSTOOD = "Hmm, I didn't understand that. Try something like 'tomorrow at 6pm' or 'Saturday 2pm'."
 MSG_DATE_CANCELLED = "No problem! Text PLAY anytime to request a match."
@@ -60,6 +59,16 @@ MSG_ASK_GROUP_TARGET = """Who would you like to invite to this match?
 1) Everyone
 {groups_list}
 Reply with a number."""
+
+MSG_ASK_GROUP_WITH_TIME = """🎾 {club_name}
+📅 {time}
+
+Who would you like to invite?
+1) Everyone
+{groups_list}
+Reply with a number, or a different time."""
+
+MSG_MATCH_REQUESTED_GROUP = "🎾 {club_name}: Match requested for {time}! Inviting {count} players from {group_name}. We'll let you know when they respond."
 
 # States
 STATE_NEW = "NEW"

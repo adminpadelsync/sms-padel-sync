@@ -8,9 +8,13 @@ from datetime import datetime, timedelta
 def _parse_gender(text: str) -> Optional[str]:
     """
     Parse gender preference from response.
-    Returns 'male', 'female', or None.
+    Returns 'male', 'female', 'mixed', or None.
     """
     text_upper = text.upper()
+    
+    # Check for explicit E (Either/Mixed)
+    if re.search(r'\bE\b', text_upper) or 'EITHER' in text_upper or 'MIXED' in text_upper:
+        return "mixed"
     
     # Check for explicit M or F (not part of other words)
     if re.search(r'\bM\b', text_upper) or 'MALE' in text_upper and 'FEMALE' not in text_upper:
@@ -58,7 +62,8 @@ DEFAULT_GENDER = "Mixed"
 def handle_match_date_input(from_number: str, body: str, player: dict):
     """
     Handle date/time input for match request (first phase).
-    Parses natural language input and asks for confirmation with preferences.
+    Parses natural language input. If player is in groups, asks group first.
+    Otherwise, asks for preferences confirmation.
     """
     date_str = body.strip()
     
@@ -70,34 +75,73 @@ def handle_match_date_input(from_number: str, body: str, player: dict):
     # Try NLP parsing first
     parsed_dt, human_readable, iso_format = parse_natural_date(date_str)
     
-    if parsed_dt is not None:
-        _send_preferences_confirmation(from_number, human_readable, iso_format, player)
+    if parsed_dt is None:
+        # Fallback: Try strict YYYY-MM-DD HH:MM format
+        try:
+            scheduled_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+            human_readable = scheduled_time.strftime("%a, %b %d at %I:%M %p")
+            iso_format = scheduled_time.isoformat()
+            parsed_dt = scheduled_time
+        except ValueError:
+            pass
+    
+    if parsed_dt is None:
+        # Neither worked - ask user to try again
+        send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
         return
     
-    # Fallback: Try strict YYYY-MM-DD HH:MM format
-    try:
-        scheduled_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-        human_readable = scheduled_time.strftime("%a, %b %d at %I:%M %p")
-        iso_format = scheduled_time.isoformat()
+    # Date parsed successfully - check if player is in any groups
+    groups_res = supabase.table("group_memberships").select(
+        "group_id, player_groups(name)"
+    ).eq("player_id", player["player_id"]).execute()
+    
+    if groups_res.data:
+        # Player is in groups - ask group selection FIRST with time confirmation
+        groups_data = groups_res.data
         
+        # Format list - start at 2 since 1 is Everyone
+        groups_list = ""
+        group_options = {}
+        for idx, item in enumerate(groups_data, 2):
+            group_name = item.get("player_groups", {}).get("name", "Unknown Group")
+            groups_list += f"{idx}) {group_name}\n"
+            group_options[str(idx)] = {
+                "group_id": item["group_id"],
+                "group_name": group_name
+            }
+        
+        send_sms(from_number, msg.MSG_ASK_GROUP_WITH_TIME.format(
+            club_name=get_club_name(),
+            time=human_readable,
+            groups_list=groups_list
+        ))
+        
+        # Store state for group selection
+        set_user_state(from_number, msg.STATE_MATCH_GROUP_SELECTION, {
+            "scheduled_time_iso": iso_format,
+            "scheduled_time_human": human_readable,
+            "group_options": group_options
+        })
+    else:
+        # Player not in any groups - go directly to preferences
         _send_preferences_confirmation(from_number, human_readable, iso_format, player)
-        return
-    except ValueError:
-        pass
-    
-    # Neither worked - ask user to try again
-    send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
 
 
 def _send_preferences_confirmation(from_number: str, human_readable: str, iso_format: str, player: dict):
     """
     Send confirmation message with match preferences.
+    Gender defaults to player's own gender.
     """
     player_level = player.get("declared_skill_level", 3.5) if player else 3.5
+    player_gender = player.get("gender", "male") if player else "male"
     
     # Calculate default level range
     level_min = max(2.0, player_level - DEFAULT_LEVEL_RANGE)
     level_max = min(5.5, player_level + DEFAULT_LEVEL_RANGE)
+    
+    # Gender display
+    gender_display = {"male": "Male", "female": "Female"}.get(player_gender, "Mixed")
+    gender_preference = player_gender if player_gender in ["male", "female"] else "mixed"
     
     # Format for display
     confirm_msg = msg.MSG_CONFIRM_DATE_WITH_PREFS.format(
@@ -105,7 +149,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
         time=human_readable,
         level=player_level,
         range=DEFAULT_LEVEL_RANGE,
-        gender=DEFAULT_GENDER
+        gender=gender_display
     )
     
     send_sms(from_number, confirm_msg)
@@ -116,7 +160,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
         "scheduled_time_human": human_readable,
         "level_min": level_min,
         "level_max": level_max,
-        "gender_preference": "mixed"
+        "gender_preference": gender_preference
     })
 
 
@@ -192,43 +236,9 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         return
     
     if is_confirmation or (new_gender or new_level_range):
-        # Check if player belongs to any groups (using relational table)
-        # Fetch groups the player is a member of
-        groups_res = supabase.table("group_memberships").select(
-            "group_id, player_groups(name)"
-        ).eq("player_id", player["player_id"]).execute()
-        
-        # data structure: [{'group_id': '...', 'player_groups': {'name': '...'}}]
-        
-        if groups_res.data:
-            groups_data = groups_res.data
-            
-            # Format list - start at 2 since 1 is Everyone
-            groups_list = ""
-            group_options = {}
-            for idx, item in enumerate(groups_data, 2):
-                # Handle nested join result
-                group_name = item.get("player_groups", {}).get("name", "Unknown Group")
-                groups_list += f"{idx}) {group_name}\n"
-                group_options[str(idx)] = item["group_id"]
-            
-            if group_options:
-                send_sms(from_number, msg.MSG_ASK_GROUP_TARGET.format(groups_list=groups_list))
-                
-                # Update state to waiting for group selection
-                # Carry forward all match data
-                new_state_data = {
-                    "scheduled_time_iso": scheduled_time_iso,
-                    "scheduled_time_human": scheduled_time_human,
-                    "level_min": level_min,
-                    "level_max": level_max,
-                    "gender_preference": gender_preference,
-                    "group_options": group_options
-                }
-                set_user_state(from_number, msg.STATE_MATCH_GROUP_SELECTION, new_state_data)
-                return
-
-        # User confirmed - create the match with preferences (Club-wide)
+        # User confirmed - create the match with preferences
+        # Note: Group selection already happened in handle_match_date_input
+        # If we're here, user either chose "Everyone" or isn't in any groups
         _create_match(
             from_number, 
             scheduled_time_iso, 
@@ -265,37 +275,68 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
 def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict):
     """
     Handle selection of group to invite.
+    - If "1" (Everyone): go to preferences confirmation
+    - If a group number: create match immediately, skip all filters
     """
     selection = body.strip()
+    selection_lower = selection.lower()
     group_options = state_data.get("group_options", {})
+    scheduled_time_iso = state_data.get("scheduled_time_iso")
+    scheduled_time_human = state_data.get("scheduled_time_human")
     
-    target_group_id = None # Default to None (All)
-    
-    if selection == "1" or selection.lower() == "everyone" or selection.lower() == "all":
-        target_group_id = None
-    elif selection in group_options:
-        target_group_id = group_options[selection]
-    else:
-        # Invalid selection
-        groups_list = ""
-        for idx in sorted(group_options.keys()):
-            # Find name? We didn't cache names, just IDs. 
-            # Ideally we should reply with the original message or a simple error.
-            # Let's just say invalid.
-            pass
-        send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.")
+    # Check for "Everyone" selection
+    if selection == "1" or selection_lower == "everyone" or selection_lower == "all":
+        # Go to preferences confirmation (full filtering flow)
+        _send_preferences_confirmation(from_number, scheduled_time_human, scheduled_time_iso, player)
         return
-
-    _create_match(
-        from_number,
-        state_data["scheduled_time_iso"],
-        state_data["scheduled_time_human"],
-        player,
-        state_data.get("level_min"),
-        state_data.get("level_max"),
-        state_data.get("gender_preference"),
-        target_group_id
-    )
+    
+    # Check for group selection
+    if selection in group_options:
+        group_info = group_options[selection]
+        target_group_id = group_info.get("group_id") if isinstance(group_info, dict) else group_info
+        group_name = group_info.get("group_name", "your group") if isinstance(group_info, dict) else "your group"
+        
+        # Create match immediately - NO filters, invite all group members
+        _create_match(
+            from_number,
+            scheduled_time_iso,
+            scheduled_time_human,
+            player,
+            level_min=None,  # No level filter
+            level_max=None,  # No level filter
+            gender_preference=None,  # No gender filter
+            target_group_id=target_group_id,
+            skip_filters=True,
+            group_name=group_name
+        )
+        return
+    
+    # Check if user entered a new time instead of a number
+    parsed_dt, human_readable, iso_format = parse_natural_date(selection)
+    if parsed_dt is not None:
+        # Re-show group selection with new time
+        groups_list = ""
+        for idx in sorted(group_options.keys(), key=int):
+            group_info = group_options[idx]
+            group_name = group_info.get("group_name", "Unknown") if isinstance(group_info, dict) else "Unknown"
+            groups_list += f"{idx}) {group_name}\n"
+        
+        send_sms(from_number, msg.MSG_ASK_GROUP_WITH_TIME.format(
+            club_name=get_club_name(),
+            time=human_readable,
+            groups_list=groups_list
+        ))
+        
+        # Update state with new time
+        set_user_state(from_number, msg.STATE_MATCH_GROUP_SELECTION, {
+            "scheduled_time_iso": iso_format,
+            "scheduled_time_human": human_readable,
+            "group_options": group_options
+        })
+        return
+    
+    # Invalid selection
+    send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.")
 
 
 
@@ -326,10 +367,13 @@ def _create_match(
     level_min: Optional[float] = None,
     level_max: Optional[float] = None,
     gender_preference: str = "mixed",
-    target_group_id: Optional[str] = None
+    target_group_id: Optional[str] = None,
+    skip_filters: bool = False,
+    group_name: str = None
 ):
     """
     Create match in database with preferences and trigger invites.
+    If skip_filters is True, invites all group members regardless of level/gender.
     """
     if not player:
         send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND)
@@ -343,9 +387,9 @@ def _create_match(
             "team_2_players": [],
             "scheduled_time": scheduled_time_iso,
             "status": "pending",
-            "level_range_min": level_min,
-            "level_range_max": level_max,
-            "gender_preference": gender_preference,
+            "level_range_min": level_min if not skip_filters else None,
+            "level_range_max": level_max if not skip_filters else None,
+            "gender_preference": gender_preference if not skip_filters else None,
             "target_group_id": target_group_id
         }
         
@@ -360,10 +404,20 @@ def _create_match(
         if matches_res.data:
             match_id = matches_res.data[0]["match_id"]
             from matchmaker import find_and_invite_players
-            count = find_and_invite_players(match_id)
-            send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
-                club_name=get_club_name(), time=scheduled_time_human, count=count
-            ))
+            count = find_and_invite_players(match_id, skip_filters=skip_filters)
+            
+            # Use appropriate confirmation message
+            if skip_filters and group_name:
+                send_sms(from_number, msg.MSG_MATCH_REQUESTED_GROUP.format(
+                    club_name=get_club_name(), 
+                    time=scheduled_time_human, 
+                    count=count,
+                    group_name=group_name
+                ))
+            else:
+                send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
+                    club_name=get_club_name(), time=scheduled_time_human, count=count
+                ))
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
             
@@ -378,7 +432,8 @@ def _create_match(
                 "level_min": level_min,
                 "level_max": level_max,
                 "gender_preference": gender_preference,
-                "target_group_id": target_group_id
+                "target_group_id": target_group_id,
+                "skip_filters": skip_filters
             }
         )
         send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR)
