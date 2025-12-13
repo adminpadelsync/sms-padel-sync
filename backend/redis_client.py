@@ -1,4 +1,5 @@
 import os
+import json
 import redis
 from dotenv import load_dotenv
 
@@ -26,7 +27,11 @@ def set_user_state(phone_number: str, state: str, data: dict = None):
     r.hset(key, "state", state)
     if data:
         for k, v in data.items():
-            r.hset(key, k, v)
+            # Serialize dicts/lists to JSON strings for Redis storage
+            if isinstance(v, (dict, list)):
+                r.hset(key, k, json.dumps(v))
+            else:
+                r.hset(key, k, v)
     # Set expiry to 1 hour to clear stale sessions
     r.expire(key, 3600)
     return True
@@ -37,7 +42,17 @@ def get_user_state(phone_number: str):
         return None
     
     key = f"user:{phone_number}"
-    return r.hgetall(key)
+    data = r.hgetall(key)
+    
+    # Deserialize any JSON strings back to dicts/lists
+    for k, v in data.items():
+        if isinstance(v, str) and v.startswith('{') or (isinstance(v, str) and v.startswith('[')):
+            try:
+                data[k] = json.loads(v)
+            except json.JSONDecodeError:
+                pass
+    
+    return data
 
 def clear_user_state(phone_number: str):
     r = get_redis_client()
@@ -46,3 +61,4 @@ def clear_user_state(phone_number: str):
     key = f"user:{phone_number}"
     r.delete(key)
     return True
+
