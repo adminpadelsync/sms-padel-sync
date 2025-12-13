@@ -120,8 +120,11 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 action = 'maybe'
             elif len(cmd) < 5 and all(c.isalpha() for c in cmd):
                 # Voting response (A, B, AB) - use most recent invite
-                invite_index = 0
-                action = cmd  # Pass through for voting handler
+                # BUT exclude known command keywords
+                known_commands = {"play", "help", "next", "mute", "stop", "no", "yes"}
+                if cmd not in known_commands:
+                    invite_index = 0
+                    action = cmd  # Pass through for voting handler
             
             if invite_index is not None:
                 # Validate index
