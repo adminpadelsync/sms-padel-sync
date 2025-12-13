@@ -137,8 +137,17 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
              # Debugging tool to restart flow
              pass
         elif cmd == "play":
-            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=club_name))
-            set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
+            print(f"[DEBUG] PLAY command received from {from_number}. Club: {club_name}")
+            try:
+                msg_content = msg.MSG_REQUEST_DATE.format(club_name=club_name)
+                print(f"[DEBUG] Sending PLAY response: {msg_content}")
+                send_sms(from_number, msg_content)
+                set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
+            except Exception as e:
+                print(f"[ERROR] Failed to process PLAY command: {e}")
+                import traceback
+                traceback.print_exc()
+                send_sms(from_number, f"debug_error: {str(e)}")
             return
         elif cmd == "mute":
             # Mute player for rest of day
