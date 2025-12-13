@@ -110,3 +110,61 @@ export async function togglePlayerStatus(playerId: string, newStatus: boolean) {
 
     revalidatePath('/dashboard')
 }
+
+export async function deletePlayer(playerId: string) {
+    const supabase = await createClient()
+
+    // 1. Delete all match invites for this player
+    const { error: invitesError } = await supabase
+        .from('match_invites')
+        .delete()
+        .eq('player_id', playerId)
+
+    if (invitesError) {
+        console.error('Error deleting player invites:', invitesError)
+        throw invitesError
+    }
+
+    // 2. Delete group memberships
+    const { error: groupError } = await supabase
+        .from('group_memberships')
+        .delete()
+        .eq('player_id', playerId)
+
+    if (groupError) {
+        console.error('Error deleting group memberships:', groupError)
+        throw groupError
+    }
+
+    // 3. Remove player from any matches (team_1_players, team_2_players)
+    // Fetch matches where this player is in either team
+    const { data: matchesWithPlayer } = await supabase
+        .from('matches')
+        .select('match_id, team_1_players, team_2_players')
+        .or(`team_1_players.cs.{${playerId}},team_2_players.cs.{${playerId}}`)
+
+    if (matchesWithPlayer && matchesWithPlayer.length > 0) {
+        for (const match of matchesWithPlayer) {
+            const team1 = (match.team_1_players || []).filter((id: string) => id !== playerId)
+            const team2 = (match.team_2_players || []).filter((id: string) => id !== playerId)
+
+            await supabase
+                .from('matches')
+                .update({ team_1_players: team1, team_2_players: team2 })
+                .eq('match_id', match.match_id)
+        }
+    }
+
+    // 4. Finally, delete the player
+    const { error: playerError } = await supabase
+        .from('players')
+        .delete()
+        .eq('player_id', playerId)
+
+    if (playerError) {
+        console.error('Error deleting player:', playerError)
+        throw playerError
+    }
+
+    revalidatePath('/dashboard')
+}

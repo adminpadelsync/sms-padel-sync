@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { updatePlayer, createPlayer, togglePlayerStatus } from './actions'
+import { updatePlayer, createPlayer, togglePlayerStatus, deletePlayer } from './actions'
 import { getClubs } from './get-clubs'
 
 interface Player {
@@ -176,6 +176,18 @@ export function PlayerActions({ player }: PlayerActionsProps) {
         }
     }
 
+    const handleDelete = async () => {
+        if (confirm(`⚠️ PERMANENTLY DELETE ${player.name}?\n\nThis will also remove:\n• All their match invites\n• Group memberships\n• Match participations\n\nThis action cannot be undone!`)) {
+            try {
+                await deletePlayer(player.player_id)
+                window.location.reload()
+            } catch (error) {
+                console.error('Error deleting player:', error)
+                alert('Failed to delete player')
+            }
+        }
+    }
+
     return (
         <>
             <div className="flex gap-2">
@@ -187,10 +199,16 @@ export function PlayerActions({ player }: PlayerActionsProps) {
                 </button>
                 <button
                     onClick={handleToggleStatus}
-                    className={`text-sm font-medium ${player.active_status ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
+                    className={`text-sm font-medium ${player.active_status ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'
                         }`}
                 >
                     {player.active_status ? 'Deactivate' : 'Activate'}
+                </button>
+                <button
+                    onClick={handleDelete}
+                    className="text-red-600 hover:text-red-900 text-sm font-medium"
+                >
+                    Delete
                 </button>
             </div>
             <PlayerModal

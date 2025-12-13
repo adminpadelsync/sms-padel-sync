@@ -15,7 +15,7 @@ def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
                 p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                 if p_res.data:
                     phone = p_res.data[0]["phone_number"]
-                    send_sms(phone, msg.MSG_UPDATE_JOINED.format(name=joiner_name, spots=spots_left))
+                    send_sms(phone, msg.MSG_UPDATE_JOINED.format(club_name=get_club_name(), name=joiner_name, spots=spots_left))
     except Exception as e:
         print(f"Error notifying maybe players: {e}")
 
@@ -148,7 +148,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 }).eq("invite_id", invite["invite_id"]).execute()
                 
                 send_sms(from_number, 
-                    "Sorry, this match is already full! 🏸\n\n"
+                    f"🎾 {get_club_name()}: Sorry, this match is already full! 🏸\n\n"
                     "Text PLAY to request a new match, or reply MATCHES to see your invites."
                 )
                 return
@@ -173,26 +173,25 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             
             if new_player_count == 1:
                 # First player
-                response_msg = "✅ You're in! You're the first player.\n\nWe'll confirm once we have 4 players."
+                response_msg = f"✅ {get_club_name()}: You're in! You're the first player.\n\nWe'll confirm once we have 4 players."
             elif new_player_count < 4:
                 # 2nd or 3rd player - list who's confirmed so far
                 # Fetch updated match to get current player IDs
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
                 all_confirmed_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
                 
-                # Get player names and levels (excluding current player since we're telling THEM)
-                other_players = []
+                # Get player names and levels (including current player)
+                player_list_items = []
                 for pid in all_confirmed_ids:
-                    if pid != player["player_id"]:
-                        p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
-                        if p_res.data:
-                            p = p_res.data[0]
-                            other_players.append(f"{p['name']} ({p['declared_skill_level']})")
+                    p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+                    if p_res.data:
+                        p = p_res.data[0]
+                        player_list_items.append(f"  - {p['name']} ({p['declared_skill_level']})")
                 
-                player_list = ", ".join(other_players) if other_players else "You!"
+                player_list = "\n".join(player_list_items) if player_list_items else "  - You!"
                 response_msg = (
-                    f"✅ You're in! ({new_player_count}/4 confirmed)\n\n"
-                    f"So far: {player_list}\n\n"
+                    f"✅ {get_club_name()}: You're in! ({new_player_count}/4 confirmed)\n\n"
+                    f"So far:\n{player_list}\n\n"
                     f"We need {spots_left} more player{'s' if spots_left > 1 else ''} to confirm the match."
                 )
             else:
@@ -231,16 +230,16 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                     p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
                     if p_res.data:
                         p = p_res.data[0]
-                        player_names.append(f"{p['name']} ({p['declared_skill_level']})")
+                        player_names.append(f"  - {p['name']} ({p['declared_skill_level']})")
                 
-                players_text = "\n".join([f"  • {name}" for name in player_names])
+                players_text = "\n".join(player_names)
                 
                 # Notify all players
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
                         confirmation_msg = (
-                            f"🎾 MATCH CONFIRMED at {get_club_name()}!\n\n"
+                            f"🎾 {get_club_name()}: MATCH CONFIRMED!\n\n"
                             f"📅 {formatted_time}\n\n"
                             f"👥 Players:\n{players_text}\n\n"
                             f"See you on the court! 🏸"
@@ -258,7 +257,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             }).eq("invite_id", invite["invite_id"]).execute()
             
             send_sms(from_number, 
-                "Sorry, this match is already full! 🏸\n\n"
+                f"🎾 {get_club_name()}: Sorry, this match is already full! 🏸\n\n"
                 "Text PLAY to request a new match, or reply MATCHES to see your invites."
             )
         return

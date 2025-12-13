@@ -160,8 +160,16 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         if len(other_players) != 3:
             continue
         
+        # Get club name for the message
+        club_name = "the club"
+        if match.get("club_id"):
+            club_res = supabase.table("clubs").select("name").eq("club_id", match["club_id"]).execute()
+            if club_res.data:
+                club_name = club_res.data[0]["name"]
+        
         # Format message with player names
         message = msg.MSG_FEEDBACK_REQUEST.format(
+            club_name=club_name,
             player1_name=other_players[0]["name"],
             player2_name=other_players[1]["name"],
             player3_name=other_players[2]["name"]
@@ -217,8 +225,15 @@ def send_reminder_for_request(request: dict):
     if len(other_players) != 3:
         return False
     
+    # Get club name for the message
+    club_name = "the club"
+    if match.get("club_id"):
+        club_res = supabase.table("clubs").select("name").eq("club_id", match["club_id"]).execute()
+        if club_res.data:
+            club_name = club_res.data[0]["name"]
+    
     # Send reminder with slightly different wording
-    message = f"""Reminder: We'd love your feedback on your recent match!
+    message = f"""🎾 {club_name}: Reminder - We'd love your feedback on your recent match!
 
 On a scale of 1-10, how likely are you to play in a match again with:
 

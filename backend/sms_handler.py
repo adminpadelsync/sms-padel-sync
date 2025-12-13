@@ -195,7 +195,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             return
         elif cmd == "help" or cmd == "?":
             help_text = (
-                "🎾 PADEL SYNC COMMANDS\n\n"
+                f"🎾 {club_name.upper()} COMMANDS\n\n"
                 "MATCH RESPONSES:\n"
                 "• YES - Accept invite\n"
                 "• NO - Decline invite\n"
@@ -274,10 +274,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 print(f"[DEBUG] Confirmed: {len(confirmed)}, Pending (requester): {len(pending_as_requester)}, Pending (invites): {len(pending_invites)}")
                 
                 if not confirmed and not pending_as_requester and not pending_invites:
-                    send_sms(from_number, "📅 You have no match invites. Text PLAY to request a match!")
+                    send_sms(from_number, f"🎾 {club_name}: You have no match invites. Text PLAY to request a match!")
                     return
                 
-                response = "📅 Your matches:\n\n"
+                response = f"🎾 {club_name}: Your matches:\n\n"
                 
                 # Show confirmed matches
                 if confirmed:
@@ -354,14 +354,14 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             invites = supabase.table("match_invites").select("match_id").eq("player_id", player_id).eq("status", "accepted").execute().data
             
             if not invites:
-                send_sms(from_number, "📅 No confirmed matches yet. Reply MATCHES to see pending invites!")
+                send_sms(from_number, f"🎾 {club_name}: No confirmed matches yet. Reply MATCHES to see pending invites!")
                 return
             
             match_ids = [i["match_id"] for i in invites]
             matches = supabase.table("matches").select("*").in_("match_id", match_ids).eq("status", "confirmed").order("scheduled_time").limit(1).execute().data
             
             if not matches:
-                send_sms(from_number, "📅 No confirmed matches yet. Reply MATCHES to see pending invites!")
+                send_sms(from_number, f"🎾 {club_name}: No confirmed matches yet. Reply MATCHES to see pending invites!")
                 return
             
             m = matches[0]
@@ -378,12 +378,12 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
                 if p_res.data:
                     p = p_res.data[0]
-                    names.append(f"{p['name']} ({p['declared_skill_level']})")
+                    names.append(f"  - {p['name']} ({p['declared_skill_level']})")
             
-            players_text = "\n".join([f"  • {n}" for n in names])
+            players_text = "\n".join(names)
             
             response = (
-                f"🎾 Your next match:\n\n"
+                f"🎾 {club_name}: Your next match:\n\n"
                 f"📅 {time_str}\n\n"
                 f"👥 Players:\n{players_text}\n\n"
                 f"See you on the court! 🏸"
@@ -408,7 +408,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         return
 
     # Handle States
-    if current_state in [msg.STATE_WAITING_NAME, msg.STATE_WAITING_LEVEL, msg.STATE_WAITING_AVAILABILITY]:
+    if current_state in [msg.STATE_WAITING_NAME, msg.STATE_WAITING_LEVEL, msg.STATE_WAITING_GENDER, msg.STATE_WAITING_AVAILABILITY]:
         handle_onboarding(from_number, body, current_state, state_data, club_id)
 
     # --- Match Request Flow ---

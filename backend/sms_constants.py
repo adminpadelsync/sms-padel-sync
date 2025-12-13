@@ -12,6 +12,8 @@ MSG_ASK_LEVEL = (
     "F) 5.0+ (Pro)"
 )
 MSG_INVALID_LEVEL = "Please reply with a letter A-F or the number (e.g., 3.5)."
+MSG_ASK_GENDER = "Great! What is your gender? (Reply M for Male or F for Female)"
+MSG_INVALID_GENDER = "Please reply with M (Male) or F (Female)."
 MSG_ASK_AVAILABILITY = "Got it! Last question: When do you usually like to play? (e.g., 'Weekdays after 6pm', 'Sat mornings')"
 MSG_PROFILE_SETUP_DONE = "You're all set with {club_name}! We'll text you when matches are available. Text 'PLAY' anytime to request a game."
 MSG_PROFILE_ERROR = "Something went wrong saving your profile. Please try again later."
@@ -40,7 +42,7 @@ MSG_MATCH_FULL = "Sorry, this match just filled up! We'll let you know about the
 MSG_MATCH_ALREADY_FULL = "Sorry, this match is already full or cancelled."
 MSG_YOU_ARE_IN = "You're in at {club_name}! We'll confirm once we have 4 players."
 
-MSG_UPDATE_JOINED = "Update: {name} just joined! {spots} spots left. Reply YES to grab a spot."
+MSG_UPDATE_JOINED = "🎾 {club_name}: {name} just joined! {spots} spot(s) left. Reply YES to grab a spot."
 MSG_MATCH_CONFIRMED = "MATCH CONFIRMED at {club_name}! {time}. See you on the court!"
 
 MSG_DECLINE = "No problem! We'll ask you next time."
@@ -74,6 +76,7 @@ MSG_MATCH_REQUESTED_GROUP = "🎾 {club_name}: Match requested for {time}! Invit
 STATE_NEW = "NEW"
 STATE_WAITING_NAME = "WAITING_NAME"
 STATE_WAITING_LEVEL = "WAITING_LEVEL"
+STATE_WAITING_GENDER = "WAITING_GENDER"
 STATE_WAITING_AVAILABILITY = "WAITING_AVAILABILITY"
 STATE_MATCH_REQUEST_DATE = "MATCH_REQUEST_DATE"
 STATE_MATCH_REQUEST_CONFIRM = "MATCH_REQUEST_CONFIRM"
@@ -83,7 +86,7 @@ STATE_COMPLETED = "COMPLETED"
 STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"
 
 # Feedback Collection
-MSG_FEEDBACK_REQUEST = """On a scale of 1-10, how likely are you to play in a match again with:
+MSG_FEEDBACK_REQUEST = """🎾 {club_name}: On a scale of 1-10, how likely are you to play in a match again with:
 
 1. {player1_name}
 2. {player2_name}

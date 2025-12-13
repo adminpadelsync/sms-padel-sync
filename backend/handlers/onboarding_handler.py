@@ -44,8 +44,31 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             send_sms(from_number, msg.MSG_INVALID_LEVEL)
             return
 
-        # Preserve club_id in state for next step
-        set_user_state(from_number, msg.STATE_WAITING_AVAILABILITY, {"level": str(level), "club_id": club_id})
+        # Preserve name and club_id in state for next step
+        set_user_state(from_number, msg.STATE_WAITING_GENDER, {"name": state_data.get("name"), "level": str(level), "club_id": club_id})
+        send_sms(from_number, msg.MSG_ASK_GENDER)
+
+    elif current_state == msg.STATE_WAITING_GENDER:
+        gender_map = {
+            "m": "male",
+            "male": "male",
+            "f": "female",
+            "female": "female"
+        }
+        choice = body.lower().strip()
+        gender = gender_map.get(choice)
+        
+        if not gender:
+            send_sms(from_number, msg.MSG_INVALID_GENDER)
+            return
+
+        # Preserve all data in state for next step
+        set_user_state(from_number, msg.STATE_WAITING_AVAILABILITY, {
+            "name": state_data.get("name"),
+            "level": state_data.get("level"),
+            "gender": gender,
+            "club_id": club_id
+        })
         send_sms(from_number, msg.MSG_ASK_AVAILABILITY)
 
     elif current_state == msg.STATE_WAITING_AVAILABILITY:
@@ -54,6 +77,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         # Save to DB
         name = state_data.get("name")
         level = float(state_data.get("level"))
+        gender = state_data.get("gender")
         
         # Use the club_id passed through the flow
         if not club_id:
@@ -67,6 +91,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         new_player = {
             "phone_number": from_number,
             "name": name,
+            "gender": gender,
             "declared_skill_level": level,
             "adjusted_skill_level": level,
             "availability_preferences": {"text": availability},

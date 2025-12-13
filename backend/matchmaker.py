@@ -45,6 +45,13 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     club_id = match["club_id"]
     
+    # Fetch club name for SMS messages
+    club_name = "the club"
+    if club_id:
+        club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+        if club_res.data:
+            club_name = club_res.data[0]["name"]
+    
     # Get match preferences (or use defaults) - only used if not skipping filters
     level_min = match.get("level_range_min")
     level_max = match.get("level_range_max")
@@ -165,7 +172,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
                 opt_str += f"{chr(65+i)}) {time_str}\n"
             
             sms_msg = (
-                f"PADEL MATCH: {requester['name']} wants to play on {datetime.fromisoformat(options[0]).strftime('%A')}.\n"
+                f"🎾 {club_name}: {requester['name']} wants to play on {datetime.fromisoformat(options[0]).strftime('%A')}.\n"
                 f"Options:\n{opt_str}"
                 f"Reply with letter(s) (e.g. 'A' or 'AB') to vote."
             )
@@ -178,7 +185,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
                 time_str = match['scheduled_time']
             
             sms_msg = (
-                f"🎾 PADEL MATCH: {requester['name']} ({requester['declared_skill_level']}) wants to play "
+                f"🎾 {club_name}: {requester['name']} ({requester['declared_skill_level']}) wants to play "
                 f"{time_str}.\n"
                 f"Reply YES to join, NO to decline, or MUTE to pause invites today."
             )

@@ -90,25 +90,42 @@ An automated SMS-based padel match-making system with multi-club support and adm
 
 ```
 sms-padel-sync/
+├── api/                      # Vercel serverless entry point
+│   └── index.py
 ├── backend/
-│   ├── migrations/          # SQL migration files
-│   ├── main.py             # FastAPI server
-│   ├── matchmaker.py       # Match-making logic
-│   ├── sms_handler.py      # SMS processing
-│   ├── database.py         # Supabase client
-│   ├── schema.sql          # Base database schema
-│   └── setup_superuser.py  # Superuser setup script
+│   ├── handlers/             # SMS command handlers
+│   │   ├── date_parser.py
+│   │   ├── feedback_handler.py
+│   │   ├── invite_handler.py
+│   │   ├── match_handler.py
+│   │   └── onboarding_handler.py
+│   ├── migrations/           # SQL migration files
+│   ├── scripts/              # Utility & seeding scripts
+│   │   ├── add_sample_players.py
+│   │   ├── setup_superuser.py
+│   │   └── seed_club.py
+│   ├── main.py               # FastAPI server
+│   ├── api_routes.py         # API endpoints
+│   ├── sms_handler.py        # SMS processing
+│   ├── matchmaker.py         # Match-making algorithm
+│   ├── match_organizer.py    # Match coordination
+│   ├── database.py           # Supabase client
+│   ├── twilio_client.py      # SMS sending
+│   ├── redis_client.py       # State management
+│   ├── error_logger.py       # Error tracking
+│   └── schema.sql            # Base database schema
 ├── frontend/
-│   └── src/app/
-│       ├── dashboard/      # Admin dashboard
-│       ├── login/          # Authentication
-│       └── not-setup/      # User onboarding page
-├── docs/                   # Documentation
-│   ├── MULTI_TENANCY_SETUP.md
-│   ├── DISABLE_EMAIL_CONFIRMATION.md
-│   ├── twilio_setup_guide.md
-│   └── manual_verification_guide.md
-└── README.md              # This file
+│   └── src/
+│       ├── app/
+│       │   ├── dashboard/    # Admin dashboard
+│       │   ├── sms-simulator/# Testing interface
+│       │   ├── login/        # Authentication
+│       │   └── page.tsx      # Landing page
+│       ├── components/       # Reusable UI components
+│       ├── lib/              # Shared libraries
+│       └── utils/            # Utility functions
+├── docs/                     # Documentation
+└── README.md
 ```
 
 ## Key Features
