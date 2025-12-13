@@ -56,11 +56,10 @@ MSG_UNMUTED = "Welcome back! You'll now receive match invites again."
 MSG_ALREADY_MUTED = "You're already muted for today. Text UNMUTE to receive invites again."
 MSG_NOT_MUTED = "You're not currently muted. Text MUTE if you'd like to pause invites for today."
 
-MSG_ASK_GROUP_TARGET = """You are in the following groups:
+MSG_ASK_GROUP_TARGET = """Who would you like to invite to this match?
+1) Everyone
 {groups_list}
-0) Everyone (Club-wide)
-
-Reply with the number to invite."""
+Reply with a number."""
 
 # States
 STATE_NEW = "NEW"

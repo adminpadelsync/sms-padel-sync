@@ -203,10 +203,10 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         if groups_res.data:
             groups_data = groups_res.data
             
-            # Format list
+            # Format list - start at 2 since 1 is Everyone
             groups_list = ""
             group_options = {}
-            for idx, item in enumerate(groups_data, 1):
+            for idx, item in enumerate(groups_data, 2):
                 # Handle nested join result
                 group_name = item.get("player_groups", {}).get("name", "Unknown Group")
                 groups_list += f"{idx}) {group_name}\n"
@@ -271,7 +271,7 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
     
     target_group_id = None # Default to None (All)
     
-    if selection == "0" or selection.lower() == "all":
+    if selection == "1" or selection.lower() == "everyone" or selection.lower() == "all":
         target_group_id = None
     elif selection in group_options:
         target_group_id = group_options[selection]
@@ -283,7 +283,7 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
             # Ideally we should reply with the original message or a simple error.
             # Let's just say invalid.
             pass
-        send_sms(from_number, "Invalid selection. Please reply with the number of the group or 0 for Everyone.")
+        send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.")
         return
 
     _create_match(
