@@ -56,6 +56,12 @@ MSG_UNMUTED = "Welcome back! You'll now receive match invites again."
 MSG_ALREADY_MUTED = "You're already muted for today. Text UNMUTE to receive invites again."
 MSG_NOT_MUTED = "You're not currently muted. Text MUTE if you'd like to pause invites for today."
 
+MSG_ASK_GROUP_TARGET = """You are in the following groups:
+{groups_list}
+0) Everyone (Club-wide)
+
+Reply with the number to invite."""
+
 # States
 STATE_NEW = "NEW"
 STATE_WAITING_NAME = "WAITING_NAME"
@@ -63,6 +69,7 @@ STATE_WAITING_LEVEL = "WAITING_LEVEL"
 STATE_WAITING_AVAILABILITY = "WAITING_AVAILABILITY"
 STATE_MATCH_REQUEST_DATE = "MATCH_REQUEST_DATE"
 STATE_MATCH_REQUEST_CONFIRM = "MATCH_REQUEST_CONFIRM"
+STATE_MATCH_GROUP_SELECTION = "MATCH_GROUP_SELECTION"
 STATE_MATCH_REQUEST_DURATION = "MATCH_REQUEST_DURATION"
 STATE_COMPLETED = "COMPLETED"
 STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"

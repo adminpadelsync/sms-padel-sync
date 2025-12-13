@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 
 export interface UserClub {
     club_id: string | null
@@ -43,9 +44,24 @@ export async function getUserClub(): Promise<UserClub | null> {
         return null
     }
 
+    let finalClubId = data.club_id
+    let finalClubName = (data.clubs as any)?.name
+
+    // If superuser, allow overriding club via cookie
+    if (data.is_superuser) {
+        const cookieStore = await cookies()
+        const operatingClubId = cookieStore.get('operating_club_id')?.value
+        if (operatingClubId) {
+            finalClubId = operatingClubId
+            // Note: We aren't fetching the name for the cookie-overridden club here, 
+            // but it shouldn't block main functionality as ID is primary.
+            // Client components usually have the list of clubs to look up name.
+        }
+    }
+
     return {
-        club_id: data.club_id,
-        club_name: (data.clubs as any)?.name || null,
+        club_id: finalClubId,
+        club_name: finalClubName || null,
         is_superuser: data.is_superuser,
         role: data.role
     }

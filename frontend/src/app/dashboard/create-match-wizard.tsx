@@ -130,6 +130,14 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
     const handleSendInvites = async () => {
         setLoading(true)
         try {
+            const payload = {
+                club_id: clubId,
+                player_ids: selectedPlayers,
+                scheduled_time: config.scheduled_time,
+                initial_player_ids: config.initial_player_ids
+            }
+            console.log('Sending Invites Payload:', payload)
+
             const response = await fetch('/api/outreach', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -141,14 +149,33 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
                 })
             })
 
-            if (!response.ok) throw new Error('Failed to send invites')
+            if (!response.ok) {
+                const errorText = await response.text()
+                let errorMessage = 'Failed to send invites'
+                try {
+                    const errorJson = JSON.parse(errorText)
+                    errorMessage = errorJson.detail || errorMessage
+                } catch (e) {
+                    console.error('Failed to parse error JSON:', e)
+                    // If not JSON, use text if short, otherwise status text
+                    errorMessage = errorText.length < 100 ? errorText : response.statusText
+                }
+
+                console.error('Server Error Details:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                })
+
+                throw new Error(errorMessage)
+            }
 
             alert('Invites sent successfully!')
             onClose()
             window.location.reload()
         } catch (error) {
             console.error(error)
-            alert('Error sending invites')
+            alert(error instanceof Error ? error.message : 'Error sending invites')
         } finally {
             setLoading(false)
         }

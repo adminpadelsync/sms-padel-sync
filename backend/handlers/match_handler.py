@@ -1,5 +1,47 @@
 import re
+from typing import Optional, Tuple
 from datetime import datetime, timedelta
+# ... (rest of imports)
+
+# ... (down to parse_gender)
+
+def _parse_gender(text: str) -> Optional[str]:
+    """
+    Parse gender preference from response.
+    Returns 'male', 'female', or None.
+    """
+    text_upper = text.upper()
+    
+    # Check for explicit M or F (not part of other words)
+    if re.search(r'\bM\b', text_upper) or 'MALE' in text_upper and 'FEMALE' not in text_upper:
+        return "male"
+    if re.search(r'\bF\b', text_upper) or 'FEMALE' in text_upper:
+        return "female"
+    
+    return None
+
+
+def _parse_level_range(text: str) -> Optional[tuple]:
+    """
+    Parse level range from response.
+    Supports formats like "3.0-4.0" or "3.5 - 4.5".
+    """
+    # Pattern: number-number or number to number
+    pattern = r'(\d+\.?\d*)\s*[-–to]+\s*(\d+\.?\d*)'
+    match = re.search(pattern, text.lower())
+    
+    if match:
+        try:
+            level_min = float(match.group(1))
+            level_max = float(match.group(2))
+            
+            # Validate reasonable skill levels
+            if 2.0 <= level_min <= 5.5 and 2.0 <= level_max <= 5.5 and level_min <= level_max:
+                return (level_min, level_max)
+        except ValueError:
+            pass
+    
+    return None
 from database import supabase
 from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
@@ -150,7 +192,43 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         return
     
     if is_confirmation or (new_gender or new_level_range):
-        # User confirmed - create the match with preferences
+        # Check if player belongs to any groups (using relational table)
+        # Fetch groups the player is a member of
+        groups_res = supabase.table("group_memberships").select(
+            "group_id, player_groups(name)"
+        ).eq("player_id", player["player_id"]).execute()
+        
+        # data structure: [{'group_id': '...', 'player_groups': {'name': '...'}}]
+        
+        if groups_res.data:
+            groups_data = groups_res.data
+            
+            # Format list
+            groups_list = ""
+            group_options = {}
+            for idx, item in enumerate(groups_data, 1):
+                # Handle nested join result
+                group_name = item.get("player_groups", {}).get("name", "Unknown Group")
+                groups_list += f"{idx}) {group_name}\n"
+                group_options[str(idx)] = item["group_id"]
+            
+            if group_options:
+                send_sms(from_number, msg.MSG_ASK_GROUP_TARGET.format(groups_list=groups_list))
+                
+                # Update state to waiting for group selection
+                # Carry forward all match data
+                new_state_data = {
+                    "scheduled_time_iso": scheduled_time_iso,
+                    "scheduled_time_human": scheduled_time_human,
+                    "level_min": level_min,
+                    "level_max": level_max,
+                    "gender_preference": gender_preference,
+                    "group_options": group_options
+                }
+                set_user_state(from_number, msg.STATE_MATCH_GROUP_SELECTION, new_state_data)
+                return
+
+        # User confirmed - create the match with preferences (Club-wide)
         _create_match(
             from_number, 
             scheduled_time_iso, 
@@ -184,43 +262,43 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
     send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
 
 
-def _parse_gender(text: str) -> str | None:
+def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict):
     """
-    Parse gender preference from response.
-    Returns 'male', 'female', or None.
+    Handle selection of group to invite.
     """
-    text_upper = text.upper()
+    selection = body.strip()
+    group_options = state_data.get("group_options", {})
     
-    # Check for explicit M or F (not part of other words)
-    if re.search(r'\bM\b', text_upper) or 'MALE' in text_upper and 'FEMALE' not in text_upper:
-        return "male"
-    if re.search(r'\bF\b', text_upper) or 'FEMALE' in text_upper:
-        return "female"
+    target_group_id = None # Default to None (All)
     
-    return None
-
-
-def _parse_level_range(text: str) -> tuple | None:
-    """
-    Parse level range from response.
-    Supports formats like "3.0-4.0" or "3.5 - 4.5".
-    """
-    # Pattern: number-number or number to number
-    pattern = r'(\d+\.?\d*)\s*[-–to]+\s*(\d+\.?\d*)'
-    match = re.search(pattern, text.lower())
-    
-    if match:
-        try:
-            level_min = float(match.group(1))
-            level_max = float(match.group(2))
-            
-            # Validate reasonable skill levels
-            if 2.0 <= level_min <= 5.5 and 2.0 <= level_max <= 5.5 and level_min <= level_max:
-                return (level_min, level_max)
-        except ValueError:
+    if selection == "0" or selection.lower() == "all":
+        target_group_id = None
+    elif selection in group_options:
+        target_group_id = group_options[selection]
+    else:
+        # Invalid selection
+        groups_list = ""
+        for idx in sorted(group_options.keys()):
+            # Find name? We didn't cache names, just IDs. 
+            # Ideally we should reply with the original message or a simple error.
+            # Let's just say invalid.
             pass
-    
-    return None
+        send_sms(from_number, "Invalid selection. Please reply with the number of the group or 0 for Everyone.")
+        return
+
+    _create_match(
+        from_number,
+        state_data["scheduled_time_iso"],
+        state_data["scheduled_time_human"],
+        player,
+        state_data.get("level_min"),
+        state_data.get("level_max"),
+        state_data.get("gender_preference"),
+        target_group_id
+    )
+
+
+
 
 
 def _handle_mute(from_number: str, player: dict):
@@ -245,9 +323,10 @@ def _create_match(
     scheduled_time_iso: str, 
     scheduled_time_human: str, 
     player: dict,
-    level_min: float = None,
-    level_max: float = None,
-    gender_preference: str = "mixed"
+    level_min: Optional[float] = None,
+    level_max: Optional[float] = None,
+    gender_preference: str = "mixed",
+    target_group_id: Optional[str] = None
 ):
     """
     Create match in database with preferences and trigger invites.
@@ -267,6 +346,7 @@ def _create_match(
             "level_range_min": level_min,
             "level_range_max": level_max,
             "gender_preference": gender_preference,
+            "target_group_id": target_group_id
         }
         
         supabase.table("matches").insert(match_data).execute()
@@ -297,7 +377,8 @@ def _create_match(
                 "scheduled_time_iso": scheduled_time_iso,
                 "level_min": level_min,
                 "level_max": level_max,
-                "gender_preference": gender_preference
+                "gender_preference": gender_preference,
+                "target_group_id": target_group_id
             }
         )
         send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR)

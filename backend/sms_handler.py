@@ -3,7 +3,11 @@ from redis_client import get_user_state, set_user_state, clear_user_state
 from database import supabase
 import sms_constants as msg
 from handlers.invite_handler import handle_invite_response
-from handlers.match_handler import handle_match_request, handle_match_confirmation
+from handlers.match_handler import (
+    handle_match_confirmation, 
+    handle_match_date_input,
+    handle_group_selection 
+)
 from handlers.onboarding_handler import handle_onboarding
 from handlers.feedback_handler import handle_feedback_response
 from error_logger import log_sms_error
@@ -412,6 +416,9 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             log_sms_error(f"Match confirmation handler failed: {e}", from_number, body, e)
             send_sms(from_number, "Sorry, something went wrong confirming your match. Please text PLAY to try again.")
             clear_user_state(from_number)
+        
+    elif current_state == msg.STATE_MATCH_GROUP_SELECTION:
+        handle_group_selection(from_number, body, player, state_data)
 
     # --- Feedback Collection Flow ---
     elif current_state == msg.STATE_WAITING_FEEDBACK:

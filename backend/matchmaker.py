@@ -58,6 +58,21 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     # 2. Find active players in the club
     candidates_res = supabase.table("players").select("*").eq("club_id", club_id).eq("active_status", True).execute()
     
+    # Filter by Group if applicable
+    target_group_id = match.get("target_group_id")
+    group_member_ids = None
+    
+    if target_group_id:
+        print(f"Match {match_id} is targeted to group {target_group_id}")
+        # New schema: Query group_memberships table
+        group_res = supabase.table("group_memberships").select("player_id").eq("group_id", target_group_id).execute()
+        if group_res.data:
+            group_member_ids = {row["player_id"] for row in group_res.data}
+            print(f"Group found with {len(group_member_ids)} members.")
+        else:
+            print("Target group not found or empty.")
+            return 0
+    
     # Get players already in the match
     players_in_match = set(match.get("team_1_players", []) + match.get("team_2_players", []))
     
@@ -70,6 +85,11 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     candidates = []
     for p in candidates_res.data:
+        # Filter by group if set
+        if group_member_ids is not None:
+            if p["player_id"] not in group_member_ids:
+                continue
+
         # Exclude players already in match
         if p["player_id"] in players_in_match:
             continue

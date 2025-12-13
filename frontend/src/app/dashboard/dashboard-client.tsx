@@ -1,13 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { LogoutButton } from './logout-button'
 import { PlayerActions, PlayerModal } from './player-management'
 import { CreatePlayerButton } from './create-player-button'
 import { CreateMatchButton } from './create-match-button'
-import { ClubSelector } from './club-selector'
+
+import { SwitchClubModal } from './switch-club-modal'
 import { MatchDetailsModal } from './match-details-modal'
 import { MatchWizard } from './create-match-wizard'
+import { GroupModal } from './groups/group-modal'
+import { AddToGroupModal } from './groups/add-to-group-modal'
 
 interface Player {
     player_id: string
@@ -60,6 +64,7 @@ export function DashboardClient({
     userClubId,
     clubs
 }: DashboardClientProps) {
+    const router = useRouter()
     const [mounted, setMounted] = useState(false)
     const [selectedClubId, setSelectedClubId] = useState<string>(() => {
         // On server, use userClubId or first club
@@ -84,7 +89,10 @@ export function DashboardClient({
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
     const [isMatchWizardOpen, setIsMatchWizardOpen] = useState(false)
+    const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false)
+    const [addToGroupModalOpen, setAddToGroupModalOpen] = useState(false)
     const [showCompletedMatches, setShowCompletedMatches] = useState(false)
+    const [switchClubModalOpen, setSwitchClubModalOpen] = useState(false)
 
     // After mount, check localStorage for saved club selection
     useEffect(() => {
@@ -237,6 +245,13 @@ export function DashboardClient({
         }
     }
 
+
+    const handleClubChange = (clubId: string) => {
+        setSelectedClubId(clubId)
+        localStorage.setItem('selectedClubId', clubId)
+        document.cookie = `operating_club_id=${clubId}; path=/; max-age=31536000`
+        router.refresh()
+    }
     const handleSelectRow = (playerId: string) => {
         const newSelected = new Set(selectedPlayerIds)
         if (newSelected.has(playerId)) {
@@ -276,19 +291,24 @@ export function DashboardClient({
                                 ➕ Create Club
                             </a>
                         )}
-                        {isSuperuser && clubs.length > 0 && (
-                            <ClubSelector
-                                clubs={clubs}
-                                defaultClubId={userClubId}
-                                onClubChange={setSelectedClubId}
-                            />
+                        {isSuperuser && (
+                            <>
+                                <button
+                                    onClick={() => setSwitchClubModalOpen(true)}
+                                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
+                                >
+                                    <span>🏢</span>
+                                    <span>{clubs.find(c => c.club_id === selectedClubId)?.name || 'Select Club'}</span>
+                                    <span className="text-xs text-gray-500">(Switch)</span>
+                                </button>
+                                <SwitchClubModal
+                                    isOpen={switchClubModalOpen}
+                                    onClose={() => setSwitchClubModalOpen(false)}
+                                    clubs={clubs}
+                                    currentClubId={selectedClubId}
+                                />
+                            </>
                         )}
-                        <a
-                            href="/dashboard/settings"
-                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                        >
-                            ⚙️ Settings
-                        </a>
                         <LogoutButton />
                     </div>
                 </div>
@@ -443,12 +463,29 @@ export function DashboardClient({
 
                             <div className="ml-auto flex items-center gap-4">
                                 {selectedPlayerIds.size > 0 && (
-                                    <button
-                                        onClick={() => setIsMatchWizardOpen(true)}
-                                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                                    >
-                                        Create Match ({selectedPlayerIds.size})
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => setCreateGroupModalOpen(true)}
+                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                        >
+                                            Create Group
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                console.log('Opening AddToGroupModal. Selected Club ID:', selectedClubId)
+                                                setAddToGroupModalOpen(true)
+                                            }}
+                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                                        >
+                                            Add to Group
+                                        </button>
+                                        <button
+                                            onClick={() => setIsMatchWizardOpen(true)}
+                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                        >
+                                            Create Match ({selectedPlayerIds.size})
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -718,6 +755,22 @@ export function DashboardClient({
                 onClose={() => setIsMatchWizardOpen(false)}
                 clubId={selectedClubId}
                 initialSelectedPlayers={getSelectedPlayersData()}
+            />
+
+            {/* Group Modals */}
+            <GroupModal
+                isOpen={createGroupModalOpen}
+                onClose={() => setCreateGroupModalOpen(false)}
+                mode="create"
+                clubId={selectedClubId}
+                initialMemberIds={Array.from(selectedPlayerIds)}
+            />
+
+            <AddToGroupModal
+                isOpen={addToGroupModalOpen}
+                onClose={() => setAddToGroupModalOpen(false)}
+                clubId={selectedClubId}
+                playerIds={Array.from(selectedPlayerIds)}
             />
         </div>
     )

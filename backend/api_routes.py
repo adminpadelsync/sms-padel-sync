@@ -211,6 +211,10 @@ async def search_players(club_id: str, q: str = ""):
 
 @router.post("/outreach")
 async def create_outreach(request: OutreachRequest):
+    from fastapi.responses import JSONResponse
+    import traceback
+    print("DEBUG: Entered create_outreach handler")
+    print(f"DEBUG: Request payload: {request}")
     try:
         match = initiate_match_outreach(
             club_id=request.club_id,
@@ -220,7 +224,15 @@ async def create_outreach(request: OutreachRequest):
         )
         return {"match": match, "message": "Outreach initiated successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"DEBUG: Exception in create_outreach: {e}")
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"Backend Error: {str(e)}",
+                "traceback": traceback.format_exc()
+            }
+        )
 
 # IMPORTANT: This route MUST come before /matches/{match_id} or "confirmed" gets treated as a match_id
 @router.get("/matches/confirmed")
@@ -428,5 +440,133 @@ async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
         return {"message": "Settings updated", "settings": current_settings}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Groups ---
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    initial_member_ids: List[str] = []
+
+class AddGroupMembersRequest(BaseModel):
+    player_ids: List[str]
+
+@router.get("/clubs/{club_id}/groups")
+async def get_club_groups(club_id: str):
+    """Get all groups for a club."""
+    from database import supabase
+    try:
+        # Get groups
+        result = supabase.table("player_groups").select("*").eq("club_id", club_id).order("name").execute()
+        groups = result.data or []
+        
+        # For each group, get member count
+        for group in groups:
+            # We can't do a join or count easily in one query with this client sometimes, 
+            # so we'll do a separate count for now or use a view if performance matters.
+            # Simplified approach: query memberships count
+            count_res = supabase.table("group_memberships").select("player_id", count="exact").eq("group_id", group["group_id"]).execute()
+            group["member_count"] = count_res.count # count="exact" returns count in property
+            
+        return {"groups": groups}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/clubs/{club_id}/groups")
+async def create_group(club_id: str, request: CreateGroupRequest):
+    """Create a new player group."""
+    from database import supabase
+    try:
+        # 1. Create Group
+        group_data = {
+            "club_id": club_id,
+            "name": request.name,
+            "description": request.description
+        }
+        result = supabase.table("player_groups").insert(group_data).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create group")
+        
+        new_group = result.data[0]
+        group_id = new_group["group_id"]
+        
+        # 2. Add members if any
+        if request.initial_member_ids:
+            members_data = [{"group_id": group_id, "player_id": pid} for pid in request.initial_member_ids]
+            supabase.table("group_memberships").insert(members_data).execute()
+            
+        return {"group": new_group, "message": "Group created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/groups/{group_id}")
+async def get_group(group_id: str):
+    """Get details for a specific group including members."""
+    from database import supabase
+    try:
+        # Get group info
+        group_res = supabase.table("player_groups").select("*").eq("group_id", group_id).execute()
+        if not group_res.data:
+            raise HTTPException(status_code=404, detail="Group not found")
+        group = group_res.data[0]
+        
+        # Get members with player details
+        # Using a join-like query via Supabase syntax: select player_id, players:player_id(...)
+        # Actually standard PostgREST: select(..., players(...))
+        # assuming foreign key is detected.
+        # But we defined the schema manually, so PostgREST should pick up the FK.
+        # Let's try explicit join query
+        
+        members_res = supabase.table("group_memberships").select(
+            "added_at, players!inner(player_id, name, phone_number, declared_skill_level)"
+        ).eq("group_id", group_id).execute()
+        
+        # Flatten structure
+        members = []
+        for m in (members_res.data or []):
+             p = m["players"]
+             p["added_at"] = m["added_at"]
+             members.append(p)
+             
+        # Sort by name
+        members.sort(key=lambda x: x["name"])
+        
+        return {"group": group, "members": members}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/groups/{group_id}/members")
+async def add_group_members(group_id: str, request: AddGroupMembersRequest):
+    """Add members to a group."""
+    from database import supabase
+    try:
+        # Filter out existing members to avoid unique constraint errors
+        # Or use upsert (ignore duplicates)
+        # supabase.insert usually errors on duplicate. 
+        # simpler: insert and ignore error or check first.
+        # Let's check first.
+        
+        existing_res = supabase.table("group_memberships").select("player_id").eq("group_id", group_id).in_("player_id", request.player_ids).execute()
+        existing_ids = {row["player_id"] for row in existing_res.data}
+        
+        new_ids = [pid for pid in request.player_ids if pid not in existing_ids]
+        
+        if new_ids:
+            data = [{"group_id": group_id, "player_id": pid} for pid in new_ids]
+            supabase.table("group_memberships").insert(data).execute()
+            
+        return {"message": f"Added {len(new_ids)} new members"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/groups/{group_id}/members/{player_id}")
+async def remove_group_member(group_id: str, player_id: str):
+    """Remove a member from a group."""
+    from database import supabase
+    try:
+        supabase.table("group_memberships").delete().match({"group_id": group_id, "player_id": player_id}).execute()
+        return {"message": "Member removed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
