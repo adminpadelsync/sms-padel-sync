@@ -131,7 +131,13 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     print(f"Found {len(candidates)} eligible candidates.")
     
     # 3. Determine how many to invite
-    invite_limit = max_invites if max_invites is not None else BATCH_SIZE
+    # When skip_filters is True (group invite), invite ALL group members
+    if skip_filters:
+        invite_limit = len(candidates)  # Invite everyone in the group
+    elif max_invites is not None:
+        invite_limit = max_invites
+    else:
+        invite_limit = BATCH_SIZE
     
     # 4. Send invites
     invite_count = 0
