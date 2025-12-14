@@ -8,7 +8,7 @@ interface Player {
     name: string
     phone_number: string
     declared_skill_level: number
-    gender: string
+    gender?: string
 }
 
 interface Invite {
