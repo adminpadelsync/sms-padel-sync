@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogoutButton } from './logout-button'
 import { PlayerActions, PlayerModal } from './player-management'
 import { CreatePlayerButton } from './create-player-button'
 import { CreateMatchButton } from './create-match-button'
@@ -20,17 +19,31 @@ interface Player {
     declared_skill_level: number
     active_status: boolean
     club_id: string
+    gender?: string
     clubs?: {
         name: string
     }
+    groups?: {
+        group_id: string
+        name: string
+    }[]
 }
 
-interface Player {
-    player_id: string
-    name: string
-    phone_number: string
-    declared_skill_level: number
-    gender: string
+// Format phone number as (XXX) XXX-XXXX
+function formatPhoneNumber(phone: string): string {
+    // Remove all non-digit characters
+    const digits = phone.replace(/\D/g, '')
+
+    // Handle US numbers with country code
+    const nationalNumber = digits.length === 11 && digits.startsWith('1')
+        ? digits.slice(1)
+        : digits
+
+    if (nationalNumber.length !== 10) {
+        return phone // Return original if not a standard 10-digit number
+    }
+
+    return `(${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`
 }
 
 interface Match {
@@ -309,7 +322,6 @@ export function DashboardClient({
                                 />
                             </>
                         )}
-                        <LogoutButton />
                     </div>
                 </div>
 
@@ -389,9 +401,8 @@ export function DashboardClient({
 
                     {/* Filter Controls */}
                     <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                        <div className="flex flex-wrap items-center gap-6">
-                            <div className="flex-1 min-w-[200px]">
-                                <label className="text-sm font-medium text-gray-700 block mb-1">Search</label>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="w-64">
                                 <input
                                     type="text"
                                     placeholder="Search by name or phone..."
@@ -506,11 +517,9 @@ export function DashboardClient({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gender</th>
-                                    {isSuperuser && (
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
-                                    )}
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Groups</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16"></th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -526,28 +535,36 @@ export function DashboardClient({
                                                 />
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{player.name}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{player.phone_number}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatPhoneNumber(player.phone_number)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{player.declared_skill_level}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{player.gender || 'N/A'}</td>
-                                            {isSuperuser && (
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {player.clubs?.name || 'Unknown'}
-                                                </td>
-                                            )}
+                                            <td className="px-6 py-4 text-sm text-gray-500">
+                                                {player.groups && player.groups.length > 0 ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {player.groups.map(group => (
+                                                            <span key={group.group_id} className="text-gray-600">
+                                                                {group.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${player.active_status ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                                                     }`}>
                                                     {player.active_status ? 'Active' : 'Inactive'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-right">
                                                 <PlayerActions player={player} />
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={isSuperuser ? 7 : 6} className="px-6 py-4 text-center text-sm text-gray-500">
+                                        <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
                                             No players found
                                         </td>
                                     </tr>
@@ -667,77 +684,6 @@ export function DashboardClient({
                             </div>
                         </div>
                     )}
-                </div>
-
-                {/* Matches Section */}
-                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <h2 className="text-lg font-medium text-gray-900">Matches</h2>
-                            <label className="flex items-center gap-2 text-sm text-gray-600">
-                                <input
-                                    type="checkbox"
-                                    checked={showCompletedMatches}
-                                    onChange={(e) => setShowCompletedMatches(e.target.checked)}
-                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                />
-                                Show past/cancelled matches
-                            </label>
-                        </div>
-                        <CreateMatchButton clubId={selectedClubId} />
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled Time</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Players</th>
-                                    {isSuperuser && (
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredMatches && filteredMatches.length > 0 ? (
-                                    filteredMatches.map((match) => (
-                                        <tr
-                                            key={match.match_id}
-                                            onClick={() => handleMatchClick(match.match_id)}
-                                            className="cursor-pointer hover:bg-gray-50 transition-colors"
-                                        >
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {new Date(match.scheduled_time).toLocaleString()}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                                    match.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                        match.status === 'voting' ? 'bg-blue-100 text-blue-800' :
-                                                            'bg-gray-100 text-gray-800'
-                                                    }`}>
-                                                    {match.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {match.team_1_players.length + match.team_2_players.length} / 4
-                                            </td>
-                                            {isSuperuser && (
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {match.clubs?.name || 'Unknown'}
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={isSuperuser ? 4 : 3} className="px-6 py-4 text-center text-sm text-gray-500">
-                                            No matches found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
             </div>
 

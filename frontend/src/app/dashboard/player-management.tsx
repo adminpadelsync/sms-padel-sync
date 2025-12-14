@@ -168,6 +168,7 @@ interface PlayerActionsProps {
 
 export function PlayerActions({ player }: PlayerActionsProps) {
     const [showModal, setShowModal] = useState(false)
+    const [showDropdown, setShowDropdown] = useState(false)
 
     const handleToggleStatus = async () => {
         if (confirm(`Are you sure you want to ${player.active_status ? 'deactivate' : 'activate'} ${player.name}?`)) {
@@ -190,26 +191,55 @@ export function PlayerActions({ player }: PlayerActionsProps) {
 
     return (
         <>
-            <div className="flex gap-2">
+            <div className="relative">
                 <button
-                    onClick={() => setShowModal(true)}
-                    className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                    onClick={() => setShowDropdown(!showDropdown)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                    className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                    aria-label="Actions"
                 >
-                    Edit
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                    </svg>
                 </button>
-                <button
-                    onClick={handleToggleStatus}
-                    className={`text-sm font-medium ${player.active_status ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'
-                        }`}
-                >
-                    {player.active_status ? 'Deactivate' : 'Activate'}
-                </button>
-                <button
-                    onClick={handleDelete}
-                    className="text-red-600 hover:text-red-900 text-sm font-medium"
-                >
-                    Delete
-                </button>
+
+                {showDropdown && (
+                    <div className="absolute right-0 mt-1 w-36 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
+                        <button
+                            onClick={() => { setShowModal(true); setShowDropdown(false); }}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                            Edit
+                        </button>
+                        <button
+                            onClick={() => { handleToggleStatus(); setShowDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 ${player.active_status ? 'text-orange-600' : 'text-green-600'
+                                }`}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                {player.active_status ? (
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                ) : (
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                )}
+                            </svg>
+                            {player.active_status ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <div className="border-t border-gray-100 my-1"></div>
+                        <button
+                            onClick={() => { handleDelete(); setShowDropdown(false); }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete
+                        </button>
+                    </div>
+                )}
             </div>
             <PlayerModal
                 player={player}

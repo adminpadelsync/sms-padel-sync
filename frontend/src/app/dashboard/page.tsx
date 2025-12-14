@@ -38,11 +38,26 @@ export default async function Dashboard() {
         redirect('/not-setup')
     }
 
-    // Fetch ALL Players (filtering will happen client-side)
-    const { data: players } = await supabase
+    // Fetch ALL Players with their group memberships (filtering will happen client-side)
+    const { data: rawPlayers } = await supabase
         .from('players')
-        .select('*, clubs(name)')
+        .select(`
+            *,
+            clubs(name),
+            group_memberships(
+                player_groups(group_id, name)
+            )
+        `)
         .order('created_at', { ascending: false })
+
+    // Transform players to flatten the groups structure
+    const players = rawPlayers?.map(player => ({
+        ...player,
+        groups: player.group_memberships
+            ?.map((m: any) => m.player_groups)
+            .filter((g: any) => g !== null)
+            .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
+    })) || []
 
     // Fetch ALL Matches (filtering will happen client-side)
     const { data: matches } = await supabase
