@@ -2,94 +2,90 @@
 import os
 import sys
 from dotenv import load_dotenv
+from collections import defaultdict
 
 # Add backend directory to path so we can import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_db_connection
+from database import supabase
 from scoring_engine import calculate_responsiveness_score, calculate_reputation_score
 
 def recalculate_player_scores(player_id=None):
     """
-    Recalculate scores for a single player or all players if player_id is None.
+    Recalculate scores for a single player or all players using Supabase client.
     Updates 'responsiveness_score' and 'reputation_score' in the players table.
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
     try:
-        # Fetch players
-        query = "SELECT player_id, name, total_no_shows, total_matches_played FROM players"
-        params = []
+        # 1. Fetch Players
+        query = supabase.table("players").select("player_id, name, total_no_shows, total_matches_played")
         if player_id:
-            query += " WHERE player_id = %s"
-            params.append(player_id)
+            query = query.eq("player_id", player_id)
+        
+        # Paginate if needed, but for now assuming < 1000 players fit in one response (default limit is usually 1000)
+        players_res = query.execute()
+        players = players_res.data or []
+        
+        # 2. Fetch Invites (All or filtered)
+        # To avoid N+1, if processing all players, fetch ALL invites.
+        inv_query = supabase.table("match_invites").select("player_id, status")
+        if player_id:
+            inv_query = inv_query.eq("player_id", player_id)
             
-        cursor.execute(query, tuple(params))
-        players = cursor.fetchall() # returns list of tuples or dicts if RealDictCursor
+        # Supabase default limit is 1000. Use range only if needed.
+        # For safety let's fetch a large chunk or handle pagination if expecting > 1000 invites.
+        # But 'select' usually returns 1000.
+        # Let's try fetching up to 5000 invites.
+        inv_res = inv_query.limit(5000).execute()
+        invites = inv_res.data or []
         
-        # We need dictionary access. If psycopg2 defaults to tuples, we need to map.
-        # Assuming get_db_connection returns RealDictCursor or we handle it.
-        # Let's assume standard cursor for now and map assuming order.
-        desc = cursor.description
-        column_names = [col[0] for col in desc]
+        # 3. Aggregate Stats
+        # Structure: player_id -> {'total': 0, 'responded': 0, 'accepted': 0}
+        stats_map = defaultdict(lambda: {'total': 0, 'responded': 0, 'accepted': 0})
         
+        for inv in invites:
+            pid = inv['player_id']
+            status = inv.get('status')
+            
+            stats_map[pid]['total'] += 1
+            if status in ['accepted', 'declined']:
+                stats_map[pid]['responded'] += 1
+            if status == 'accepted':
+                stats_map[pid]['accepted'] += 1
+                
+        # 4. Calculate and Update
         updated_count = 0
         
-        for row in players:
-            player = dict(zip(column_names, row))
+        for player in players:
             p_id = player['player_id']
+            stats = stats_map[p_id]
             
-            # 1. Fetch Invite Stats for Responsiveness
-            # Count accepted/declined vs total
-            # status: 'accepted', 'declined' = responded
-            # status: 'sent', 'expired' = ignored (if expired)
+            # Enrich player dict for scoring engine
+            player['total_invites_received'] = stats['total']
+            player['responded_count'] = stats['responded']
+            # player['total_no_shows'] is already there
             
-            cursor.execute("""
-                SELECT 
-                    COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE status IN ('accepted', 'declined')) as responded,
-                    COUNT(*) FILTER (WHERE status = 'accepted') as accepted
-                FROM match_invites 
-                WHERE player_id = %s
-            """, (p_id,))
-            
-            stats = cursor.fetchone()
-            # map stats
-            stats_dict = dict(zip([col[0] for col in cursor.description], stats))
-            
-            player['total_invites_received'] = stats_dict['total']
-            player['responded_count'] = stats_dict['responded']
-            # We can also update the cached counters while we are at it
-            total_accepted = stats_dict['accepted']
-            
-            # Calculate Scores
+            # Calculate Scors
             resp_score = calculate_responsiveness_score(player)
             rep_score = calculate_reputation_score(player)
             
             # Update DB
-            cursor.execute("""
-                UPDATE players 
-                SET 
-                    responsiveness_score = %s,
-                    reputation_score = %s,
-                    total_invites_received = %s,
-                    total_invites_accepted = %s
-                WHERE player_id = %s
-            """, (resp_score, rep_score, stats_dict['total'], total_accepted, p_id))
+            update_data = {
+                "responsiveness_score": resp_score,
+                "reputation_score": rep_score,
+                "total_invites_received": stats['total'],
+                "total_invites_accepted": stats['accepted']
+            }
             
+            supabase.table("players").update(update_data).eq("player_id", p_id).execute()
             updated_count += 1
             
-        conn.commit()
         print(f"Successfully updated scores for {updated_count} players.")
+        return updated_count
         
     except Exception as e:
-        conn.rollback()
         print(f"Error updating scores: {e}")
+        # Re-raise so API knows it failed
         raise e
-    finally:
-        cursor.close()
-        conn.close()
 
 if __name__ == "__main__":
     load_dotenv()
