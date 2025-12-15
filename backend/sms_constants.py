@@ -14,14 +14,27 @@ MSG_ASK_LEVEL = (
 MSG_INVALID_LEVEL = "Please reply with a letter A-F or the number (e.g., 3.5)."
 MSG_ASK_GENDER = "Great! What is your gender? (Reply M for Male or F for Female)"
 MSG_INVALID_GENDER = "Please reply with M (Male) or F (Female)."
-MSG_ASK_AVAILABILITY = """Got it! Last question: When do you usually like to play? Reply with letters for all that apply:
+MSG_ASK_AVAILABILITY_ONBOARDING = """Got it! Last question: When do you usually like to play?
 A) Weekday mornings
 B) Weekday afternoons
 C) Weekday evenings
 D) Weekend mornings
 E) Weekend afternoons
 F) Weekend evenings
-G) Anytime"""
+G) Anytime
+
+Reply with letters for all that apply (example: ACD)."""
+
+MSG_ASK_AVAILABILITY_UPDATE = """When do you usually like to play?
+A) Weekday mornings
+B) Weekday afternoons
+C) Weekday evenings
+D) Weekend mornings
+E) Weekend afternoons
+F) Weekend evenings
+G) Anytime
+
+Reply with letters for all that apply (example: ACD)."""
 MSG_PROFILE_SETUP_DONE = "You're all set with {club_name}! We'll text you when matches are available. Text 'PLAY' anytime to request a game."
 MSG_PROFILE_ERROR = "Something went wrong saving your profile. Please try again later."
 MSG_SYSTEM_ERROR = "System Error: No clubs configured. Please contact admin."

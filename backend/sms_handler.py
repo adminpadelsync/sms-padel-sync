@@ -394,7 +394,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             send_sms(from_number, "📊 Reply MATCHES to see your match invites with details.")
             return
         elif cmd == "availability":
-            send_sms(from_number, msg.MSG_ASK_AVAILABILITY)
+            send_sms(from_number, msg.MSG_ASK_AVAILABILITY_UPDATE)
             set_user_state(from_number, msg.STATE_UPDATING_AVAILABILITY)
             return
         else:

@@ -69,7 +69,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             "gender": gender,
             "club_id": club_id
         })
-        send_sms(from_number, msg.MSG_ASK_AVAILABILITY)
+        send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING)
 
     elif current_state == msg.STATE_WAITING_AVAILABILITY:
         body_upper = body.upper().strip()
