@@ -551,15 +551,17 @@ export function DashboardClient({
                                                     onChange={() => handleSelectRow(player.player_id)}
                                                 />
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 flex items-center gap-1">
-                                                {player.name}
-                                                {player.pro_verified && (
-                                                    <span title="Verified Pro Level">
-                                                        <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                        </svg>
-                                                    </span>
-                                                )}
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 align-middle">
+                                                <div className="flex items-center gap-1">
+                                                    {player.name}
+                                                    {player.pro_verified && (
+                                                        <span title="Verified Pro Level">
+                                                            <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatPhoneNumber(player.phone_number)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -595,13 +597,13 @@ export function DashboardClient({
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{player.gender || 'N/A'}</td>
                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                 {player.groups && player.groups.length > 0 ? (
-                                                    <div className="flex flex-col gap-0.5">
+                                                    <ul className="list-disc pl-4 space-y-0.5">
                                                         {player.groups.map(group => (
-                                                            <span key={group.group_id} className="text-gray-600">
+                                                            <li key={group.group_id} className="text-gray-600">
                                                                 {group.name}
-                                                            </span>
+                                                            </li>
                                                         ))}
-                                                    </div>
+                                                    </ul>
                                                 ) : (
                                                     <span className="text-gray-400">—</span>
                                                 )}
