@@ -4,8 +4,9 @@ import sys
 from dotenv import load_dotenv
 from collections import defaultdict
 
-# Add backend directory to path so we can import modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Only add path if running as main script, not when imported
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import supabase
 from scoring_engine import calculate_responsiveness_score, calculate_reputation_score
@@ -15,6 +16,9 @@ def recalculate_player_scores(player_id=None):
     Recalculate scores for a single player or all players using Supabase client.
     Updates 'responsiveness_score' and 'reputation_score' in the players table.
     """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check environment variables.")
+
     try:
         # 1. Fetch Players
         query = supabase.table("players").select("player_id, name, total_no_shows, total_matches_played")

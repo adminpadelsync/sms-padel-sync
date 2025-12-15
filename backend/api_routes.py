@@ -377,11 +377,22 @@ async def process_invite_timeouts():
 @router.post("/cron/recalculate-scores")
 async def trigger_score_recalculation():
     """Cron endpoint to recalculate scores for all players."""
-    from score_calculator import recalculate_player_scores
+    import traceback
     try:
-        recalculate_player_scores()
-        return {"message": "Scores recalculated successfully"}
+        print("DEBUG: Attempting to import score_calculator")
+        from score_calculator import recalculate_player_scores
+    except ImportError as e:
+        print(f"DEBUG: Import Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to import score calculator: {str(e)}")
+        
+    try:
+        print("DEBUG: calling recalculate_player_scores")
+        count = recalculate_player_scores()
+        return {"message": f"Scores recalculated successfully for {count} players"}
     except Exception as e:
+        print(f"DEBUG: Execution Error: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
