@@ -27,21 +27,42 @@ CREATE TABLE players (
   player_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   phone_number TEXT NOT NULL, -- same phone can be at multiple clubs
   name TEXT NOT NULL,
-  declared_skill_level DECIMAL(2,1) CHECK (declared_skill_level IN (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)),
-  adjusted_skill_level DECIMAL(2,1) CHECK (adjusted_skill_level IN (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)),
+  gender TEXT CHECK (gender IN ('male', 'female')),
+  
+  -- Skill levels (0.25 increments: 2.50, 2.75, 3.00, ... 5.00)
+  declared_skill_level DECIMAL(3,2) CHECK (declared_skill_level IN (2.50, 2.75, 3.00, 3.25, 3.50, 3.75, 4.00, 4.25, 4.50, 4.75, 5.00)),
+  adjusted_skill_level DECIMAL(3,2) CHECK (adjusted_skill_level IN (2.50, 2.75, 3.00, 3.25, 3.50, 3.75, 4.00, 4.25, 4.50, 4.75, 5.00)),
   level_confidence_score INTEGER CHECK (level_confidence_score BETWEEN 0 AND 100),
   last_level_adjustment_date TIMESTAMP,
-  last_level_adjustment_by UUID, -- references users or 'system'
+  last_level_adjustment_by UUID,
   last_level_adjustment_reason TEXT,
+  
+  -- Pro verification
+  pro_verified BOOLEAN DEFAULT false,
+  pro_verified_at TIMESTAMP,
+  pro_verified_by UUID,
+  pro_verification_notes TEXT,
+  
+  -- Cached scoring (updated nightly)
+  responsiveness_score INTEGER DEFAULT 50 CHECK (responsiveness_score BETWEEN 0 AND 100),
+  reputation_score INTEGER DEFAULT 50 CHECK (reputation_score BETWEEN 0 AND 100),
+  total_invites_received INTEGER DEFAULT 0,
+  total_invites_accepted INTEGER DEFAULT 0,
+  total_no_shows INTEGER DEFAULT 0,
+  average_response_time_seconds INTEGER,
+  
+  -- Club and status
   club_id UUID NOT NULL REFERENCES clubs(club_id),
-  availability_preferences JSONB,
   active_status BOOLEAN DEFAULT true,
-  blocked_players UUID[], -- array of player_ids
-  private_groups UUID[], -- array of group_ids
+  blocked_players UUID[],
+  private_groups UUID[],
   created_at TIMESTAMP DEFAULT NOW(),
   last_active TIMESTAMP,
   total_matches_played INTEGER DEFAULT 0,
-  -- Unique constraint allows same phone at multiple clubs
+  
+  -- Availability preferences (legacy, to be replaced in Phase 1.5)
+  availability_preferences JSONB,
+  
   UNIQUE (phone_number, club_id)
 );
 
@@ -106,7 +127,12 @@ CREATE TABLE match_invites (
   player_id UUID NOT NULL REFERENCES players(player_id),
   status TEXT CHECK (status IN ('sent', 'accepted', 'declined', 'expired', 'maybe', 'removed')),
   sent_at TIMESTAMP DEFAULT NOW(),
-  responded_at TIMESTAMP
+  responded_at TIMESTAMP,
+  
+  -- ML tracking fields
+  invite_score INTEGER CHECK (invite_score BETWEEN 0 AND 100),
+  score_breakdown JSONB, -- {"responsiveness": 75, "compatibility": 82, "reputation": 68}
+  response_time_seconds INTEGER
 );
 
 -- Match Votes (Depends on matches, players)

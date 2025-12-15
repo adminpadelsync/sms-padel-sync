@@ -168,3 +168,40 @@ export async function deletePlayer(playerId: string) {
 
     revalidatePath('/dashboard')
 }
+
+export async function verifyPlayer(playerId: string, data: {
+    verified: boolean
+    level: number
+    notes?: string
+}) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Not authenticated')
+    }
+
+    const updates: any = {
+        pro_verified: data.verified,
+        declared_skill_level: data.level,
+        adjusted_skill_level: data.level,
+    }
+
+    if (data.verified) {
+        updates.pro_verified_at = new Date().toISOString()
+        updates.pro_verified_by = user.id
+        updates.pro_verification_notes = data.notes
+    }
+
+    const { error } = await supabase
+        .from('players')
+        .update(updates)
+        .eq('player_id', playerId)
+
+    if (error) {
+        console.error('Error verifying player:', error)
+        throw error
+    }
+
+    revalidatePath('/dashboard')
+}

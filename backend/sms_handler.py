@@ -393,6 +393,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         elif cmd == "status":
             send_sms(from_number, "📊 Reply MATCHES to see your match invites with details.")
             return
+        elif cmd == "availability":
+            send_sms(from_number, msg.MSG_ASK_AVAILABILITY)
+            set_user_state(from_number, msg.STATE_UPDATING_AVAILABILITY)
+            return
         else:
             send_sms(from_number, msg.MSG_WELCOME_BACK.format(club_name=club_name, name=player['name']))
             return
@@ -410,6 +414,65 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     # Handle States
     if current_state in [msg.STATE_WAITING_NAME, msg.STATE_WAITING_LEVEL, msg.STATE_WAITING_GENDER, msg.STATE_WAITING_AVAILABILITY]:
         handle_onboarding(from_number, body, current_state, state_data, club_id)
+
+    elif current_state == msg.STATE_UPDATING_AVAILABILITY:
+        body_upper = body.upper().strip()
+        
+        # Default all to False - or should we modify existing?
+        # Let's overwrite with new selection for simplicity
+        avail_updates = {
+            "avail_weekday_morning": False,
+            "avail_weekday_afternoon": False,
+            "avail_weekday_evening": False,
+            "avail_weekend_morning": False,
+            "avail_weekend_afternoon": False,
+            "avail_weekend_evening": False
+        }
+        
+        if "G" in body_upper or "ANYTIME" in body_upper:
+             for key in avail_updates:
+                 avail_updates[key] = True
+        else:
+            mapping = {
+                "A": "avail_weekday_morning",
+                "B": "avail_weekday_afternoon",
+                "C": "avail_weekday_evening",
+                "D": "avail_weekend_morning",
+                "E": "avail_weekend_afternoon",
+                "F": "avail_weekend_evening"
+            }
+            for letter, key in mapping.items():
+                if letter in body_upper:
+                    avail_updates[key] = True
+        
+        try:
+            supabase.table("players").update(avail_updates).eq("player_id", player["player_id"]).execute()
+            
+            # Construct confirmation message
+            active = [k for k, v in avail_updates.items() if v]
+            if len(active) == 6:
+                confirm = "Anytime"
+            elif not active:
+                confirm = "None"
+            else:
+                # E.g. "Weekday mornings, Weekend evenings"
+                readable = {
+                    "avail_weekday_morning": "Weekday mornings",
+                    "avail_weekday_afternoon": "Weekday afternoons",
+                    "avail_weekday_evening": "Weekday evenings",
+                    "avail_weekend_morning": "Weekend mornings",
+                    "avail_weekend_afternoon": "Weekend afternoons",
+                    "avail_weekend_evening": "Weekend evenings"
+                }
+                parts = [readable[k] for k in active]
+                confirm = ", ".join(parts)
+            
+            send_sms(from_number, f"Got it! Availability updated: {confirm}")
+            clear_user_state(from_number)
+        except Exception as e:
+            print(f"[ERROR] Failed to update availability: {e}")
+            send_sms(from_number, "Sorry, something went wrong updating your availability.")
+            clear_user_state(from_number)
 
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:

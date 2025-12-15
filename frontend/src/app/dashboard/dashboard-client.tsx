@@ -10,7 +10,9 @@ import { SwitchClubModal } from './switch-club-modal'
 import { MatchDetailsModal } from './match-details-modal'
 import { MatchWizard } from './create-match-wizard'
 import { GroupModal } from './groups/group-modal'
+
 import { AddToGroupModal } from './groups/add-to-group-modal'
+import { VerificationModal } from './verification-modal'
 
 interface Player {
     player_id: string
@@ -19,7 +21,13 @@ interface Player {
     declared_skill_level: number
     active_status: boolean
     club_id: string
+
     gender?: string
+    pro_verified?: boolean
+    pro_verified_at?: string
+    pro_verification_notes?: string
+    responsiveness_score?: number
+    reputation_score?: number
     clubs?: {
         name: string
     }
@@ -87,7 +95,10 @@ export function DashboardClient({
         return userClubId || ''
     })
     const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
+
     const [matchModalOpen, setMatchModalOpen] = useState(false)
+    const [verificationModalOpen, setVerificationModalOpen] = useState(false)
+    const [playerToVerify, setPlayerToVerify] = useState<Player | null>(null)
 
     // Player filter state
     const [targetLevel, setTargetLevel] = useState<number | null>(null)
@@ -136,9 +147,13 @@ export function DashboardClient({
 
     // Apply gender filter
     if (genderFilter !== 'all') {
-        filteredPlayers = filteredPlayers.filter(p =>
-            p.gender?.toLowerCase() === genderFilter.toLowerCase()
-        )
+        if (genderFilter === 'verified') {
+            filteredPlayers = filteredPlayers.filter(p => p.pro_verified)
+        } else {
+            filteredPlayers = filteredPlayers.filter(p =>
+                p.gender?.toLowerCase() === genderFilter.toLowerCase()
+            )
+        }
     }
 
     // Apply search filter
@@ -455,6 +470,7 @@ export function DashboardClient({
                                     <option value="all">All</option>
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
+                                    <option value="verified">Verified Only</option>
                                 </select>
                             </div>
 
@@ -516,6 +532,7 @@ export function DashboardClient({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gender</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Groups</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -534,9 +551,31 @@ export function DashboardClient({
                                                     onChange={() => handleSelectRow(player.player_id)}
                                                 />
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{player.name}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 flex items-center gap-1">
+                                                {player.name}
+                                                {player.pro_verified && (
+                                                    <span title="Verified Pro Level">
+                                                        <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatPhoneNumber(player.phone_number)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{player.declared_skill_level}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {player.declared_skill_level.toFixed(2)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <div className="flex gap-2">
+                                                    <span title={`Responsiveness Score: ${player.responsiveness_score || '-'}`} className={`font-mono ${player.responsiveness_score && player.responsiveness_score > 80 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                        {player.responsiveness_score || '-'}
+                                                    </span>
+                                                    <span className="text-gray-300">/</span>
+                                                    <span title={`Reputation Score: ${player.reputation_score || '-'}`} className={`font-mono ${player.reputation_score && player.reputation_score > 80 ? 'text-blue-600' : 'text-gray-500'}`}>
+                                                        {player.reputation_score || '-'}
+                                                    </span>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{player.gender || 'N/A'}</td>
                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                 {player.groups && player.groups.length > 0 ? (
@@ -558,7 +597,13 @@ export function DashboardClient({
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                <PlayerActions player={player} />
+                                                <PlayerActions
+                                                    player={player}
+                                                    onVerify={() => {
+                                                        setPlayerToVerify(player)
+                                                        setVerificationModalOpen(true)
+                                                    }}
+                                                />
                                             </td>
                                         </tr>
                                     ))
@@ -717,6 +762,15 @@ export function DashboardClient({
                 onClose={() => setAddToGroupModalOpen(false)}
                 clubId={selectedClubId}
                 playerIds={Array.from(selectedPlayerIds)}
+            />
+
+            <VerificationModal
+                player={playerToVerify}
+                isOpen={verificationModalOpen}
+                onClose={() => {
+                    setVerificationModalOpen(false)
+                    setPlayerToVerify(null)
+                }}
             />
         </div>
     )

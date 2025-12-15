@@ -374,6 +374,17 @@ async def process_invite_timeouts():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/cron/recalculate-scores")
+async def trigger_score_recalculation():
+    """Cron endpoint to recalculate scores for all players."""
+    from score_calculator import recalculate_player_scores
+    try:
+        recalculate_player_scores()
+        return {"message": "Scores recalculated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/matches/{match_id}/feedback")
 async def trigger_match_feedback(match_id: str):
     """Manually trigger feedback SMS for a specific match (for testing)."""

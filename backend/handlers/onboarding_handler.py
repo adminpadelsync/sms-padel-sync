@@ -72,7 +72,38 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         send_sms(from_number, msg.MSG_ASK_AVAILABILITY)
 
     elif current_state == msg.STATE_WAITING_AVAILABILITY:
-        availability = body.strip()
+        body_upper = body.upper().strip()
+        
+        # Default all to False
+        avail_updates = {
+            "avail_weekday_morning": False,
+            "avail_weekday_afternoon": False,
+            "avail_weekday_evening": False,
+            "avail_weekend_morning": False,
+            "avail_weekend_afternoon": False,
+            "avail_weekend_evening": False
+        }
+        
+        # Parse choices
+        # Check for "G" or "ANYTIME" -> set all to True
+        if "G" in body_upper or "ANYTIME" in body_upper:
+             for key in avail_updates:
+                 avail_updates[key] = True
+        else:
+            # Map letters to keys
+            mapping = {
+                "A": "avail_weekday_morning",
+                "B": "avail_weekday_afternoon",
+                "C": "avail_weekday_evening",
+                "D": "avail_weekend_morning",
+                "E": "avail_weekend_afternoon",
+                "F": "avail_weekend_evening"
+            }
+            
+            # Check for each letter
+            for letter, key in mapping.items():
+                if letter in body_upper:
+                    avail_updates[key] = True
         
         # Save to DB
         name = state_data.get("name")
@@ -94,9 +125,9 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             "gender": gender,
             "declared_skill_level": level,
             "adjusted_skill_level": level,
-            "availability_preferences": {"text": availability},
             "club_id": club_id,
-            "active_status": True
+            "active_status": True,
+            **avail_updates
         }
 
         try:

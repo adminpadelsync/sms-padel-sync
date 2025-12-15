@@ -14,7 +14,14 @@ MSG_ASK_LEVEL = (
 MSG_INVALID_LEVEL = "Please reply with a letter A-F or the number (e.g., 3.5)."
 MSG_ASK_GENDER = "Great! What is your gender? (Reply M for Male or F for Female)"
 MSG_INVALID_GENDER = "Please reply with M (Male) or F (Female)."
-MSG_ASK_AVAILABILITY = "Got it! Last question: When do you usually like to play? (e.g., 'Weekdays after 6pm', 'Sat mornings')"
+MSG_ASK_AVAILABILITY = """Got it! Last question: When do you usually like to play? Reply with letters for all that apply:
+A) Weekday mornings
+B) Weekday afternoons
+C) Weekday evenings
+D) Weekend mornings
+E) Weekend afternoons
+F) Weekend evenings
+G) Anytime"""
 MSG_PROFILE_SETUP_DONE = "You're all set with {club_name}! We'll text you when matches are available. Text 'PLAY' anytime to request a game."
 MSG_PROFILE_ERROR = "Something went wrong saving your profile. Please try again later."
 MSG_SYSTEM_ERROR = "System Error: No clubs configured. Please contact admin."
@@ -82,8 +89,10 @@ STATE_MATCH_REQUEST_DATE = "MATCH_REQUEST_DATE"
 STATE_MATCH_REQUEST_CONFIRM = "MATCH_REQUEST_CONFIRM"
 STATE_MATCH_GROUP_SELECTION = "MATCH_GROUP_SELECTION"
 STATE_MATCH_REQUEST_DURATION = "MATCH_REQUEST_DURATION"
+STATE_MATCH_REQUEST_DURATION = "MATCH_REQUEST_DURATION"
 STATE_COMPLETED = "COMPLETED"
 STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"
+STATE_UPDATING_AVAILABILITY = "UPDATING_AVAILABILITY"
 
 # Feedback Collection
 MSG_FEEDBACK_REQUEST = """🎾 {club_name}: On a scale of 1-10, how likely are you to play in a match again with:
