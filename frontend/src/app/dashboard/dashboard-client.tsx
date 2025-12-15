@@ -566,14 +566,30 @@ export function DashboardClient({
                                                 {player.declared_skill_level.toFixed(2)}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <div className="flex gap-2">
-                                                    <span title={`Responsiveness Score: ${player.responsiveness_score || '-'}`} className={`font-mono ${player.responsiveness_score && player.responsiveness_score > 80 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                        {player.responsiveness_score || '-'}
-                                                    </span>
-                                                    <span className="text-gray-300">/</span>
-                                                    <span title={`Reputation Score: ${player.reputation_score || '-'}`} className={`font-mono ${player.reputation_score && player.reputation_score > 80 ? 'text-blue-600' : 'text-gray-500'}`}>
-                                                        {player.reputation_score || '-'}
-                                                    </span>
+                                                <div className="flex flex-col gap-1.5 w-32">
+                                                    {/* Responsiveness */}
+                                                    <div className="flex items-center gap-2" title="Responsiveness Score (Response Rate)">
+                                                        <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 w-8">Resp</span>
+                                                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${(!player.responsiveness_score || player.responsiveness_score < 50) ? 'bg-red-400' : player.responsiveness_score < 80 ? 'bg-yellow-400' : 'bg-blue-500'}`}
+                                                                style={{ width: `${player.responsiveness_score || 0}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-gray-600 w-6 text-right">{player.responsiveness_score || '-'}</span>
+                                                    </div>
+
+                                                    {/* Reputation */}
+                                                    <div className="flex items-center gap-2" title="Reputation Score (Based on No-shows)">
+                                                        <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 w-8">Rep</span>
+                                                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${(!player.reputation_score || player.reputation_score < 50) ? 'bg-red-400' : player.reputation_score < 80 ? 'bg-yellow-400' : 'bg-green-500'}`}
+                                                                style={{ width: `${player.reputation_score || 0}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-gray-600 w-6 text-right">{player.reputation_score || '-'}</span>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{player.gender || 'N/A'}</td>
