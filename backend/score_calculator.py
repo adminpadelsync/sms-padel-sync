@@ -38,8 +38,8 @@ def recalculate_player_scores(player_id=None):
         # Supabase default limit is 1000. Use range only if needed.
         # For safety let's fetch a large chunk or handle pagination if expecting > 1000 invites.
         # But 'select' usually returns 1000.
-        # Let's try fetching up to 5000 invites.
-        inv_res = inv_query.limit(5000).execute()
+        # Let's try fetching up to 500 invites (reduced to avoid Vercel timeout).
+        inv_res = inv_query.limit(500).execute()
         invites = inv_res.data or []
         
         # 3. Aggregate Stats

@@ -374,7 +374,7 @@ async def process_invite_timeouts():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/cron/recalculate-scores")
+@router.api_route("/cron/recalculate-scores", methods=["GET", "POST"])
 async def trigger_score_recalculation():
     """Cron endpoint to recalculate scores for all players."""
     import traceback
