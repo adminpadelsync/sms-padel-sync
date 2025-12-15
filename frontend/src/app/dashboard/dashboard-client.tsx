@@ -855,5 +855,6 @@ export function DashboardClient({
                     }}
                 />
             </div>
-            )
+        </div>
+    )
 }
