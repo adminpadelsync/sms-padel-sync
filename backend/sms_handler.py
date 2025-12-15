@@ -193,7 +193,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             }).eq("player_id", player["player_id"]).execute()
             send_sms(from_number, msg.MSG_UNMUTED)
             return
-        elif cmd == "help" or cmd == "?":
+        elif cmd in ["help", "?", "commands", "menu"]:
             help_text = (
                 f"🎾 {club_name.upper()} COMMANDS\n\n"
                 "MATCH RESPONSES:\n"
@@ -205,9 +205,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 "• NEXT - Next confirmed match\n\n"
                 "OTHER:\n"
                 "• PLAY - Request a match\n"
+                "• AVAILABILITY - Set play times\n"
                 "• MUTE - Pause invites for today\n"
                 "• UNMUTE - Resume invites\n"
-                "• HELP - Show this message"
+                "• COMMANDS - Show this message"
             )
             send_sms(from_number, help_text)
             return
