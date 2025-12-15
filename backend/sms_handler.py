@@ -193,7 +193,13 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             }).eq("player_id", player["player_id"]).execute()
             send_sms(from_number, msg.MSG_UNMUTED)
             return
-        elif cmd in ["help", "?", "commands", "menu"]:
+        elif cmd in ["help", "?"]:
+            # Twilio handles this via Messaging Service (Opt-Out management)
+            # We silently return 200 OK to avoid sending a duplicate message
+            print(f"[DEBUG] HELP command received from {from_number}. Letting Twilio handle response.")
+            return
+            
+        elif cmd in ["commands", "menu"]:
             help_text = (
                 f"🎾 {club_name.upper()} COMMANDS\n\n"
                 "MATCH RESPONSES:\n"
