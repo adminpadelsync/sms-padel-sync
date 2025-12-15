@@ -116,3 +116,29 @@ async def post_sms_inbox(message: InboxMessage):
     handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
 
+@app.api_route("/cron/recalculate-scores", methods=["GET", "POST"])
+async def trigger_score_recalculation_direct():
+    """Direct cron endpoint to debug routing issues."""
+    from fastapi import HTTPException
+    import traceback
+    try:
+        print("DEBUG: Direct cron endpoint hit")
+        from score_calculator import recalculate_player_scores
+        count = recalculate_player_scores()
+        return {"message": f"Scores recalculated successfully for {count} players (DIRECT)"}
+    except Exception as e:
+        print(f"DEBUG: Direct cron error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.api_route("/debug-routing", methods=["GET", "POST"])
+async def debug_routing(request: Request):
+    return {
+        "root_path": request.scope.get("root_path"),
+        "path": request.scope.get("path"),
+        "method": request.method,
+        "raw_path": request.scope.get("raw_path").decode() if request.scope.get("raw_path") else None,
+        "is_vercel": os.environ.get('VERCEL')
+    }
+
+
