@@ -69,6 +69,28 @@ const nextConfig: NextConfig = {
             ? 'http://localhost:8001/api/clubs'
             : `${apiUrl || ''}/api/clubs`,
       },
+      },
+      {
+  source: '/api/cron/:path*',
+    destination:
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8001/api/cron/:path*'
+    : `${apiUrl || ''}/api/cron/:path*`,
+      },
+{
+  source: '/api/groups/:path*',
+    destination:
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8001/api/groups/:path*'
+    : `${apiUrl || ''}/api/groups/:path*`,
+      },
+{
+  source: '/api/debug-routing',
+    destination:
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8001/api/debug-routing'
+    : `${apiUrl || ''}/api/debug-routing`,
+      },
     ]
   },
 };
