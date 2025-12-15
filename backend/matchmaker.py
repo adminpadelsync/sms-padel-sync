@@ -135,30 +135,50 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         # Note: availability_preferences check removed - was blocking players without this set
         candidates.append(p)
     
-    print(f"Found {len(candidates)} eligible candidates.")
+    # 3. Rank Candidates using Scoring Engine
+    from scoring_engine import rank_candidates
     
-    # 3. Determine how many to invite
+    # Construct match details for scoring
+    # Note: match keys in DB are level_range_min/max, scoring engine expects level_min/max
+    score_match_details = {
+        "level_min": match.get("level_range_min"),
+        "level_max": match.get("level_range_max"),
+        "gender_preference": match.get("gender_preference")
+    }
+    
+    # Rank them!
+    # This injects '_invite_score' and '_score_breakdown' into each candidate dict
+    sorted_candidates = rank_candidates(candidates, score_match_details)
+    
+    print(f"Found {len(sorted_candidates)} eligible candidates (Sorted by Score).")
+    if sorted_candidates:
+        top = sorted_candidates[0]
+        print(f"Top candidate: {top['name']} - Score: {top.get('_invite_score')}")
+
+    # 4. Determine how many to invite
     # When skip_filters is True (group invite), invite ALL group members
     if skip_filters:
-        invite_limit = len(candidates)  # Invite everyone in the group
+        invite_limit = len(sorted_candidates)  # Invite everyone in the group
     elif max_invites is not None:
         invite_limit = max_invites
     else:
         invite_limit = BATCH_SIZE
     
-    # 4. Send invites
+    # 5. Send invites
     invite_count = 0
     expires_at = (datetime.utcnow() + timedelta(minutes=INVITE_TIMEOUT_MINUTES)).isoformat()
     
-    for p in candidates[:invite_limit]:
-        # Create Invite with expiration
+    for p in sorted_candidates[:invite_limit]:
+        # Create Invite with expiration and SCORES
         invite_data = {
             "match_id": match_id,
             "player_id": p["player_id"],
             "status": "sent",
             "sent_at": datetime.utcnow().isoformat(),
             "expires_at": expires_at,
-            "batch_number": batch_number
+            "batch_number": batch_number,
+            "invite_score": p.get("_invite_score"),
+            "score_breakdown": p.get("_score_breakdown")
         }
         supabase.table("match_invites").insert(invite_data).execute()
         
@@ -192,7 +212,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         
         send_sms(p["phone_number"], sms_msg)
         invite_count += 1
-        print(f"Invited {p['name']} ({p['phone_number']})")
+        print(f"Invited {p['name']} ({p['phone_number']}) - Score: {p.get('_invite_score')}")
     
     return invite_count
 
