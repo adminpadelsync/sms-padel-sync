@@ -11,6 +11,12 @@ interface Player {
     declared_skill_level: number
     active_status: boolean
     gender?: string
+    avail_weekday_morning?: boolean
+    avail_weekday_afternoon?: boolean
+    avail_weekday_evening?: boolean
+    avail_weekend_morning?: boolean
+    avail_weekend_afternoon?: boolean
+    avail_weekend_evening?: boolean
 }
 
 interface PlayerModalProps {
@@ -27,6 +33,13 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
         phone_number: player?.phone_number || '',
         declared_skill_level: player?.declared_skill_level || 3.5,
         gender: player?.gender || '',
+        avail_weekday_morning: player?.avail_weekday_morning || false,
+        avail_weekday_afternoon: player?.avail_weekday_afternoon || false,
+        avail_weekday_evening: player?.avail_weekday_evening || false,
+        avail_weekend_morning: player?.avail_weekend_morning || false,
+        avail_weekend_afternoon: player?.avail_weekend_afternoon || false,
+        avail_weekend_evening: player?.avail_weekend_evening || false,
+        active_status: player ? player.active_status : true,
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -43,6 +56,13 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                     phone_number: formData.phone_number,
                     declared_skill_level: formData.declared_skill_level,
                     gender: formData.gender,
+                    avail_weekday_morning: formData.avail_weekday_morning,
+                    avail_weekday_afternoon: formData.avail_weekday_afternoon,
+                    avail_weekday_evening: formData.avail_weekday_evening,
+                    avail_weekend_morning: formData.avail_weekend_morning,
+                    avail_weekend_afternoon: formData.avail_weekend_afternoon,
+                    avail_weekend_evening: formData.avail_weekend_evening,
+                    active_status: formData.active_status,
                 })
             } else {
                 await createPlayer({
@@ -51,6 +71,13 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                     declared_skill_level: formData.declared_skill_level,
                     gender: formData.gender,
                     club_id: clubId,
+                    avail_weekday_morning: formData.avail_weekday_morning,
+                    avail_weekday_afternoon: formData.avail_weekday_afternoon,
+                    avail_weekday_evening: formData.avail_weekday_evening,
+                    avail_weekend_morning: formData.avail_weekend_morning,
+                    avail_weekend_afternoon: formData.avail_weekend_afternoon,
+                    avail_weekend_evening: formData.avail_weekend_evening,
+                    active_status: formData.active_status,
                 })
             }
             onClose()
@@ -138,6 +165,89 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                             <option value="female">Female</option>
                             <option value="other">Other</option>
                         </select>
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            <div className="grid grid-cols-4 gap-2 text-xs font-medium text-gray-500 mb-2 text-center">
+                                <span className="text-left pl-2">When</span>
+                                <span>Morning</span>
+                                <span>Afternoon</span>
+                                <span>Evening</span>
+                            </div>
+
+                            {/* Weekdays Row */}
+                            <div className="grid grid-cols-4 gap-2 items-center mb-2">
+                                <span className="text-sm font-medium text-gray-700 pl-2">Weekdays</span>
+                                <div className="flex justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.avail_weekday_morning}
+                                        onChange={(e) => setFormData({ ...formData, avail_weekday_morning: e.target.checked })}
+                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                </div>
+                                <div className="flex justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.avail_weekday_afternoon}
+                                        onChange={(e) => setFormData({ ...formData, avail_weekday_afternoon: e.target.checked })}
+                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                </div>
+                                <div className="flex justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.avail_weekday_evening}
+                                        onChange={(e) => setFormData({ ...formData, avail_weekday_evening: e.target.checked })}
+                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Weekends Row */}
+                            <div className="grid grid-cols-4 gap-2 items-center">
+                                <span className="text-sm font-medium text-gray-700 pl-2">Weekends</span>
+                                <div className="flex justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.avail_weekend_morning}
+                                        onChange={(e) => setFormData({ ...formData, avail_weekend_morning: e.target.checked })}
+                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                </div>
+                                <div className="flex justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.avail_weekend_afternoon}
+                                        onChange={(e) => setFormData({ ...formData, avail_weekend_afternoon: e.target.checked })}
+                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                </div>
+                                <div className="flex justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.avail_weekend_evening}
+                                        onChange={(e) => setFormData({ ...formData, avail_weekend_evening: e.target.checked })}
+                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                        <input
+                            type="checkbox"
+                            id="active_status"
+                            checked={formData.active_status}
+                            onChange={(e) => setFormData({ ...formData, active_status: e.target.checked })}
+                            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor="active_status" className="text-sm text-gray-700">
+                            Active (Receive Invites)
+                        </label>
                     </div>
 
                     <div className="flex gap-3 pt-4">

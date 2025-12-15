@@ -16,6 +16,13 @@ export async function updatePlayer(playerId: string, data: {
     phone_number: string
     declared_skill_level: number
     gender?: string
+    avail_weekday_morning?: boolean
+    avail_weekday_afternoon?: boolean
+    avail_weekday_evening?: boolean
+    avail_weekend_morning?: boolean
+    avail_weekend_afternoon?: boolean
+    avail_weekend_evening?: boolean
+    active_status?: boolean
 }) {
     const supabase = await createClient()
 
@@ -26,6 +33,13 @@ export async function updatePlayer(playerId: string, data: {
             phone_number: data.phone_number,
             declared_skill_level: data.declared_skill_level,
             gender: data.gender,
+            avail_weekday_morning: data.avail_weekday_morning,
+            avail_weekday_afternoon: data.avail_weekday_afternoon,
+            avail_weekday_evening: data.avail_weekday_evening,
+            avail_weekend_morning: data.avail_weekend_morning,
+            avail_weekend_afternoon: data.avail_weekend_afternoon,
+            avail_weekend_evening: data.avail_weekend_evening,
+            active_status: data.active_status,
         })
         .eq('player_id', playerId)
 
@@ -42,7 +56,14 @@ export async function createPlayer(data: {
     phone_number: string
     declared_skill_level: number
     gender?: string
-    club_id?: string  // Optional - for superusers to specify club
+    club_id?: string
+    avail_weekday_morning?: boolean
+    avail_weekday_afternoon?: boolean
+    avail_weekday_evening?: boolean
+    avail_weekend_morning?: boolean
+    avail_weekend_afternoon?: boolean
+    avail_weekend_evening?: boolean
+    active_status?: boolean
 }) {
     const supabase = await createClient()
 
@@ -84,7 +105,13 @@ export async function createPlayer(data: {
             adjusted_skill_level: data.declared_skill_level,
             gender: data.gender,
             club_id: club_id,
-            active_status: true,
+            active_status: data.active_status ?? true, // Default to true if not provided
+            avail_weekday_morning: data.avail_weekday_morning ?? false,
+            avail_weekday_afternoon: data.avail_weekday_afternoon ?? false,
+            avail_weekday_evening: data.avail_weekday_evening ?? false,
+            avail_weekend_morning: data.avail_weekend_morning ?? false,
+            avail_weekend_afternoon: data.avail_weekend_afternoon ?? false,
+            avail_weekend_evening: data.avail_weekend_evening ?? false,
         })
 
     if (error) {

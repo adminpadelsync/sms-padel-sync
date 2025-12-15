@@ -22,6 +22,13 @@ interface Player {
     active_status: boolean
     club_id: string
 
+    avail_weekday_morning?: boolean
+    avail_weekday_afternoon?: boolean
+    avail_weekday_evening?: boolean
+    avail_weekend_morning?: boolean
+    avail_weekend_afternoon?: boolean
+    avail_weekend_evening?: boolean
+
     gender?: string
     pro_verified?: boolean
     pro_verified_at?: string
