@@ -805,55 +805,55 @@ export function DashboardClient({
                             </div>
                         )}
                     </div>
+
+                )}
+
+                {activeTab === 'matches' && (
+                    <div className="bg-white p-8 text-center text-gray-500 border rounded-lg">
+                        Matches View Coming Soon
+                    </div>
+                )}
+
+                {/* Match Details Modal */}
+                <MatchDetailsModal
+                    match={selectedMatch}
+                    isOpen={matchModalOpen}
+                    onClose={() => setMatchModalOpen(false)}
+                    onUpdate={handleMatchUpdate}
+                />
+
+                {/* Create Match Wizard (from selection) */}
+                <MatchWizard
+                    isOpen={isMatchWizardOpen}
+                    onClose={() => setIsMatchWizardOpen(false)}
+                    clubId={selectedClubId}
+                    initialSelectedPlayers={getSelectedPlayersData()}
+                />
+
+                {/* Group Modals */}
+                <GroupModal
+                    isOpen={createGroupModalOpen}
+                    onClose={() => setCreateGroupModalOpen(false)}
+                    mode="create"
+                    clubId={selectedClubId}
+                    initialMemberIds={Array.from(selectedPlayerIds)}
+                />
+
+                <AddToGroupModal
+                    isOpen={addToGroupModalOpen}
+                    onClose={() => setAddToGroupModalOpen(false)}
+                    clubId={selectedClubId}
+                    playerIds={Array.from(selectedPlayerIds)}
+                />
+
+                <VerificationModal
+                    player={playerToVerify}
+                    isOpen={verificationModalOpen}
+                    onClose={() => {
+                        setVerificationModalOpen(false)
+                        setPlayerToVerify(null)
+                    }}
+                />
             </div>
-            )}
-
-            {activeTab === 'matches' && (
-                <div className="bg-white p-8 text-center text-gray-500 border rounded-lg">
-                    Matches View Coming Soon
-                </div>
-            )}
-
-            {/* Match Details Modal */}
-            <MatchDetailsModal
-                match={selectedMatch}
-                isOpen={matchModalOpen}
-                onClose={() => setMatchModalOpen(false)}
-                onUpdate={handleMatchUpdate}
-            />
-
-            {/* Create Match Wizard (from selection) */}
-            <MatchWizard
-                isOpen={isMatchWizardOpen}
-                onClose={() => setIsMatchWizardOpen(false)}
-                clubId={selectedClubId}
-                initialSelectedPlayers={getSelectedPlayersData()}
-            />
-
-            {/* Group Modals */}
-            <GroupModal
-                isOpen={createGroupModalOpen}
-                onClose={() => setCreateGroupModalOpen(false)}
-                mode="create"
-                clubId={selectedClubId}
-                initialMemberIds={Array.from(selectedPlayerIds)}
-            />
-
-            <AddToGroupModal
-                isOpen={addToGroupModalOpen}
-                onClose={() => setAddToGroupModalOpen(false)}
-                clubId={selectedClubId}
-                playerIds={Array.from(selectedPlayerIds)}
-            />
-
-            <VerificationModal
-                player={playerToVerify}
-                isOpen={verificationModalOpen}
-                onClose={() => {
-                    setVerificationModalOpen(false)
-                    setPlayerToVerify(null)
-                }}
-            />
-        </div>
-    )
+            )
 }
