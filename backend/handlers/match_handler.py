@@ -508,7 +508,7 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
 
             from matchmaker import find_and_invite_players
             count = find_and_invite_players(match_id)
-            send_sms(from_number, msg.MSG_MATCH_REQUESTED_VOTING.format(count=count))
+            send_sms(from_number, msg.MSG_MATCH_REQUESTED_VOTING.format(club_name=get_club_name(), count=count))
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
 

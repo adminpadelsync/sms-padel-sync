@@ -2,6 +2,15 @@ from typing import List, Optional
 from datetime import datetime
 from database import supabase
 
+def _get_club_name(club_id: str) -> str:
+    """Helper to get club name from ID."""
+    if not club_id:
+        return "the club"
+    res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+    if res.data:
+        return res.data[0]["name"]
+    return "the club"
+
 def get_player_recommendations(
     club_id: str,
     target_level: float,
@@ -160,9 +169,11 @@ def initiate_match_outreach(
                 other_invites_res = supabase.table("match_invites").select("match_id").eq("player_id", player_id).eq("status", "sent").neq("match_id", match_id).order("sent_at", desc=True).execute()
                 other_invites = other_invites_res.data if other_invites_res.data else []
                 
+                club_name = _get_club_name(club_id)
+                
                 # Construct message with new invite as primary
                 body = (
-                    f"🎾 NEW MATCH INVITE!\n"
+                    f"🎾 {club_name}: NEW MATCH INVITE!\n"
                     f"{formatted_time}\n\n"
                     f"Reply YES to join, NO to decline."
                 )
@@ -333,8 +344,9 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
         phone = p.get('phone_number')
         name = p.get('name')
         if phone:
+            club_name = _get_club_name(match['club_id'])
             body = (
-                f"🎾 NEW MATCH INVITE!\n"
+                f"🎾 {club_name}: NEW MATCH INVITE!\n"
                 f"{formatted_time}\n"
                 f"({spots_text})\n\n"
                 f"{confirmed_players_text}"
@@ -467,8 +479,9 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
                 formatted_time = match['scheduled_time']
             
             if phone:
+                club_name = _get_club_name(match['club_id'])
                 message = (
-                    f"📋 You've been removed from the match on {formatted_time}.\n\n"
+                    f"🎾 {club_name}: You've been removed from the match on {formatted_time}.\n\n"
                     f"If you have questions, please contact the organizer."
                 )
                 send_sms(phone, message)

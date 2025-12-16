@@ -126,7 +126,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             
             # Check gender preference
             if gender_preference and gender_preference != "mixed":
-                player_gender = p.get("gender", "").lower()
+                player_gender = (p.get("gender") or "").lower()
                 if gender_preference == "male" and player_gender != "male":
                     continue
                 if gender_preference == "female" and player_gender != "female":

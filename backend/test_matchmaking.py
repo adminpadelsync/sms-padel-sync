@@ -24,6 +24,10 @@ def setup_players():
     # Clear DB (Order matters due to FKs)
     # 1. Delete Invites
     supabase.table("match_invites").delete().neq("invite_id", "00000000-0000-0000-0000-000000000000").execute()
+    supabase.table("match_feedback").delete().neq("feedback_id", "00000000-0000-0000-0000-000000000000").execute()
+    supabase.table("match_votes").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
+    supabase.table("feedback_requests").delete().neq("request_id", "00000000-0000-0000-0000-000000000000").execute()
+    supabase.table("error_logs").delete().neq("error_id", "00000000-0000-0000-0000-000000000000").execute()
     
     # 2. Delete Matches
     supabase.table("matches").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
@@ -45,7 +49,12 @@ def setup_players():
             "name": f"Player {i+1}",
             "declared_skill_level": 3.5,
             "adjusted_skill_level": 3.5,
-            "availability_preferences": {"text": "Anytime"},
+            "avail_weekday_morning": True,
+            "avail_weekday_afternoon": True,
+            "avail_weekday_evening": True,
+            "avail_weekend_morning": True,
+            "avail_weekend_afternoon": True,
+            "avail_weekend_evening": True,
             "club_id": club_id,
             "active_status": True
         }
@@ -62,7 +71,7 @@ def test_matchmaking():
     print("\n--- 1. Player 1 Requests Match ---")
     handle_incoming_sms(P1_PHONE, "PLAY")
     handle_incoming_sms(P1_PHONE, "2023-12-05 18:00")
-    handle_incoming_sms(P1_PHONE, "90")
+    handle_incoming_sms(P1_PHONE, "YES")
     
     # Verify Match Created
     matches_res = supabase.table("matches").select("*").contains("team_1_players", [p1["player_id"]]).order("created_at", desc=True).limit(1).execute()

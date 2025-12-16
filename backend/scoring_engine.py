@@ -97,7 +97,7 @@ def calculate_compatibility_score(player: Dict, match_details: Dict) -> int:
     # match_details might have 'gender_preference' ('M', 'F', 'mixed', 'any')
     gender_score = 100
     req_gender = match_details.get('gender_preference')
-    player_gender = player.get('gender', 'unknown').lower()
+    player_gender = (player.get('gender') or 'unknown').lower()
     
     if req_gender and req_gender.lower() not in ['any', 'mixed', 'everyone']:
         req = req_gender.lower()
