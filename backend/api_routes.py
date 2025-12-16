@@ -352,7 +352,7 @@ async def remove_player(match_id: str, player_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/cron/feedback")
+@router.api_route("/cron/feedback", methods=["GET", "POST"])
 async def trigger_feedback_collection():
     """Cron endpoint to send feedback requests for recent matches."""
     from feedback_scheduler import run_feedback_scheduler
@@ -363,7 +363,7 @@ async def trigger_feedback_collection():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/cron/invite-timeout")
+@router.api_route("/cron/invite-timeout", methods=["GET", "POST"])
 async def process_invite_timeouts():
     """Cron endpoint to process expired invites and send replacements."""
     from matchmaker import process_expired_invites
