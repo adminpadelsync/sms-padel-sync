@@ -47,10 +47,13 @@ def get_matches_needing_feedback():
         settings = club.get("settings") or {}
         delay_hours = float(settings.get("feedback_delay_hours", DEFAULT_FEEDBACK_DELAY_HOURS))
         
-        # Calculate the time window (matches that started delay_hours ago, ± 10 min buffer)
-        target_time = datetime.utcnow() - timedelta(hours=delay_hours)
-        window_start = target_time - timedelta(minutes=10)
-        window_end = target_time + timedelta(minutes=10)
+        # Calculate the time window
+        # We look for ANY match that started at least delay_hours ago, but not older than 48h
+        # This handles cases where the cron job missed its slot or downtime occurred.
+        
+        now = datetime.utcnow()
+        cutoff_time = now - timedelta(hours=delay_hours)
+        lookback_limit = now - timedelta(hours=48)
         
         # Query matches for this club
         result = supabase.table("matches").select("*").eq(
@@ -60,9 +63,9 @@ def get_matches_needing_feedback():
         ).eq(
             "feedback_collected", False
         ).gte(
-            "scheduled_time", window_start.isoformat()
+            "scheduled_time", lookback_limit.isoformat()
         ).lte(
-            "scheduled_time", window_end.isoformat()
+            "scheduled_time", cutoff_time.isoformat()
         ).execute()
         
         matches_to_process.extend(result.data)
@@ -86,20 +89,21 @@ def get_requests_needing_reminder():
         reminder_hours = float(settings.get("feedback_reminder_delay_hours", DEFAULT_REMINDER_DELAY_HOURS))
         
         # Find requests that need reminders
-        target_time = datetime.utcnow() - timedelta(hours=reminder_hours)
-        window_start = target_time - timedelta(minutes=10)
-        window_end = target_time + timedelta(minutes=10)
+        # Widen window to catch missed crons
+        now = datetime.utcnow()
+        cutoff_time = now - timedelta(hours=reminder_hours)
+        lookback_limit = now - timedelta(hours=48)
         
         # Get requests where:
-        # 1. Initial sent within our window
+        # 1. Initial sent at least reminder_hours ago (but not ancient)
         # 2. No reminder sent yet
         # 3. No response received yet
         result = supabase.table("feedback_requests").select(
             "*, matches(*), players(*)"
         ).gte(
-            "initial_sent_at", window_start.isoformat()
+            "initial_sent_at", lookback_limit.isoformat()
         ).lte(
-            "initial_sent_at", window_end.isoformat()
+            "initial_sent_at", cutoff_time.isoformat()
         ).is_(
             "reminder_sent_at", "null"
         ).is_(
