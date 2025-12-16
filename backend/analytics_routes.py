@@ -6,7 +6,7 @@ import json
 
 router = APIRouter()
 
-@router.get("/analytics/health")
+@router.get("/health")
 async def get_club_health(club_id: str):
     """
     Get club setup health metrics:
@@ -78,7 +78,7 @@ async def get_club_health(club_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/analytics/activity")
+@router.get("/activity")
 async def get_activity_metrics(club_id: str):
     """
     Get match activity metrics (Last 30 Days):
@@ -89,7 +89,7 @@ async def get_activity_metrics(club_id: str):
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
         
         # 1. Match Stats
-        matches_res = supabase.table("matches").select("status").eq("club_id", club_id).gte("created_at", thirty_days_ago).execute()
+        matches_res = supabase.table("matches").select("status, match_id").eq("club_id", club_id).gte("created_at", thirty_days_ago).execute()
         matches = matches_res.data or []
         
         total_requested = len(matches)
@@ -153,7 +153,7 @@ async def get_activity_metrics(club_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/analytics/feedback")
+@router.get("/feedback")
 async def get_feedback_metrics(club_id: str):
     """
     Get feedback insights:

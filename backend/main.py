@@ -52,7 +52,7 @@ import analytics_routes
 # Include routes - remove /api prefix when on Vercel since /api is already in the path
 prefix = "" if is_vercel else "/api"
 app.include_router(api_routes.router, prefix=prefix)
-app.include_router(analytics_routes.router, prefix=prefix)
+app.include_router(analytics_routes.router, prefix=f"{prefix}/analytics")
 
 @app.get("/")
 async def root():
