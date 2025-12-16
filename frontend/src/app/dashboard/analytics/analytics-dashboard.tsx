@@ -13,9 +13,12 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
     const [feedback, setFeedback] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
+    const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
         async function fetchData() {
             setLoading(true);
+            setError(null);
             try {
                 const [healthRes, activityRes, feedbackRes] = await Promise.all([
                     fetch(`/api/insights/health?club_id=${clubId}`),
@@ -23,12 +26,17 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
                     fetch(`/api/insights/feedback?club_id=${clubId}`)
                 ]);
 
-                if (healthRes.ok) setHealth(await healthRes.json());
-                if (activityRes.ok) setActivity(await activityRes.json());
-                if (feedbackRes.ok) setFeedback(await feedbackRes.json());
+                if (!healthRes.ok) throw new Error(`Health API Error: ${healthRes.statusText}`);
+                if (!activityRes.ok) throw new Error(`Activity API Error: ${activityRes.statusText}`);
+                if (!feedbackRes.ok) throw new Error(`Feedback API Error: ${feedbackRes.statusText}`);
 
-            } catch (error) {
+                setHealth(await healthRes.json());
+                setActivity(await activityRes.json());
+                setFeedback(await feedbackRes.json());
+
+            } catch (error: any) {
                 console.error("Failed to fetch analytics", error);
+                setError(error.message || "Unknown error occurred");
             } finally {
                 setLoading(false);
             }
@@ -47,8 +55,25 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
         );
     }
 
+    if (error) {
+        return (
+            <div className="p-8 text-center">
+                <div className="text-red-500 font-medium mb-2">Unable to load analytics data</div>
+                <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded inline-block">
+                    Error Details: {error}
+                </div>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="block mx-auto mt-4 text-sm text-indigo-600 hover:text-indigo-800"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
     if (!health || !activity || !feedback) {
-        return <div className="p-4 text-center text-gray-500">Unable to load analytics data.</div>;
+        return <div className="p-4 text-center text-gray-500">No analytics data available.</div>;
     }
 
     // Prepare Skill Distribution Data
