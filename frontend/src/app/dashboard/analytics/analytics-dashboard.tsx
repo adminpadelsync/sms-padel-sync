@@ -18,9 +18,9 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
             setLoading(true);
             try {
                 const [healthRes, activityRes, feedbackRes] = await Promise.all([
-                    fetch(`/api/analytics/health?clubId=${clubId}`),
-                    fetch(`/api/analytics/activity?clubId=${clubId}`),
-                    fetch(`/api/analytics/feedback?clubId=${clubId}`)
+                    fetch(`/api/analytics/health?club_id=${clubId}`),
+                    fetch(`/api/analytics/activity?club_id=${clubId}`),
+                    fetch(`/api/analytics/feedback?club_id=${clubId}`)
                 ]);
 
                 if (healthRes.ok) setHealth(await healthRes.json());
