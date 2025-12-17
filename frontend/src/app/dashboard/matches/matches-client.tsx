@@ -53,6 +53,9 @@ export function MatchesClient({
     const [showCompletedMatches, setShowCompletedMatches] = useState(false)
 
     // After mount, check localStorage for saved club selection
+    const [resendingId, setResendingId] = useState<string | null>(null)
+
+    // ... (keep existing localStorage effect)
     useEffect(() => {
         setMounted(true)
         if (isSuperuser && typeof window !== 'undefined') {
@@ -63,14 +66,13 @@ export function MatchesClient({
         }
     }, [isSuperuser, clubs])
 
-    // Filter matches by selected club
+    // Filter matches ...
     let filteredMatches = isSuperuser && mounted
         ? initialMatches.filter(m => m.club_id === selectedClubId)
         : isSuperuser
             ? initialMatches.filter(m => m.club_id === (userClubId || clubs[0]?.club_id))
             : initialMatches
 
-    // Filter out completed/cancelled AND past matches unless checkbox is checked
     if (!showCompletedMatches) {
         const now = new Date()
         filteredMatches = filteredMatches.filter(m =>
@@ -80,13 +82,31 @@ export function MatchesClient({
         )
     }
 
-    // Sort by scheduled time (upcoming first)
     filteredMatches = filteredMatches.sort((a, b) =>
         new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
     )
 
     const handleMatchClick = (matchId: string) => {
         window.location.href = `/dashboard/matches/${matchId}`
+    }
+
+    const handleResendFeedback = async (e: React.MouseEvent, matchId: string) => {
+        e.stopPropagation()
+        if (confirm('Are you sure you want to resend feedback requests to all players?')) {
+            setResendingId(matchId)
+            try {
+                const res = await fetch(`/api/matches/${matchId}/feedback?force=true`, {
+                    method: 'POST'
+                })
+                if (!res.ok) throw new Error('Failed to resend')
+                alert('Feedback requests resent successfully!')
+            } catch (err) {
+                console.error(err)
+                alert('Error resending feedback requests')
+            } finally {
+                setResendingId(null)
+            }
+        }
     }
 
     return (
@@ -157,19 +177,30 @@ export function MatchesClient({
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap align-top">
                                                 {match.feedback_status && (
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
-                                                        match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
-                                                            'bg-gray-100 text-gray-600'
-                                                        }`}>
-                                                        {match.feedback_status}
-                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                            match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
+                                                                'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                            {match.feedback_status}
+                                                        </span>
+                                                        {match.feedback_status === 'Sent' && (
+                                                            <button
+                                                                onClick={(e) => handleResendFeedback(e, match.match_id)}
+                                                                disabled={resendingId === match.match_id}
+                                                                className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded hover:bg-blue-50 disabled:opacity-50"
+                                                            >
+                                                                {resendingId === match.match_id ? 'Sending...' : 'Resend'}
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
+                                        <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
                                             No matches found
                                         </td>
                                     </tr>

@@ -115,13 +115,14 @@ def get_requests_needing_reminder():
     return requests_to_remind
 
 
-def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = False):
+def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = False, force: bool = False):
     """
     Send feedback SMS to all players in a match.
     
     Args:
         match: Match dictionary
         is_manual_trigger: If True, skip time checks and send immediately
+        force: If True, resend even if already sent
     """
     match_id = match["match_id"]
     
@@ -150,8 +151,8 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
     r = get_redis_client()
     
     for player_id in all_players:
-        # Skip if already sent
-        if player_id in existing_player_ids:
+        # Skip if already sent AND not forcing
+        if player_id in existing_player_ids and not force:
             continue
             
         player = player_map.get(player_id)
@@ -198,12 +199,22 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         
         # Send SMS
         if send_sms(player["phone_number"], message):
-            # Record the request
-            supabase.table("feedback_requests").insert({
-                "match_id": match_id,
-                "player_id": player_id,
-                "initial_sent_at": datetime.utcnow().isoformat()
-            }).execute()
+            # Record or Update the request
+            if player_id in existing_player_ids:
+                # Update existing to reset lifecycle
+                supabase.table("feedback_requests").update({
+                    "initial_sent_at": datetime.utcnow().isoformat(),
+                    "reminder_sent_at": None,
+                    "response_received_at": None
+                }).eq("match_id", match_id).eq("player_id", player_id).execute()
+            else:
+                # Insert new
+                supabase.table("feedback_requests").insert({
+                    "match_id": match_id,
+                    "player_id": player_id,
+                    "initial_sent_at": datetime.utcnow().isoformat()
+                }).execute()
+                
             sent_count += 1
     
     return sent_count
@@ -304,7 +315,7 @@ def run_feedback_scheduler():
     }
 
 
-def trigger_feedback_for_match(match_id: str):
+def trigger_feedback_for_match(match_id: str, force: bool = False):
     """
     Manually trigger feedback requests for a specific match.
     Used for testing from the SMS simulator.
@@ -315,7 +326,7 @@ def trigger_feedback_for_match(match_id: str):
         return {"error": "Match not found"}
     
     match = result.data[0]
-    sent = send_feedback_requests_for_match(match, is_manual_trigger=True)
+    sent = send_feedback_requests_for_match(match, is_manual_trigger=True, force=force)
     
     return {
         "match_id": match_id,

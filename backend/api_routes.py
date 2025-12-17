@@ -397,11 +397,11 @@ async def trigger_score_recalculation():
 
 
 @router.post("/matches/{match_id}/feedback")
-async def trigger_match_feedback(match_id: str):
+async def trigger_match_feedback(match_id: str, force: bool = False):
     """Manually trigger feedback SMS for a specific match (for testing)."""
-    from feedback_scheduler import trigger_feedback_for_match
     try:
-        result = trigger_feedback_for_match(match_id)
+        from feedback_scheduler import trigger_feedback_for_match
+        result = trigger_feedback_for_match(match_id, force=force)
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])
         return result
