@@ -32,6 +32,18 @@ interface Match {
     team_2_player_details?: Player[]
 }
 
+interface Feedback {
+    feedback_id: string
+    match_id: string
+    player_id: string
+    rated_player_id: string
+    rating: number
+    comment?: string
+    created_at: string
+    rater?: { name: string }
+    rated?: { name: string }
+}
+
 const statusConfig: Record<string, { bg: string; text: string; label: string; icon: string }> = {
     accepted: { bg: 'bg-green-100', text: 'text-green-800', label: 'Accepted', icon: '✅' },
     declined: { bg: 'bg-red-100', text: 'text-red-800', label: 'Declined', icon: '❌' },
@@ -48,6 +60,7 @@ export default function MatchDetailPage() {
 
     const [match, setMatch] = useState<Match | null>(null)
     const [invites, setInvites] = useState<Invite[]>([])
+    const [feedback, setFeedback] = useState<Feedback[]>([])
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState(false)
 
@@ -61,9 +74,10 @@ export default function MatchDetailPage() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const [matchRes, invitesRes] = await Promise.all([
+                const [matchRes, invitesRes, feedbackRes] = await Promise.all([
                     fetch(`/api/matches/${matchId}`),
-                    fetch(`/api/matches/${matchId}/invites`)
+                    fetch(`/api/matches/${matchId}/invites`),
+                    fetch(`/api/matches/${matchId}/feedback`)
                 ])
 
                 if (matchRes.ok) {
@@ -74,6 +88,11 @@ export default function MatchDetailPage() {
                 if (invitesRes.ok) {
                     const invitesData = await invitesRes.json()
                     setInvites(invitesData.invites || [])
+                }
+
+                if (feedbackRes.ok) {
+                    const feedbackData = await feedbackRes.json()
+                    setFeedback(feedbackData.feedback || [])
                 }
             } catch (error) {
                 console.error('Error fetching match data:', error)
@@ -481,6 +500,45 @@ export default function MatchDetailPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Feedback Section */}
+                {feedback.length > 0 && (
+                    <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div className="px-6 py-4 border-b border-gray-200">
+                            <h2 className="text-lg font-medium text-gray-900">
+                                Match Feedback ({feedback.length})
+                            </h2>
+                        </div>
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {feedback.map((item) => (
+                                    <div key={item.feedback_id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="text-sm">
+                                                <span className="font-medium text-gray-900">{item.rater?.name || 'Unknown'}</span>
+                                                <span className="text-gray-500 mx-1">rated</span>
+                                                <span className="font-medium text-gray-900">{item.rated?.name || 'Unknown'}</span>
+                                            </div>
+                                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${item.rating >= 9 ? 'bg-green-100 text-green-800' :
+                                                item.rating >= 7 ? 'bg-blue-100 text-blue-800' :
+                                                    item.rating >= 5 ? 'bg-yellow-100 text-yellow-800' :
+                                                        'bg-red-100 text-red-800'
+                                                }`}>
+                                                {item.rating}/10
+                                            </span>
+                                        </div>
+                                        {item.comment && (
+                                            <p className="text-sm text-gray-600 mt-2 italic">"{item.comment}"</p>
+                                        )}
+                                        <p className="text-xs text-gray-400 mt-2">
+                                            {new Date(item.created_at).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

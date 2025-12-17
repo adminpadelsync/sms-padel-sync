@@ -410,6 +410,68 @@ async def trigger_match_feedback(match_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/matches/{match_id}/feedback")
+async def get_match_feedback(match_id: str):
+    """Get feedback received for a specific match, flattened."""
+    from database import supabase
+    try:
+        # 1. Get raw feedback rows
+        # Join rater details
+        feedback_res = supabase.table("match_feedback").select(
+            "*, rater:player_id(name)"
+        ).eq("match_id", match_id).execute()
+        
+        raw_feedback = feedback_res.data or []
+        if not raw_feedback:
+            return {"feedback": []}
+            
+        # 2. Get all player names to resolve keys in JSONB
+        # We can just fetch players involved in this match (rater + rated)
+        # But easier to just fetch all players in the match context
+        
+        # Get rater names map
+        rater_map = {item["player_id"]: item["rater"]["name"] for item in raw_feedback if item.get("rater")}
+        
+        # Collect all rated IDs
+        rated_ids = set()
+        for item in raw_feedback:
+            ratings = item.get("individual_ratings") or {}
+            rated_ids.update(ratings.keys())
+            
+        # Fetch names for rated players
+        rated_map = {}
+        if rated_ids:
+            p_res = supabase.table("players").select("player_id, name").in_("player_id", list(rated_ids)).execute()
+            rated_map = {p["player_id"]: p["name"] for p in p_res.data}
+            
+        # 3. Flatten structure
+        flattened_feedback = []
+        for item in raw_feedback:
+            rater_id = item["player_id"]
+            rater_name = rater_map.get(rater_id, "Unknown")
+            ratings = item.get("individual_ratings") or {}
+            
+            for rated_id, score in ratings.items():
+                flattened_feedback.append({
+                    "feedback_id": f"{item['feedback_id']}_{rated_id}", # Synthetic ID
+                    "match_id": match_id,
+                    "player_id": rater_id,
+                    "rated_player_id": rated_id,
+                    "rating": score,
+                    "comment": item.get("nps_comment"), # Optional general comment
+                    "created_at": item["created_at"],
+                    "rater": {"name": rater_name},
+                    "rated": {"name": rated_map.get(rated_id, "Unknown")}
+                })
+                
+        # Sort by most recent
+        flattened_feedback.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        return {"feedback": flattened_feedback}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ClubSettingsUpdate(BaseModel):
     feedback_delay_hours: Optional[float] = None
     feedback_reminder_delay_hours: Optional[float] = None
