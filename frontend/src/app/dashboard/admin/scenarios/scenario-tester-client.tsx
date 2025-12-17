@@ -59,7 +59,8 @@ export default function ScenarioTesterClient() {
             })
 
             if (!response.ok) {
-                throw new Error('Failed to run scenario')
+                const errorData = await response.json().catch(() => ({ detail: response.statusText }))
+                throw new Error(errorData.detail || `Server Error: ${response.status} ${response.statusText}`)
             }
 
             const data = await response.json()
