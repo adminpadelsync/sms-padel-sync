@@ -13,6 +13,8 @@ interface Match {
     clubs?: {
         name: string
     }
+    player_names?: string[]
+    feedback_status?: string
 }
 
 interface MatchesClientProps {
@@ -119,6 +121,7 @@ export function MatchesClient({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled Time</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Players</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feedback</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -141,8 +144,26 @@ export function MatchesClient({
                                                     {match.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {match.team_1_players.length + match.team_2_players.length} / 4
+                                            <td className="px-6 py-4 text-sm text-gray-500 align-top">
+                                                {match.player_names && match.player_names.length > 0 ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        {match.player_names.map((name, idx) => (
+                                                            <span key={idx} className="whitespace-nowrap">{name}</span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span>{match.team_1_players.length + match.team_2_players.length} / 4</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap align-top">
+                                                {match.feedback_status && (
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                        match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
+                                                            'bg-gray-100 text-gray-600'
+                                                        }`}>
+                                                        {match.feedback_status}
+                                                    </span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))
