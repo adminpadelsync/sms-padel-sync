@@ -23,6 +23,7 @@ interface Group {
     name: string
     description?: string
     club_id: string
+    visibility?: 'private' | 'open' | 'public'
 }
 
 interface GroupDetailsClientProps {
@@ -73,7 +74,24 @@ export function GroupDetailsClient({ group, members }: GroupDetailsClientProps) 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                 <div className="flex justify-between items-start">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">{group.name}</h1>
+                        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                            {group.name}
+                            {group.visibility === 'public' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Public
+                                </span>
+                            )}
+                            {group.visibility === 'open' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Open
+                                </span>
+                            )}
+                            {(group.visibility === 'private' || !group.visibility) && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    Private
+                                </span>
+                            )}
+                        </h1>
                         <p className="text-gray-500 mt-2">{group.description || 'No description'}</p>
                     </div>
                     <div className="flex gap-3">
