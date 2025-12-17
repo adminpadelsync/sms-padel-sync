@@ -30,11 +30,17 @@ def handle_feedback_response(from_number: str, body: str, player: dict, state_da
         send_sms(from_number, msg.MSG_FEEDBACK_INVALID)
         return
     
-    # Get players to rate from state (stored as JSON string)
-    players_to_rate_str = state_data.get("players_to_rate", "[]")
-    try:
-        players_to_rate = json.loads(players_to_rate_str)
-    except json.JSONDecodeError:
+    # Get players to rate from state (stored as JSON string or list)
+    players_to_rate_data = state_data.get("players_to_rate", [])
+    
+    if isinstance(players_to_rate_data, str):
+        try:
+            players_to_rate = json.loads(players_to_rate_data)
+        except json.JSONDecodeError:
+            players_to_rate = []
+    elif isinstance(players_to_rate_data, list):
+        players_to_rate = players_to_rate_data
+    else:
         players_to_rate = []
     
     match_id = state_data.get("match_id")
