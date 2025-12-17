@@ -9,6 +9,7 @@ interface Group {
     group_id: string
     name: string
     description?: string
+    visibility?: 'private' | 'open' | 'public'
     member_count: number
 }
 
@@ -81,6 +82,29 @@ export function GroupsClient({ initialGroups, clubId }: GroupsClientProps) {
                         <p className="text-gray-500 text-sm mb-4 line-clamp-2 h-10">
                             {group.description || 'No description'}
                         </p>
+
+                        <div className="flex items-center gap-2 mb-4">
+                            {group.visibility === 'public' && (
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    Public
+                                </span>
+                            )}
+                            {group.visibility === 'open' && (
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    Open
+                                </span>
+                            )}
+                            {group.visibility === 'private' && (
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                    Private
+                                </span>
+                            )}
+                            {!group.visibility && (
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                    Private
+                                </span>
+                            )}
+                        </div>
 
                         <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                             <div className="text-sm text-gray-600">

@@ -38,6 +38,7 @@ export async function createGroup(data: {
     name: string
     description: string
     club_id: string
+    visibility?: 'private' | 'open' | 'public'
     initial_member_ids?: string[]
 }) {
     const supabase = await createClient()
@@ -48,7 +49,8 @@ export async function createGroup(data: {
         .insert({
             name: data.name,
             description: data.description,
-            club_id: data.club_id
+            club_id: data.club_id,
+            visibility: data.visibility || 'private'
         })
         .select()
         .single()
@@ -82,7 +84,7 @@ export async function createGroup(data: {
     return group
 }
 
-export async function updateGroup(groupId: string, data: { name: string, description: string }) {
+export async function updateGroup(groupId: string, data: { name: string, description: string, visibility?: 'private' | 'open' | 'public' }) {
     const supabase = await createClient()
 
     const { error } = await supabase

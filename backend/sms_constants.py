@@ -92,12 +92,19 @@ Reply with a number, or a different time."""
 
 MSG_MATCH_REQUESTED_GROUP = "🎾 {club_name}: Match requested for {time}! Inviting {count} players from {group_name}. We'll let you know when they respond."
 
+# Group Management
+MSG_ASK_GROUPS_ONBOARDING = "Would you like to join any player groups? (Reply with numbers, e.g. 1 3, or SKIP)\n\n{groups_list}"
+MSG_GROUPS_LIST_AVAILABLE = "🎾 {club_name} Public Groups:\n\n{groups_list}\n\nReply with a number to join."
+MSG_NO_PUBLIC_GROUPS = "🎾 {club_name} has no public groups available to join right now."
+MSG_JOINED_GROUPS_SUCCESS = "Success! You've joined: {group_names}."
+
 # States
 STATE_NEW = "NEW"
 STATE_WAITING_NAME = "WAITING_NAME"
 STATE_WAITING_LEVEL = "WAITING_LEVEL"
 STATE_WAITING_GENDER = "WAITING_GENDER"
 STATE_WAITING_AVAILABILITY = "WAITING_AVAILABILITY"
+STATE_WAITING_GROUPS_ONBOARDING = "WAITING_GROUPS_ONBOARDING"
 STATE_MATCH_REQUEST_DATE = "MATCH_REQUEST_DATE"
 STATE_MATCH_REQUEST_CONFIRM = "MATCH_REQUEST_CONFIRM"
 STATE_MATCH_GROUP_SELECTION = "MATCH_GROUP_SELECTION"
@@ -106,6 +113,7 @@ STATE_MATCH_REQUEST_DURATION = "MATCH_REQUEST_DURATION"
 STATE_COMPLETED = "COMPLETED"
 STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"
 STATE_UPDATING_AVAILABILITY = "UPDATING_AVAILABILITY"
+STATE_BROWSING_GROUPS = "BROWSING_GROUPS"
 
 # Feedback Collection
 MSG_FEEDBACK_REQUEST = """🎾 {club_name}: Quick feedback for your match on {match_time}.

@@ -532,7 +532,13 @@ async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
 class CreateGroupRequest(BaseModel):
     name: str
     description: Optional[str] = None
+    visibility: Optional[str] = 'private'
     initial_member_ids: List[str] = []
+
+class UpdateGroupRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    visibility: Optional[str] = None
 
 class AddGroupMembersRequest(BaseModel):
     player_ids: List[str]
@@ -567,7 +573,8 @@ async def create_group(club_id: str, request: CreateGroupRequest):
         group_data = {
             "club_id": club_id,
             "name": request.name,
-            "description": request.description
+            "description": request.description,
+            "visibility": request.visibility
         }
         result = supabase.table("player_groups").insert(group_data).execute()
         if not result.data:
@@ -618,6 +625,33 @@ async def get_group(group_id: str):
         members.sort(key=lambda x: x["name"])
         
         return {"group": group, "members": members}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/groups/{group_id}")
+async def update_group(group_id: str, request: UpdateGroupRequest):
+    """Update group details (name, description, visibility)."""
+    from database import supabase
+    try:
+        # Build updates dict from non-None fields
+        updates = {}
+        if request.name is not None:
+            updates["name"] = request.name
+        if request.description is not None:
+            updates["description"] = request.description
+        if request.visibility is not None:
+            updates["visibility"] = request.visibility
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+            
+        result = supabase.table("player_groups").update(updates).eq("group_id", group_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Group not found")
+            
+        return {"group": result.data[0], "message": "Group updated successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -7,6 +7,7 @@ interface Group {
     group_id: string
     name: string
     description?: string
+    visibility?: 'private' | 'open' | 'public'
 }
 
 interface GroupModalProps {
@@ -22,6 +23,7 @@ export function GroupModal({ group, isOpen, onClose, mode, clubId, initialMember
     const [formData, setFormData] = useState({
         name: group?.name || '',
         description: group?.description || '',
+        visibility: group?.visibility || 'private' as const,
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -36,12 +38,14 @@ export function GroupModal({ group, isOpen, onClose, mode, clubId, initialMember
                 await updateGroup(group.group_id, {
                     name: formData.name,
                     description: formData.description,
+                    visibility: formData.visibility,
                 })
             } else if (clubId) {
                 console.log('Creating group for Club ID:', clubId)
                 await createGroup({
                     name: formData.name,
                     description: formData.description,
+                    visibility: formData.visibility,
                     club_id: clubId,
                     initial_member_ids: initialMemberIds,
                 })
@@ -97,6 +101,21 @@ export function GroupModal({ group, isOpen, onClose, mode, clubId, initialMember
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             placeholder="Optional description..."
                         />
+                    </div>
+                    <div>
+                        <label htmlFor="visibility" className="block text-sm font-medium text-gray-700 mb-1">
+                            Visibility
+                        </label>
+                        <select
+                            id="visibility"
+                            value={formData.visibility}
+                            onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="private">Private (Unlisted, admin add only)</option>
+                            <option value="open">Open (Unlisted, anyone can join)</option>
+                            <option value="public">Public (Listed, anyone can join)</option>
+                        </select>
                     </div>
 
                     <div className="flex gap-3 pt-4">

@@ -63,11 +63,55 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             return
 
         # Preserve all data in state for next step
+        # Before asking availability, check if there are any public groups to join
+        try:
+            public_groups_res = supabase.table("player_groups").select("group_id, name").eq("club_id", club_id).eq("visibility", "public").execute()
+            public_groups = public_groups_res.data or []
+        except Exception as e:
+            print(f"Error fetching public groups: {e}")
+            public_groups = []
+
+        if public_groups:
+            set_user_state(from_number, msg.STATE_WAITING_GROUPS_ONBOARDING, {
+                "name": state_data.get("name"),
+                "level": state_data.get("level"),
+                "gender": gender,
+                "club_id": club_id,
+                "available_groups": public_groups # Store to map numbers back to IDs
+            })
+            groups_text = "\n".join([f"{i+1}. {g['name']}" for i, g in enumerate(public_groups)])
+            send_sms(from_number, msg.MSG_ASK_GROUPS_ONBOARDING.format(groups_list=groups_text))
+        else:
+            set_user_state(from_number, msg.STATE_WAITING_AVAILABILITY, {
+                "name": state_data.get("name"),
+                "level": state_data.get("level"),
+                "gender": gender,
+                "club_id": club_id
+            })
+            send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING)
+
+    elif current_state == msg.STATE_WAITING_GROUPS_ONBOARDING:
+        import re
+        choice = body.strip().upper()
+        selected_ids = []
+        
+        if choice != "SKIP":
+            nums = re.findall(r'\d+', choice)
+            available = state_data.get("available_groups", [])
+            for n in nums:
+                try:
+                    idx = int(n) - 1
+                    if 0 <= idx < len(available):
+                        selected_ids.append(available[idx]["group_id"])
+                except:
+                    continue
+        
         set_user_state(from_number, msg.STATE_WAITING_AVAILABILITY, {
             "name": state_data.get("name"),
             "level": state_data.get("level"),
-            "gender": gender,
-            "club_id": club_id
+            "gender": state_data.get("gender"),
+            "club_id": club_id,
+            "selected_group_ids": selected_ids
         })
         send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING)
 
@@ -131,7 +175,15 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         }
 
         try:
-            supabase.table("players").insert(new_player).execute()
+            player_res = supabase.table("players").insert(new_player).execute()
+            if player_res.data:
+                new_player_id = player_res.data[0]["player_id"]
+                # Add to selected groups if any
+                selected_group_ids = state_data.get("selected_group_ids", [])
+                if selected_group_ids:
+                    memberships = [{"group_id": gid, "player_id": new_player_id} for gid in selected_group_ids]
+                    supabase.table("group_memberships").insert(memberships).execute()
+            
             clear_user_state(from_number)
             send_sms(from_number, msg.MSG_PROFILE_SETUP_DONE.format(club_name=get_club_name()))
         except Exception as e:

@@ -211,6 +211,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 "• NEXT - Next confirmed match\n\n"
                 "OTHER:\n"
                 "• PLAY - Request a match\n"
+                "• GROUPS - Join player groups\n"
                 "• AVAILABILITY - Set play times\n"
                 "• MUTE - Pause invites for today\n"
                 "• UNMUTE - Resume invites\n"
@@ -400,6 +401,21 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         elif cmd == "status":
             send_sms(from_number, "📊 Reply MATCHES to see your match invites with details.")
             return
+        elif cmd == "groups":
+            # List public groups
+            try:
+                public_groups = supabase.table("player_groups").select("group_id, name").eq("club_id", club_id).eq("visibility", "public").execute().data or []
+                if not public_groups:
+                    send_sms(from_number, msg.MSG_NO_PUBLIC_GROUPS.format(club_name=club_name))
+                    return
+                
+                groups_text = "\n".join([f"{i+1}. {g['name']}" for i, g in enumerate(public_groups)])
+                send_sms(from_number, msg.MSG_GROUPS_LIST_AVAILABLE.format(club_name=club_name, groups_list=groups_text))
+                set_user_state(from_number, msg.STATE_BROWSING_GROUPS, {"available_groups": public_groups, "club_id": str(club_id)})
+            except Exception as e:
+                print(f"[ERROR] GROUPS command failed: {e}")
+                send_sms(from_number, "Sorry, I couldn't fetch groups right now.")
+            return
         elif cmd == "availability":
             send_sms(from_number, msg.MSG_ASK_AVAILABILITY_UPDATE)
             set_user_state(from_number, msg.STATE_UPDATING_AVAILABILITY)
@@ -419,7 +435,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         return
 
     # Handle States
-    if current_state in [msg.STATE_WAITING_NAME, msg.STATE_WAITING_LEVEL, msg.STATE_WAITING_GENDER, msg.STATE_WAITING_AVAILABILITY]:
+    if current_state in [msg.STATE_WAITING_NAME, msg.STATE_WAITING_LEVEL, msg.STATE_WAITING_GENDER, msg.STATE_WAITING_AVAILABILITY, msg.STATE_WAITING_GROUPS_ONBOARDING]:
         handle_onboarding(from_number, body, current_state, state_data, club_id)
 
     elif current_state == msg.STATE_UPDATING_AVAILABILITY:
@@ -474,12 +490,58 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 parts = [readable[k] for k in active]
                 confirm = ", ".join(parts)
             
-            send_sms(from_number, f"Got it! Availability updated: {confirm}")
+            send_sms(from_number, "Got it! Availability updated: {confirm}")
             clear_user_state(from_number)
         except Exception as e:
             print(f"[ERROR] Failed to update availability: {e}")
             send_sms(from_number, "Sorry, something went wrong updating your availability.")
             clear_user_state(from_number)
+
+    elif current_state == msg.STATE_BROWSING_GROUPS:
+        # Handle group selection to join
+        import re
+        nums = re.findall(r'\d+', body)
+        if not nums:
+            # If they didn't send a number, maybe they are done
+            clear_user_state(from_number)
+            send_sms(from_number, "No groups joined. Text GROUPS anytime to browse again.")
+            return
+        
+        available = state_data.get("available_groups", [])
+        joined_names = []
+        joined_ids = []
+        for n in nums:
+             idx = int(n) - 1
+             if 0 <= idx < len(available):
+                  joined_names.append(available[idx]["name"])
+                  joined_ids.append(available[idx]["group_id"])
+        
+        if joined_ids:
+            try:
+                # Add player to selected groups
+                player_id = player["player_id"]
+                memberships = [{"group_id": gid, "player_id": player_id} for gid in joined_ids]
+                # Upsert would be better if we had it, but let's just insert one by one or filter
+                # Simple approach: filter out already joined
+                existing = supabase.table("group_memberships").select("group_id").eq("player_id", player_id).in_("group_id", joined_ids).execute().data or []
+                existing_ids = {row["group_id"] for row in existing}
+                
+                final_to_join = [m for m in memberships if m["group_id"] not in existing_ids]
+                final_names = [available[i]["name"] for i, m in enumerate(memberships) if m["group_id"] not in existing_ids]
+
+                if final_to_join:
+                    supabase.table("group_memberships").insert(final_to_join).execute()
+                    send_sms(from_number, msg.MSG_JOINED_GROUPS_SUCCESS.format(group_names=", ".join(final_names)))
+                else:
+                    send_sms(from_number, "You are already a member of those groups!")
+                
+                clear_user_state(from_number)
+            except Exception as e:
+                print(f"[ERROR] Failed to join groups: {e}")
+                send_sms(from_number, "Sorry, something went wrong joining those groups.")
+                clear_user_state(from_number)
+        else:
+            send_sms(from_number, "Invalid selection. Please reply with a number from the list or text RESET.")
 
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:
