@@ -14,6 +14,7 @@ from handlers.feedback_handler import handle_feedback_response
 from error_logger import log_sms_error
 from datetime import datetime
 import re
+from logic.reasoner import reason_message, ReasonerResult
 
 def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     """
@@ -67,17 +68,43 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     state_data = get_user_state(from_number)
     current_state = state_data.get("state") if state_data else None
 
-    # 3. Check for keyword interrupts - if user sends a command while in a flow, reset and process the command
-    # This allows users to escape stuck states by texting a keyword like PLAY, HELP, MATCHES, etc.
-    INTERRUPT_KEYWORDS = {"play", "help", "?", "matches", "next", "status", "cancel", "stop", "reset", "mute", "unmute"}
-    cmd_lower = body.lower().strip()
+    # 3. REASONING GATEWAY (New Intelligence Layer)
+    # Determine intent using Gemini (or fast-path keywords)
+    reasoner_result = reason_message(body, current_state or "IDLE", player)
+    intent = reasoner_result.intent
+    confidence = reasoner_result.confidence
+    # If the reasoner is very confident in a new intent, we might interrupt the flow.
     
-    if current_state and cmd_lower in INTERRUPT_KEYWORDS:
-        # User is interrupting an active flow with a keyword - clear state and let command processing handle it
-        print(f"[SMS] Keyword interrupt: '{cmd_lower}' while in state '{current_state}' - clearing state")
+    print(f"[REASONER] Intent: {intent} (conf: {confidence}) | State: {current_state}")
+
+    # 4. Check for Global Interrupts (High confidence intents that override everything)
+    # Allows "PLAY", "MATCHES", "RESET" to break out of any state
+    GLOBAL_INTERRUPTS = ["START_MATCH", "CHECK_STATUS", "RESET", "JOIN_GROUP", "MUTE", "UNMUTE"]
+    
+    if intent in GLOBAL_INTERRUPTS and confidence > 0.8:
+        print(f"[SMS] Global interrupt: '{intent}' overriding state '{current_state}'")
         clear_user_state(from_number)
-        current_state = None
-        state_data = None
+        current_state = None # Reset state so command logic below catches it
+        
+        # Map intents to legacy command strings for compatibility
+        if intent == "START_MATCH":
+            body = "play" # Force command
+        elif intent == "CHECK_STATUS":
+            body = "matches"
+        elif intent == "RESET":
+            body = "reset"
+        elif intent == "JOIN_GROUP":
+            body = "groups"
+        elif intent == "MUTE":
+            body = "mute"
+        elif intent == "UNMUTE":
+            body = "unmute"
+
+    # If player exists and no active conversation, check for commands
+    if player and not current_state:
+        cmd = body.lower().strip()
+        
+        # Check for Invite Responses (unchanged...)
 
     # If player exists and no active conversation, check for commands
     if player and not current_state:
@@ -499,10 +526,24 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
 
     elif current_state == msg.STATE_BROWSING_GROUPS:
         # Handle group selection to join
-        import re
-        nums = re.findall(r'\d+', body)
+        # Use entities from Reasoner if available (e.g. "selection": 1)
+        selection = reasoner_result.entities.get("selection")
+        
+        nums = []
+        if selection:
+            nums = [str(selection)]
+        else:
+             # Fallback to regex
+             import re
+             nums = re.findall(r'\d+', body)
+        
         if not nums:
             # If they didn't send a number, maybe they are done
+            # BUT: Check if it was a greeting or unknown before just quitting
+            if intent in ["GREETING", "CHITCHAT", "UNKNOWN"]:
+                 send_sms(from_number, msg.MSG_NUDGE_GROUP_SELECTION)
+                 return
+            
             clear_user_state(from_number)
             send_sms(from_number, "No groups joined. Text GROUPS anytime to browse again.")
             return

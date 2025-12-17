@@ -98,6 +98,11 @@ MSG_GROUPS_LIST_AVAILABLE = "🎾 {club_name} Public Groups:\n\n{groups_list}\n\
 MSG_NO_PUBLIC_GROUPS = "🎾 {club_name} has no public groups available to join right now."
 MSG_JOINED_GROUPS_SUCCESS = "Success! You've joined: {group_names}."
 
+# Resilience & Nudges
+MSG_NUDGE_GROUP_SELECTION = "I didn't catch that. Please reply with the number of the group you want to join (e.g., '1'), or text RESET."
+MSG_NUDGE_GENERIC = "I'm not sure I understood. You can reply with a command like PLAY, MATCHES, or GROUPS, or text RESET to start over."
+MSG_CORRECTION_PROMPT = "I think you want to {intent_desc}. Is that right? (Reply YES or NO)"
+
 # States
 STATE_NEW = "NEW"
 STATE_WAITING_NAME = "WAITING_NAME"
