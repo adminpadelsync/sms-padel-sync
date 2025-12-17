@@ -171,9 +171,14 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
             if club_res.data:
                 club_name = club_res.data[0]["name"]
         
+        # Format friendly match time (e.g. "Mon 6pm")
+        match_time = datetime.fromisoformat(match["scheduled_time"])
+        time_str = match_time.strftime("%a %-I%p").replace(":00", "").lower()
+        
         # Format message with player names
         message = msg.MSG_FEEDBACK_REQUEST.format(
             club_name=club_name,
+            match_time=time_str,
             player1_name=other_players[0]["name"],
             player2_name=other_players[1]["name"],
             player3_name=other_players[2]["name"]
@@ -236,10 +241,14 @@ def send_reminder_for_request(request: dict):
         if club_res.data:
             club_name = club_res.data[0]["name"]
     
-    # Send reminder with slightly different wording
-    message = f"""🎾 {club_name}: Reminder - We'd love your feedback on your recent match!
+    # Format friendly match time
+    match_time = datetime.fromisoformat(match["scheduled_time"])
+    time_str = match_time.strftime("%a %-I%p").replace(":00", "").lower()
 
-On a scale of 1-10, how likely are you to play in a match again with:
+    # Send reminder with slightly different wording
+    message = f"""🎾 {club_name}: Reminder - We'd love your feedback on your match on {time_str}!
+
+On a scale of 1-10, how likely are you to play again with:
 
 1. {other_players[0]["name"]}
 2. {other_players[1]["name"]}

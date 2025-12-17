@@ -108,16 +108,16 @@ STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"
 STATE_UPDATING_AVAILABILITY = "UPDATING_AVAILABILITY"
 
 # Feedback Collection
-MSG_FEEDBACK_REQUEST = """🎾 {club_name}: On a scale of 1-10, how likely are you to play in a match again with:
+MSG_FEEDBACK_REQUEST = """🎾 {club_name}: Quick feedback for your match on {match_time}.
+On a scale of 1-10, how likely are you to play again with:
 
 1. {player1_name}
 2. {player2_name}
 3. {player3_name}
 
-Reply with 3 numbers separated by spaces (e.g., "8 7 9")
-Reply SKIP to skip feedback."""
+Reply with 3 numbers (e.g., "8 7 9") or SKIP."""
 
 MSG_FEEDBACK_THANKS = "Thanks for your feedback! This helps us create better matches for you."
-MSG_FEEDBACK_INVALID = "Please reply with 3 numbers (1-10) separated by spaces, e.g., '8 7 9'"
+MSG_FEEDBACK_INVALID = "Please reply with 3 numbers (1-10) separated by spaces, e.g., '8 7 9' or SKIP."
 MSG_FEEDBACK_SKIPPED = "No problem! We'll ask again next time."
 
