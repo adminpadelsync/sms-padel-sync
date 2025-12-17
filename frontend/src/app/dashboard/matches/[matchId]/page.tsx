@@ -503,38 +503,138 @@ export default function MatchDetailPage() {
 
                 {/* Feedback Section */}
                 {feedback.length > 0 && (
-                    <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h2 className="text-lg font-medium text-gray-900">
-                                Match Feedback ({feedback.length})
-                            </h2>
-                        </div>
-                        <div className="p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {feedback.map((item) => (
-                                    <div key={item.feedback_id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="text-sm">
-                                                <span className="font-medium text-gray-900">{item.rater?.name || 'Unknown'}</span>
-                                                <span className="text-gray-500 mx-1">rated</span>
-                                                <span className="font-medium text-gray-900">{item.rated?.name || 'Unknown'}</span>
+                    <div className="mt-8 space-y-6">
+                        {/* 1. Summary Cards */}
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div className="px-6 py-4 border-b border-gray-200">
+                                <h2 className="text-lg font-medium text-gray-900">Feedback Summary</h2>
+                            </div>
+                            <div className="p-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {allPlayers.map(player => {
+                                        const received = feedback.filter(f => f.rated_player_id === player.player_id)
+                                        const avgScore = received.length > 0
+                                            ? (received.reduce((acc, curr) => acc + curr.rating, 0) / received.length).toFixed(1)
+                                            : 'N/A'
+
+                                        return (
+                                            <div key={player.player_id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col h-full hover:shadow-md transition-shadow">
+                                                <div className="flex items-center gap-3 mb-3 border-b border-gray-100 pb-3">
+                                                    <div className="h-10 w-10 text-xl flex items-center justify-center bg-gray-200 rounded-full text-gray-600">
+                                                        {/* Simple avatar placeholder */}
+                                                        {player.name.charAt(0)}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-gray-900 truncate" title={player.name}>{player.name}</p>
+                                                        <p className="text-xs text-gray-500">Rec: {received.length}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mb-4">
+                                                    <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Average</p>
+                                                    <div className={`text-4xl font-bold ${avgScore === 'N/A' ? 'text-gray-300' :
+                                                            Number(avgScore) >= 8 ? 'text-green-600' :
+                                                                Number(avgScore) >= 6 ? 'text-yellow-600' : 'text-red-500'
+                                                        }`}>
+                                                        {avgScore}<span className="text-lg text-gray-400 font-normal">/10</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2 mt-auto">
+                                                    {received.map(f => (
+                                                        <div key={f.feedback_id} className="flex items-center gap-2 text-xs bg-white p-1.5 rounded border border-gray-100">
+                                                            <span className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full font-bold text-white ${f.rating >= 8 ? 'bg-green-500' : f.rating >= 6 ? 'bg-yellow-500' : 'bg-red-500'
+                                                                }`}>
+                                                                {f.rating}
+                                                            </span>
+                                                            <span className="text-gray-600 truncate">
+                                                                from {f.rater?.name || 'Unknown'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                    {received.length === 0 && (
+                                                        <p className="text-xs text-gray-400 italic">No ratings yet</p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${item.rating >= 9 ? 'bg-green-100 text-green-800' :
-                                                item.rating >= 7 ? 'bg-blue-100 text-blue-800' :
-                                                    item.rating >= 5 ? 'bg-yellow-100 text-yellow-800' :
-                                                        'bg-red-100 text-red-800'
-                                                }`}>
-                                                {item.rating}/10
-                                            </span>
-                                        </div>
-                                        {item.comment && (
-                                            <p className="text-sm text-gray-600 mt-2 italic">"{item.comment}"</p>
-                                        )}
-                                        <p className="text-xs text-gray-400 mt-2">
-                                            {new Date(item.created_at).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                ))}
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. Detailed Matrix */}
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                <h2 className="text-lg font-medium text-gray-900">Detailed Feedback Matrix</h2>
+                                <p className="text-sm text-gray-500">Rows: Player Rated (Receiver) • Columns: Rated By (Giver)</p>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 text-center">
+                                    <thead className="bg-white">
+                                        <tr>
+                                            <th className="px-4 py-3 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider sticky left-0 z-10 border-r">
+                                                Player
+                                            </th>
+                                            {allPlayers.map(p => (
+                                                <th key={p.player_id} className="px-2 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[100px]">
+                                                    Rated by<br />
+                                                    <span className="text-blue-600">{p.name.split(' ')[0]}</span>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {allPlayers.map((rowPlayer) => (
+                                            <tr key={rowPlayer.player_id}>
+                                                <td className="px-4 py-4 whitespace-nowrap text-left border-r bg-gray-50 sticky left-0 font-medium text-gray-900 text-sm">
+                                                    {rowPlayer.name}
+                                                </td>
+                                                {allPlayers.map((colPlayer) => {
+                                                    // Find feedback where Rater = colPlayer AND Rated = rowPlayer
+                                                    const fb = feedback.find(f =>
+                                                        f.player_id === colPlayer.player_id &&
+                                                        f.rated_player_id === rowPlayer.player_id
+                                                    )
+                                                    const isSelf = rowPlayer.player_id === colPlayer.player_id
+
+                                                    if (isSelf) {
+                                                        return (
+                                                            <td key={colPlayer.player_id} className="bg-gray-100/50 p-2">
+                                                                <div className="w-full h-full min-h-[40px] flex items-center justify-center relative opacity-20">
+                                                                    {/* Hashed pattern effect with CSS or SVG */}
+                                                                    <svg width="100%" height="100%" className="absolute inset-0">
+                                                                        <defs>
+                                                                            <pattern id="diagonalHatch" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+                                                                                <line x1="0" y1="0" x2="0" y2="10" style={{ stroke: 'black', strokeWidth: 1 }} />
+                                                                            </pattern>
+                                                                        </defs>
+                                                                        <rect width="100%" height="100%" fill="url(#diagonalHatch)" />
+                                                                    </svg>
+                                                                </div>
+                                                            </td>
+                                                        )
+                                                    }
+
+                                                    return (
+                                                        <td key={colPlayer.player_id} className="p-2 align-middle">
+                                                            {fb ? (
+                                                                <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg text-lg font-bold shadow-sm ${fb.rating >= 8 ? 'bg-green-100 text-green-700 border border-green-200' :
+                                                                        fb.rating >= 6 ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                                                            'bg-red-50 text-red-700 border border-red-200'
+                                                                    }`}>
+                                                                    {fb.rating}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-300 text-2xl">•</span>
+                                                            )}
+                                                        </td>
+                                                    )
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
