@@ -148,4 +148,16 @@ async def debug_routing(request: Request):
         "is_vercel": os.environ.get('VERCEL')
     }
 
+@app.api_route("/debug-routes", methods=["GET"])
+async def list_routes():
+    routes = []
+    for route in app.routes:
+        if hasattr(route, "path"):
+             routes.append({
+                 "path": route.path,
+                 "name": route.name,
+                 "methods": list(route.methods) if hasattr(route, "methods") else None
+             })
+    return {"cnt": len(routes), "routes": routes}
+
 
