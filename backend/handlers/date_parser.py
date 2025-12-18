@@ -164,13 +164,18 @@ def parse_natural_date(
         # Check if the parsed date is in the past
         # CRITICAL: We must compare apples to apples (New York vs New York)
         import pytz
+        from datetime import timedelta
         tz = pytz.timezone(timezone)
+        
+        # Current time in the target timezone (naive local)
         now_in_tz = datetime.now(tz).replace(tzinfo=None)
         
-        if parsed < now_in_tz:
+        # Buffer/Grace period: allow requests up to 1 hour in the past 
+        # (useful for same-hour requests or clock skew during testing)
+        buffer_time = now_in_tz - timedelta(hours=1)
+        
+        if parsed < buffer_time:
             print(f"[date_parser] Rejecting past date: {parsed} (current time in {timezone}: {now_in_tz})")
-            # If it's earlier today, it's probably meant for tomorrow
-            # But for explicit past dates, we should reject
             return None, None, None
         
         # Format for human-readable confirmation
