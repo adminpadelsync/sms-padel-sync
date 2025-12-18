@@ -2,6 +2,7 @@ from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta
 from logic_utils import is_quiet_hours
+from redis_client import clear_user_state
 
 
 # Configuration
@@ -216,6 +217,10 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             )
         
         send_sms(p["phone_number"], sms_msg)
+        
+        # CLEAR STATE so they don't get stuck in old feedback loops
+        clear_user_state(p["phone_number"])
+        
         invite_count += 1
         print(f"Invited {p['name']} ({p['phone_number']}) - Score: {p.get('_invite_score')}")
     
