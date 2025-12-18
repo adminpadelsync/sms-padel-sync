@@ -779,8 +779,12 @@ async def run_scenario(request: ScenarioRequest = None):
             reply_action = "NONE"
             
             if reasoner_result.intent == "START_MATCH":
-                next_state = "STATE_MATCH_REQUEST_DATE"
-                reply_action = "ASK_DATE"
+                if reasoner_result.entities.get("date") and reasoner_result.entities.get("time"):
+                    next_state = "IDLE"
+                    reply_action = "INITIATE_MATCH"
+                else:
+                    next_state = "STATE_MATCH_REQUEST_DATE"
+                    reply_action = "ASK_DATE"
             elif reasoner_result.intent == "JOIN_GROUP":
                 next_state = "BROWSING_GROUPS"
                 reply_action = "LIST_GROUPS"
