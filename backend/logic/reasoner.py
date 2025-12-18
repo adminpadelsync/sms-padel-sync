@@ -98,15 +98,9 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     )
 
     try:
-        # Try primary model (Flash - faster/cheaper)
-        try:
-             model = genai.GenerativeModel('gemini-1.5-flash')
-             response = model.generate_content(prompt)
-        except Exception:
-             # Fallback to Pro (older but reliable)
-             print("Warning: gemini-1.5-flash failed, falling back to gemini-pro")
-             model = genai.GenerativeModel('gemini-pro')
-             response = model.generate_content(prompt)
+        # Use available model from user list (gemini-2.0-flash)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(prompt)
 
         # Attempt to parse JSON from response
         res_text = response.text.strip()
