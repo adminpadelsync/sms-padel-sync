@@ -30,11 +30,12 @@ Current User Profile: {user_profile}
 
 ### Intents:
 - START_MATCH: Requesting to play a match (Look for "play", "match", "game").
-- JOIN_GROUP: Wanting to join a specific group (Look for "groups", number selections).
+- JOIN_GROUP: Wanting to join a specific group (Look for "groups", number selections LIKE "1", "2").
 - SET_AVAILABILITY: Providing availability (Look for "mornings", "weekends", "anytime").
 - CHECK_STATUS: Asking for match invites or next matches (Look for "matches", "next", "status").
 - MUTE: Wanting to pause invites (Look for "mute", "pause", "stop").
 - UNMUTE: Resuming invites (Look for "unmute", "resume", "start").
+- SUBMIT_FEEDBACK: Providing numeric ratings for players (Look for sequence of numbers e.g. "1 9 8" or "10 10 10").
 - RESET: Wanting to start over or clear state.
 - GREETING: Just saying hello.
 - CHITCHAT: General banter or feedback.
@@ -43,22 +44,30 @@ Current User Profile: {user_profile}
 ### Entities to extract:
 - date: e.g., "Sunday", "Tomorrow", "Dec 20".
 - time: e.g., "4pm", "18:00", "afternoon".
-- selection: e.g., "1", "first one", "top one" (convert to integer if possible).
+- selection: e.g., "1", "first one" (for groups).
+- ratings: e.g., [1, 9, 8] (list of integers).
 - skill_level: e.g., "3.5", "intermediate", "C".
 - gender: e.g., "male", "female".
+
+### Examples:
+User: "1 9 8"
+Result: {{ "intent": "SUBMIT_FEEDBACK", "confidence": 0.9, "entities": {{ "ratings": [1, 9, 8] }} }}
+
+User: "I want to join group 2"
+Result: {{ "intent": "JOIN_GROUP", "confidence": 0.9, "entities": {{ "selection": 2 }} }}
+
+User: "10 10 9"
+Result: {{ "intent": "SUBMIT_FEEDBACK", "confidence": 0.9, "entities": {{ "ratings": [10, 10, 9] }} }}
+
+User: "3"
+Result: {{ "intent": "CHOOSE_OPTION", "confidence": 0.8, "entities": {{ "selection": 3 }} }}
 
 ### Output Format:
 Return ONLY a JSON object:
 {{
   "intent": "INTENT_NAME",
   "confidence": 0.0-1.0,
-  "entities": {{
-    "date": "...",
-    "time": "...",
-    "selection": ...,
-    "skill_level": "...",
-    "gender": "..."
-  }},
+  "entities": {{ ... }},
   "reasoning": "Brief explanation of why"
 }}
 
@@ -98,8 +107,9 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     )
 
     try:
-        # Use available model from user list (gemini-2.0-flash)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        # Use configurable model
+        model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash")
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
 
         # Attempt to parse JSON from response
