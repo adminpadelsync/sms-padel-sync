@@ -126,6 +126,70 @@ def normalize_sms_text(text: str) -> str:
 
 
 
+def _manual_regex_fallback(text: str, timezone: str) -> Tuple[Optional[datetime], Optional[str], Optional[str]]:
+    """
+    Final safety net: Parse common patterns using only re and datetime.
+    Supports: "today at 4pm", "tomorrow 6:30", "4pm", etc.
+    """
+    try:
+        import pytz
+        from datetime import timedelta
+        tz = pytz.timezone(timezone)
+        now_in_tz = datetime.now(tz).replace(tzinfo=None)
+        
+        clean = text.lower().strip()
+        
+        # 1. Determine base date
+        base_date = now_in_tz
+        has_relative = False
+        if "tomorrow" in clean:
+            base_date = now_in_tz + timedelta(days=1)
+            clean = clean.replace("tomorrow", "")
+            has_relative = True
+        elif "today" in clean:
+            clean = clean.replace("today", "")
+            has_relative = True
+        
+        # 2. Extract time using regex
+        # Look for patterns like "4pm", "4:30pm", "16:00", "at 4"
+        time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', clean)
+        if not time_match:
+            # If we only have "today" or "tomorrow", maybe default to a sensible time?
+            # But better to return None and let it ask.
+            return None, None, None
+            
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2)) if time_match.group(2) else 0
+        meridiem = time_match.group(3)
+        
+        # Adjust for AM/PM
+        if meridiem == "pm" and hour < 12:
+            hour += 12
+        elif meridiem == "am" and hour == 12:
+            hour = 0
+        elif not meridiem:
+            # Heuristic: if hour is small (1-7), assume PM
+            if 1 <= hour <= 8:
+                hour += 12
+        
+        parsed_dt = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        
+        # If it's today and in the past (more than 1 hour ago), we reject or nudge
+        buffer_time = now_in_tz - timedelta(hours=1)
+        if parsed_dt < buffer_time:
+             # Basic heuristic: if it's earlier today, they likely meant tomorrow or 
+             # just missed the window.
+             return None, None, None
+             
+        human_readable = parsed_dt.strftime("%a, %b %d at %I:%M %p")
+        print(f"[date_parser] Regex Fallback Success! '{text}' -> {human_readable}")
+        return parsed_dt, human_readable, parsed_dt.isoformat()
+        
+    except Exception as e:
+        print(f"[date_parser] Regex fallback failed: {e}")
+        return None, None, None
+
+
 def parse_natural_date(
     text: str, 
     timezone: str = "America/New_York"
@@ -150,57 +214,57 @@ def parse_natural_date(
     
     # If dateparser is not available, use fallback logic
     if not DATEPARSER_AVAILABLE:
-        if not DATEUTIL_AVAILABLE:
-            print("[date_parser] No parsing libraries available (dateparser/dateutil missing)")
-            return None, None, None
-            
-        try:
-            import dateutil.parser
-            normalized_text = normalize_sms_text(text)
-            
-            # Basic noise stripping
-            noise_words = [r'\bplay\b', r'\bmatch\b', r'\bgame\b', r'\baround\b', r'\bat\b']
-            cleaned_text = normalized_text
-            for noise in noise_words:
-                cleaned_text = re.sub(noise, '', cleaned_text, flags=re.IGNORECASE)
-            cleaned_text = ' '.join(cleaned_text.split())
-            
-            # Manual handle for "today" and "tomorrow" 
-            import pytz
-            from datetime import timedelta
-            tz = pytz.timezone(timezone)
-            now_in_tz = datetime.now(tz).replace(tzinfo=None)
-            
-            base_date = now_in_tz
-            has_relative = False
-            if "tomorrow" in cleaned_text:
-                base_date = now_in_tz + timedelta(days=1)
-                cleaned_text = cleaned_text.replace("tomorrow", "").strip()
-                has_relative = True
-            elif "today" in cleaned_text:
-                cleaned_text = cleaned_text.replace("today", "").strip()
-                has_relative = True
-            
-            # If after removal, there is nothing left and no relative word, fail
-            if not cleaned_text and not has_relative:
-                return None, None, None
+        # First attempt: dateutil (if available)
+        if DATEUTIL_AVAILABLE:
+            try:
+                import dateutil.parser
+                normalized_text = normalize_sms_text(text)
                 
-            # Try parsing the remaining part with dateutil
-            parsed_time = dateutil.parser.parse(cleaned_text, default=base_date, fuzzy=True)
-            
-            # Buffer/Grace period: allow requests up to 1 hour in the past 
-            buffer_time = now_in_tz - timedelta(hours=1)
-            
-            if parsed_time < buffer_time:
-                return None, None, None
-            
-            human_readable = parsed_time.strftime("%a, %b %d at %I:%M %p")
-            print(f"[date_parser] Fallback Success! '{text}' -> {human_readable}")
-            return parsed_time, human_readable, parsed_time.isoformat()
-            
-        except Exception as fallback_err:
-            print(f"[date_parser] Fallback failed for '{text}': {fallback_err}")
-            return None, None, None
+                # Basic noise stripping
+                noise_words = [r'\bplay\b', r'\bmatch\b', r'\bgame\b', r'\baround\b', r'\bat\b']
+                cleaned_text = normalized_text
+                for noise in noise_words:
+                    cleaned_text = re.sub(noise, '', cleaned_text, flags=re.IGNORECASE)
+                cleaned_text = ' '.join(cleaned_text.split())
+                
+                # Manual handle for "today" and "tomorrow" 
+                import pytz
+                from datetime import timedelta
+                tz = pytz.timezone(timezone)
+                now_in_tz = datetime.now(tz).replace(tzinfo=None)
+                
+                base_date = now_in_tz
+                has_relative = False
+                if "tomorrow" in cleaned_text:
+                    base_date = now_in_tz + timedelta(days=1)
+                    cleaned_text = cleaned_text.replace("tomorrow", "").strip()
+                    has_relative = True
+                elif "today" in cleaned_text:
+                    cleaned_text = cleaned_text.replace("today", "").strip()
+                    has_relative = True
+                
+                # If after removal, there is nothing left and no relative word, fail
+                if not cleaned_text and not has_relative:
+                    return _manual_regex_fallback(text, timezone)
+                    
+                # Try parsing the remaining part with dateutil
+                parsed_time = dateutil.parser.parse(cleaned_text, default=base_date, fuzzy=True)
+                
+                # Buffer/Grace period
+                buffer_time = now_in_tz - timedelta(hours=1)
+                if parsed_time < buffer_time:
+                    return _manual_regex_fallback(text, timezone)
+                
+                human_readable = parsed_time.strftime("%a, %b %d at %I:%M %p")
+                print(f"[date_parser] Dateutil Fallback Success! '{text}' -> {human_readable}")
+                return parsed_time, human_readable, parsed_time.isoformat()
+                
+            except Exception as fallback_err:
+                print(f"[date_parser] Dateutil fallback failed for '{text}': {fallback_err}")
+                return _manual_regex_fallback(text, timezone)
+        else:
+            # No dateutil either - go straight to regex
+            return _manual_regex_fallback(text, timezone)
     
     # If we are here, dateparser IS available
     import dateparser
@@ -235,8 +299,8 @@ def parse_natural_date(
         parsed = dateparser.parse(cleaned_text, settings=settings)
         
         if parsed is None:
-            print(f"[date_parser] dateparser.parse returned None for cleaned: '{cleaned_text}' (orig: '{text}')")
-            return None, None, None
+            print(f"[date_parser] dateparser.parse returned None - calling regex fallback")
+            return _manual_regex_fallback(text, timezone)
         
         # Check if the parsed date is in the past
         import pytz
@@ -262,9 +326,8 @@ def parse_natural_date(
         
     except Exception as e:
         import traceback
-        print(f"[date_parser] Error parsing '{text}': {e}")
-        traceback.print_exc()
-        return None, None, None
+        print(f"[date_parser] Error parsing '{text}' with dateparser - calling regex fallback: {e}")
+        return _manual_regex_fallback(text, timezone)
 
 
 def format_datetime_for_sms(dt: datetime) -> str:
