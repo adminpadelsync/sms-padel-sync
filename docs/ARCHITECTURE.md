@@ -43,3 +43,27 @@ The system uses a "Reasoning Gateway" (`backend/logic/reasoner.py`) using Gemini
 - **Root `requirements.txt`**: Used by Vercel for the Python runtime.
 - **Backend `requirements.txt`**: Used for local development in `backend/`.
 - **Note**: Always keep these in sync. Verify `python-multipart` is present for form data handling.
+
+## AI & NLP (Google Gemini)
+
+### 1. Model Configuration
+The specific Gemini model used is configurable via environment variables. This is crucial because model availability varies by region and API version.
+
+- **Variable**: `LLM_MODEL_NAME`
+- **Default**: `gemini-2.0-flash`
+- **Recommended**: Use `flash` models (e.g., `gemini-1.5-flash` or `gemini-2.0-flash`) for the best balance of speed and cost.
+
+### 2. "Training" & Tuning (Few-Shot Prompting)
+The system is "tuned" using few-shot prompting within `backend/logic/reasoner.py`. We don't retrain weights; we provide examples in the prompt instructions.
+
+- **To improve accuracy**:
+    1.  Identify a failed intent in the **Scenario Tester**.
+    2.  Add a new example to the `PROMPT_TEMPLATE` in `reasoner.py`.
+    3.  Example format:
+        ```text
+        User: "1 9 8"
+        Result: { "intent": "SUBMIT_FEEDBACK", "confidence": 0.9, "entities": { "ratings": [1, 9, 8] } }
+        ```
+
+### 3. Scenario Tester
+The **Conversational Scenario Tester** (`/dashboard/admin/scenarios`) is the primary tool for verifying that prompt changes have the desired effect without affecting live SMS traffic. Always run your "Golden Dataset" of test cases here after modifying the prompt.
