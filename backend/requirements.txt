@@ -19,8 +19,6 @@ pydantic==2.12.4
 requests==2.31.0
 pytz==2025.1
 
-# AI & NLP
-google-genai==0.3.0
 
 # Auth & Security
 PyJWT==2.10.1

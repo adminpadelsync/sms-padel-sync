@@ -1,14 +1,15 @@
 import os
 import json
-# Lazy import to prevent Vercel boot crashes
-# from google import genai 
+import requests
+import time
+import random
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure Gemini Client
-# api_key is passed directly to Client constructor in the function
+# Gemini REST API Configuration
+GEMINI_API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
 
 class ReasonerResult:
     def __init__(self, intent: str, confidence: float, entities: Dict[str, Any], raw_reply: Optional[str] = None):
@@ -80,6 +81,48 @@ Return ONLY a JSON object:
 User Message: "{message}"
 """
 
+def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.0-flash") -> Optional[str]:
+    """Helper to call Gemini via REST API to avoid SDK dependency issues."""
+    url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
+    
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 1024
+        }
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        # Parse response path: candidates[0].content.parts[0].text
+        if "candidates" in result and len(result["candidates"]) > 0:
+            candidate = result["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"]:
+                parts = candidate["content"]["parts"]
+                if len(parts) > 0 and "text" in parts[0]:
+                    return parts[0]["text"]
+        
+        print(f"[REASONER] Unexpected API response structure: {result}")
+        return None
+        
+    except Exception as e:
+        print(f"[REASONER] API Request Failed: {e}")
+        # If response exists, print it for debugging
+        if 'response' in locals():
+            try:
+                print(f"[REASONER] Error Response: {response.text}")
+            except:
+                pass
+        return None
+
 def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict[str, Any] = None) -> ReasonerResult:
     """
     Analyzes the message to determine intent and entities.
@@ -101,10 +144,9 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     if body_clean.isdigit():
         return ReasonerResult("CHOOSE_OPTION", 0.9, {"selection": int(body_clean)})
 
-    # 3. Slow Path (Gemini)
+    # 3. Slow Path (Gemini REST API)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        # Fallback to UNKNOWN if no API key
         return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Missing GEMINI_API_KEY"}')
 
     prompt = PROMPT_TEMPLATE.format(
@@ -113,76 +155,47 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         user_profile=json.dumps(user_profile or {}),
     )
 
-    try:
-        # Lazy Import for Safety
+    max_retries = 3
+    retry_delay = 1.0
+    model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash")
+
+    for attempt in range(max_retries + 1):
         try:
-            from google import genai
-            from google.genai import types
-        except ImportError as ie:
-            print(f"[CRITICAL] Failed to import google-genai: {ie}")
-            # Try to debug namespace
-            try:
-                import google
-                print(f"[DEBUG] google package path: {getattr(google, '__path__', 'unknown')}")
-            except:
-                pass
-            return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "Dependency Error: {ie}"}}')
-
-        # Client initialization
-        import time
-        import random
-
-        client = genai.Client(api_key=api_key)
-        model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash")
-        
-        max_retries = 3
-        retry_delay = 1.0  # Initial delay in seconds
-        
-        response = None
-        for attempt in range(max_retries + 1):
-            try:
-                # generate_content signature is slightly different
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                break # Success!
-            except Exception as e:
-                # Check for 429 Rate Limit
-                if "429" in str(e) and attempt < max_retries:
-                    # Exponential backoff with jitter
-                    sleep_time = retry_delay * (2 ** attempt) + (random.random() * 0.5)
-                    print(f"[REASONER] 429 Rate Limit hit. Retrying in {sleep_time:.2f}s (Attempt {attempt + 1}/{max_retries})")
-                    time.sleep(sleep_time)
-                else:
-                    # Reraise if not 429 or max retries reached
-                    raise e
-
-        # Attempt to parse JSON from response
-        res_text = response.text.strip()
-        if "```json" in res_text:
-            res_text = res_text.split("```json")[1].split("```")[0].strip()
-        
-        data = json.loads(res_text)
-        return ReasonerResult(
-            intent=data.get("intent", "UNKNOWN"),
-            confidence=data.get("confidence", 0.0),
-            entities=data.get("entities", {}),
-            raw_reply=res_text
-        )
-    except Exception as e:
-        print(f"Error in reasoning: {e}")
-        
-        # Try to list available models to help debug
-        try:
-            from google import genai
-            debug_client = genai.Client(api_key=api_key)
-            available_models = []
-            for m in debug_client.models.list():
-                # Filter for generation support if possible, or just list all
-                available_models.append(m.name)
-            error_msg = f"API Error: {str(e)}. Available Models: {', '.join(available_models)}"
-        except Exception as list_err:
-            error_msg = f"API Error: {str(e)}. Could not list models: {str(list_err)}"
+            res_text = call_gemini_api(prompt, api_key, model_name)
             
-        return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "{error_msg}"}}')
+            if res_text:
+                # Attempt to parse JSON
+                clean_text = res_text.strip()
+                if "```json" in clean_text:
+                    clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_text:
+                    clean_text = clean_text.split("```")[1].split("```")[0].strip()
+                    
+                data = json.loads(clean_text)
+                return ReasonerResult(
+                    intent=data.get("intent", "UNKNOWN"),
+                    confidence=data.get("confidence", 0.0),
+                    entities=data.get("entities", {}),
+                    raw_reply=clean_text
+                )
+            
+            # If we got here and res_text is None, it might have been a transient error captured in logs
+            # We can retry if loop continues, but call_gemini_api handles its own single request.
+            # Ideally call_gemini_api would raise for us to catch/retry here. 
+            # For simplicity, let's treat None as a failure worthy of retry if it was a network issue.
+            
+            if attempt < max_retries:
+                 # Exponential backoff
+                sleep_time = retry_delay * (2 ** attempt) + (random.random() * 0.5)
+                time.sleep(sleep_time)
+                continue
+            
+        except Exception as e:
+            print(f"[REASONER] Logic Error: {e}")
+            if attempt < max_retries:
+                time.sleep(1)
+            else:
+                return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "{str(e)}"}}')
+
+    return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Failed to generate response after retries"}')
+
