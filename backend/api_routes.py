@@ -701,10 +701,51 @@ async def remove_group_member(group_id: str, player_id: str):
 class ScenarioStep(BaseModel):
     user_input: str
     expected_intent: Optional[str] = None
+    expected_entities: Optional[Dict[str, Any]] = None
 
 class ScenarioRequest(BaseModel):
     steps: List[ScenarioStep]
     initial_state: Optional[str] = "IDLE"
+
+class GoldenScenarioRequest(BaseModel):
+    name: str
+    initial_state: str
+    steps: List[Dict[str, Any]]
+
+@router.get("/test/scenarios")
+async def get_golden_scenarios():
+    """Fetch all saved golden test cases."""
+    from database import supabase
+    try:
+        result = supabase.table("reasoner_test_cases").select("*").order("created_at", desc=True).execute()
+        return {"scenarios": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/test/scenarios")
+async def save_golden_scenario(request: GoldenScenarioRequest):
+    """Save a scenario as a golden test case."""
+    from database import supabase
+    try:
+        data = {
+            "name": request.name,
+            "initial_state": request.initial_state,
+            "steps": request.steps
+        }
+        result = supabase.table("reasoner_test_cases").insert(data).execute()
+        return {"scenario": result.data[0], "message": "Golden scenario saved."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/test/scenarios/{scenario_id}")
+async def delete_golden_scenario(scenario_id: str):
+    """Delete a golden test case."""
+    from database import supabase
+    try:
+        supabase.table("reasoner_test_cases").delete().eq("id", scenario_id).execute()
+        return {"message": "Scenario deleted."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.api_route("/test/scenario", methods=["GET", "POST"])
 async def run_scenario(request: ScenarioRequest = None):
@@ -751,6 +792,11 @@ async def run_scenario(request: ScenarioRequest = None):
             elif reasoner_result.intent == "RESET":
                 next_state = "IDLE"
                 reply_action = "SYSTEM_RESET"
+            
+            # 3. Check against expectations if provided
+            passed_intent = True
+            if step.expected_intent:
+                passed_intent = (reasoner_result.intent == step.expected_intent)
                  
             # Add result
             results.append({
@@ -761,7 +807,9 @@ async def run_scenario(request: ScenarioRequest = None):
                 "state_before": current_state,
                 "state_after": next_state,
                 "simulated_reply": reply_action,
-                "reasoning": reasoner_result.raw_reply
+                "reasoning": reasoner_result.raw_reply,
+                "expected_intent": step.expected_intent,
+                "passed_intent": passed_intent
             })
             
             current_state = next_state
