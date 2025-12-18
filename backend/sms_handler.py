@@ -89,7 +89,11 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         
         # Map intents to legacy command strings for compatibility
         if intent == "START_MATCH":
-            body = "play" # Force command
+            # If we are starting a match, we want to keep the original body if it has more info
+            # OR we pass the reasoner entities to the handler
+            if not body.lower().startswith("play") and not body.lower().startswith("start"):
+                # Force command if text was something else but intent was START_MATCH
+                body = "play" 
         elif intent == "CHECK_STATUS":
             body = "matches"
         elif intent == "RESET":
@@ -160,10 +164,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         elif cmd == "play":
             print(f"[DEBUG] PLAY command received from {from_number}. Club: {club_name}")
             try:
-                msg_content = msg.MSG_REQUEST_DATE.format(club_name=club_name)
-                print(f"[DEBUG] Sending PLAY response: {msg_content}")
-                send_sms(from_number, msg_content)
-                set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
+                handle_match_request(from_number, body, player, reasoner_result.entities)
             except Exception as e:
                 print(f"[ERROR] Failed to process PLAY command: {e}")
                 import traceback
@@ -577,7 +578,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     # --- Match Request Flow ---
     elif current_state == msg.STATE_MATCH_REQUEST_DATE:
         try:
-            handle_match_request(from_number, body, player)
+            handle_match_request(from_number, body, player, reasoner_result.entities)
         except Exception as e:
             print(f"[ERROR] handle_match_request failed: {e}")
             log_sms_error(f"Match request handler failed: {e}", from_number, body, e)

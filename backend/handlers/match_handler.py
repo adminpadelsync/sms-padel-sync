@@ -59,7 +59,7 @@ DEFAULT_LEVEL_RANGE = 0.25
 DEFAULT_GENDER = "Mixed"
 
 
-def handle_match_date_input(from_number: str, body: str, player: dict):
+def handle_match_date_input(from_number: str, body: str, player: dict, entities: Optional[dict] = None):
     """
     Handle date/time input for match request (first phase).
     Parses natural language input. If player is in groups, asks group first.
@@ -67,13 +67,30 @@ def handle_match_date_input(from_number: str, body: str, player: dict):
     """
     date_str = body.strip()
     
-    # Check for Range (e.g., "2023-12-01 14:00-18:00") - keep existing voting flow
-    if "-" in date_str and len(date_str.split("-")) >= 4:
-        _handle_range_match(from_number, date_str, player)
-        return
+    # 1. Use pre-extracted entities if available (from Reasoner)
+    parsed_dt = None
+    human_readable = None
+    iso_format = None
     
-    # Try NLP parsing first
-    parsed_dt, human_readable, iso_format = parse_natural_date(date_str)
+    if entities:
+        # Check if we have a date and time entity
+        ent_date = entities.get("date")
+        ent_time = entities.get("time")
+        if ent_date or ent_time:
+            # Reconstruct string for parser or use directly if already parsed
+            # For now, we Re-parse the entities to ensure consistent formatting
+            ent_msg = f"{ent_date or ''} {ent_time or ''}".strip()
+            parsed_dt, human_readable, iso_format = parse_natural_date(ent_msg)
+
+    # 2. Fallback to parsing the body if no entities or entities failed
+    if parsed_dt is None:
+        # Check for Range (e.g., "2023-12-01 14:00-18:00") - keep existing voting flow
+        if "-" in date_str and len(date_str.split("-")) >= 4:
+            _handle_range_match(from_number, date_str, player)
+            return
+        
+        # Try NLP parsing
+        parsed_dt, human_readable, iso_format = parse_natural_date(date_str)
     
     if parsed_dt is None:
         # Fallback: Try strict YYYY-MM-DD HH:MM format
@@ -517,9 +534,9 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
 
 
 # Backwards compatibility alias
-def handle_match_request(from_number: str, body: str, player: dict):
+def handle_match_request(from_number: str, body: str, player: dict, entities: Optional[dict] = None):
     """
     Legacy function name for backwards compatibility.
     Routes to handle_match_date_input.
     """
-    handle_match_date_input(from_number, body, player)
+    handle_match_date_input(from_number, body, player, entities)
