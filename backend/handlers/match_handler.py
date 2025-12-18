@@ -103,8 +103,14 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             pass
     
     if parsed_dt is None:
-        # Neither worked - ask user to try again
-        send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
+        # Neither worked - if the body was just "play" or similar, ask friendly
+        if body.lower().strip() in ["play", "start", "match"]:
+            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=get_club_name()))
+            # Set state to wait for date
+            set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
+        else:
+            # Re-ask if they sent something we couldn't parse
+            send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
         return
     
     # Date parsed successfully - check if player is in any groups
