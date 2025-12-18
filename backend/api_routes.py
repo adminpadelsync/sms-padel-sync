@@ -688,3 +688,73 @@ async def remove_group_member(group_id: str, player_id: str):
         return {"message": "Member removed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Scenario Tester ---
+
+class ScenarioStep(BaseModel):
+    user_input: str
+    expected_intent: Optional[str] = None
+
+class ScenarioRequest(BaseModel):
+    steps: List[ScenarioStep]
+    initial_state: Optional[str] = "IDLE"
+
+@router.api_route("/test/scenario", methods=["GET", "POST"])
+async def run_scenario(request: ScenarioRequest = None):
+    """
+    Run a conversational scenario through the Reasoner.
+    """
+    from typing import Dict, Any
+    
+    # Handle GET or empty body
+    if not request or not request.steps:
+        return {"message": "Scenario Tester Endpoint is Reachable. Use POST with steps to test."}
+        
+    # Lazy import to prevent module-level crashes if generic lib is missing/broken
+    try:
+        from logic.reasoner import reason_message
+    except ImportError as e:
+         raise HTTPException(status_code=500, detail=f"Failed to import reasoner: {e}")
+
+    results = []
+    current_state = request.initial_state
+    
+    try:
+        for step in request.steps:
+            # 1. Reason about the message
+            mock_player = {"name": "Test User", "skill_level": 4.0}
+            
+            reasoner_result = reason_message(step.user_input, current_state, mock_player)
+            
+            # 2. Simulate state transition logic (simplified)
+            next_state = current_state
+            reply_action = "NONE"
+            
+            if reasoner_result.intent == "START_MATCH":
+                next_state = "MATCH_REQUEST_DATE"
+                reply_action = "ASK_DATE"
+            elif reasoner_result.intent == "JOIN_GROUP":
+                next_state = "BROWSING_GROUPS"
+                reply_action = "LIST_GROUPS"
+            elif reasoner_result.intent == "Check_STATUS":
+                reply_action = "SHOW_MATCHES"
+                 
+            # Add result
+            results.append({
+                "input": step.user_input,
+                "intent": reasoner_result.intent,
+                "confidence": reasoner_result.confidence,
+                "entities": reasoner_result.entities,
+                "state_before": current_state,
+                "state_after": next_state,
+                "simulated_reply": reply_action,
+                "reasoning": reasoner_result.raw_reply
+            })
+            
+            current_state = next_state
+
+        return {"step_results": results}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
