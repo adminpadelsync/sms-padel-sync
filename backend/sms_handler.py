@@ -81,6 +81,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     # Allows "PLAY", "MATCHES", "RESET" to break out of any state
     GLOBAL_INTERRUPTS = ["START_MATCH", "CHECK_STATUS", "RESET", "JOIN_GROUP", "MUTE", "UNMUTE"]
     
+    # Map intents to legacy command strings for compatibility
     if intent in GLOBAL_INTERRUPTS and confidence > 0.8:
         print(f"[SMS] Global interrupt: '{intent}' overriding state '{current_state}'")
         clear_user_state(from_number)
@@ -100,20 +101,13 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         elif intent == "UNMUTE":
             body = "unmute"
 
-    # If player exists and no active conversation, check for commands
-    if player and not current_state:
-        cmd = body.lower().strip()
-        
-        # Check for Invite Responses (unchanged...)
-
-    # If player exists and no active conversation, check for commands
+    # 5. COMMAND PROCESSING (For IDLE state or Global Interrupts)
     if player and not current_state:
         cmd = body.lower().strip()
         
         # Check for Invite Responses
         # Patterns: YES, NO, MAYBE, 1, 1Y, 1N, 2Y, 2N, A, B, AB (voting)
-        # Get ALL active invites for this player (both 'sent' AND 'maybe'), ordered by sent_at DESC (newest first)
-        # IMPORTANT: Include 'maybe' so players who said MAYBE can later say YES
+        # Get ALL active invites for this player
         all_invites_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute()
         all_sent_invites = all_invites_res.data if all_invites_res.data else []
         
@@ -125,8 +119,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             action = None  # 'yes', 'no', 'maybe'
             
             if numbered_match:
-                # Numbered response like "1", "1Y", "2N"
-                invite_index = int(numbered_match.group(1)) - 1  # Convert to 0-based
+                invite_index = int(numbered_match.group(1)) - 1
                 action_char = numbered_match.group(2)
                 if action_char == 'y':
                     action = 'yes'
@@ -135,7 +128,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 elif action_char == 'm':
                     action = 'maybe'
                 else:
-                    action = 'yes'  # Default: just number means YES
+                    action = 'yes'
             elif cmd == "yes":
                 invite_index = 0
                 action = 'yes'
@@ -146,15 +139,12 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 invite_index = 0
                 action = 'maybe'
             elif len(cmd) < 5 and all(c.isalpha() for c in cmd):
-                # Voting response (A, B, AB) - use most recent invite
-                # BUT exclude known command keywords
                 known_commands = {"play", "help", "next", "mute", "stop", "no", "yes"}
                 if cmd not in known_commands:
                     invite_index = 0
-                    action = cmd  # Pass through for voting handler
+                    action = cmd
             
             if invite_index is not None:
-                # Validate index
                 if invite_index < 0 or invite_index >= len(all_sent_invites):
                     send_sms(from_number, f"❌ Invalid match number. You have {len(all_sent_invites)} pending invite(s). Reply 1-{len(all_sent_invites)}.")
                     return

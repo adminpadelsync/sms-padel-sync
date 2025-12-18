@@ -53,14 +53,15 @@ Current User Profile: {user_profile}
 User: "1 9 8"
 Result: {{ "intent": "SUBMIT_FEEDBACK", "confidence": 0.9, "entities": {{ "ratings": [1, 9, 8] }} }}
 
-User: "I want to join group 2"
+User: "play today at 4pm"
+Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "today", "time": "4pm" }} }}
+
+User: "actually i want to join group 2"
 Result: {{ "intent": "JOIN_GROUP", "confidence": 0.9, "entities": {{ "selection": 2 }} }}
 
-User: "10 10 9"
-Result: {{ "intent": "SUBMIT_FEEDBACK", "confidence": 0.9, "entities": {{ "ratings": [10, 10, 9] }} }}
-
-User: "3"
-Result: {{ "intent": "CHOOSE_OPTION", "confidence": 0.8, "entities": {{ "selection": 3 }} }}
+### Explicit Instructions:
+- If use says "play", "match", "game", "reset", "matches", "groups", "mute", or "unmute", this is a HIGH CONFIDENCE intent that should interrupt any current flow.
+- "1 9 8" or similar numeric sequences are ONLY for feedback.
 
 ### Output Format:
 Return ONLY a JSON object:
@@ -84,11 +85,11 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     # Priority Keywords (Global Interrupts)
     if body_clean == "RESET":
         return ReasonerResult("RESET", 1.0, {})
-    if body_clean in ["PLAY", "START"]:
+    if body_clean in ["PLAY", "START"] or body_clean.startswith("PLAY"):
         return ReasonerResult("START_MATCH", 1.0, {})
     if body_clean == "GROUPS":
         return ReasonerResult("JOIN_GROUP", 1.0, {})
-    if body_clean == "MATCHES":
+    if body_clean in ["MATCHES", "NEXT"]:
         return ReasonerResult("CHECK_STATUS", 1.0, {})
 
     # 2. Check for Simple Choices (Regex-like)
