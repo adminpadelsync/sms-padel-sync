@@ -16,13 +16,18 @@ class ScenarioRequest(BaseModel):
 class ScenarioResult(BaseModel):
     step_results: List[Dict[str, Any]]
 
-@router.post("/test/scenario")
-async def run_scenario(request: ScenarioRequest):
+@router.api_route("/test/scenario", methods=["GET", "POST"])
+async def run_scenario(request: ScenarioRequest = None):
     """
     Run a conversational scenario through the Reasoner.
     Note: This only tests the NLP layer, not the full SMS state machine (which requires DB/Redis).
     """
     results = []
+    
+    # Handle GET or empty body
+    if not request or not request.steps:
+        return {"message": "Scenario Tester Endpoint is Reacahble. Use POST with steps to test."}
+        
     current_state = request.initial_state
     
     for step in request.steps:
