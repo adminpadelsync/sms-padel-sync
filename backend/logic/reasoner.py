@@ -1,15 +1,14 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure Gemini
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
+# Configure Gemini Client
+# api_key is passed directly to Client constructor in the function
 
 class ReasonerResult:
     def __init__(self, intent: str, confidence: float, entities: Dict[str, Any], raw_reply: Optional[str] = None):
@@ -103,6 +102,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         return ReasonerResult("CHOOSE_OPTION", 0.9, {"selection": int(body_clean)})
 
     # 3. Slow Path (Gemini)
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         # Fallback to UNKNOWN if no API key
         return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Missing GEMINI_API_KEY"}')
@@ -114,19 +114,24 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     )
 
     try:
-        # Use configurable model with retry logic
+        # Client initialization
         import time
         import random
 
+        client = genai.Client(api_key=api_key)
         model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash")
-        model = genai.GenerativeModel(model_name)
         
         max_retries = 3
         retry_delay = 1.0  # Initial delay in seconds
         
+        response = None
         for attempt in range(max_retries + 1):
             try:
-                response = model.generate_content(prompt)
+                # generate_content signature is slightly different
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
                 break # Success!
             except Exception as e:
                 # Check for 429 Rate Limit
@@ -156,10 +161,11 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         
         # Try to list available models to help debug
         try:
+            debug_client = genai.Client(api_key=api_key)
             available_models = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    available_models.append(m.name)
+            for m in debug_client.models.list():
+                # Filter for generation support if possible, or just list all
+                available_models.append(m.name)
             error_msg = f"API Error: {str(e)}. Available Models: {', '.join(available_models)}"
         except Exception as list_err:
             error_msg = f"API Error: {str(e)}. Could not list models: {str(list_err)}"
