@@ -289,10 +289,10 @@ export default function MatchDetailPage() {
                 {/* Header */}
                 <div className="mb-6">
                     <button
-                        onClick={() => router.push('/dashboard')}
-                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium mb-4 inline-flex items-center"
+                        onClick={() => router.push('/dashboard/matches')}
+                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium mb-4 inline-flex items-center transition-colors"
                     >
-                        ← Back to Dashboard
+                        ← Back to Matches
                     </button>
 
                     <div className="flex justify-between items-start">
@@ -533,8 +533,8 @@ export default function MatchDetailPage() {
                                                 <div className="mb-4">
                                                     <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Average</p>
                                                     <div className={`text-4xl font-bold ${avgScore === 'N/A' ? 'text-gray-300' :
-                                                            Number(avgScore) >= 8 ? 'text-green-600' :
-                                                                Number(avgScore) >= 6 ? 'text-yellow-600' : 'text-red-500'
+                                                        Number(avgScore) >= 8 ? 'text-green-600' :
+                                                            Number(avgScore) >= 6 ? 'text-yellow-600' : 'text-red-500'
                                                         }`}>
                                                         {avgScore}<span className="text-lg text-gray-400 font-normal">/10</span>
                                                     </div>
@@ -620,8 +620,8 @@ export default function MatchDetailPage() {
                                                         <td key={colPlayer.player_id} className="p-2 align-middle">
                                                             {fb ? (
                                                                 <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg text-lg font-bold shadow-sm ${fb.rating >= 8 ? 'bg-green-100 text-green-700 border border-green-200' :
-                                                                        fb.rating >= 6 ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                                                                            'bg-red-50 text-red-700 border border-red-200'
+                                                                    fb.rating >= 6 ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                                                        'bg-red-50 text-red-700 border border-red-200'
                                                                     }`}>
                                                                     {fb.rating}
                                                                 </span>
