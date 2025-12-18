@@ -139,7 +139,23 @@ def parse_natural_date(
     try:
         # Normalize SMS shorthand before parsing
         normalized_text = normalize_sms_text(text)
-        parsed = dateparser.parse(normalized_text, settings=settings)
+        
+        # Strip common noise words that aren't dates but often appear in SMS
+        # like "play around", "at", "match", "request", "game"
+        noise_words = [
+            r'\bplay\b', r'\bmatch\b', r'\bgame\b', r'\baround\b', r'\bround\b', 
+            r'\bat\b', r'\bi\b', r'\bwanted\b', r'\btry\b', r'\bto\b', r'\bfor\b',
+            r'\bplease\b', r'\bcan\b', r'\bu\b', r'\byou\b', r'\bwant\b', r'\bwould\b', r'\blike\b'
+        ]
+        cleaned_text = normalized_text
+        for noise in noise_words:
+            cleaned_text = re.sub(noise, '', cleaned_text, flags=re.IGNORECASE)
+        
+        # Clean up double spaces
+        cleaned_text = ' '.join(cleaned_text.split())
+        
+        print(f"[date_parser] Parsing cleaned text: '{cleaned_text}' (original: '{text}')")
+        parsed = dateparser.parse(cleaned_text, settings=settings)
         
         if parsed is None:
             return None, None, None

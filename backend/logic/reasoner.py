@@ -59,6 +59,12 @@ Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "t
 User: "actually i want to join group 2"
 Result: {{ "intent": "JOIN_GROUP", "confidence": 0.9, "entities": {{ "selection": 2 }} }}
 
+User: "play around 4pm today"
+Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "today", "time": "4pm" }} }}
+
+User: "play at 6:30 tomorrow"
+Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "tomorrow", "time": "6:30" }} }}
+
 ### Explicit Instructions:
 - If use says "play", "match", "game", "reset", "matches", "groups", "mute", or "unmute", this is a HIGH CONFIDENCE intent that should interrupt any current flow.
 - "1 9 8" or similar numeric sequences are ONLY for feedback.
