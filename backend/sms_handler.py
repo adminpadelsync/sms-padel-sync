@@ -528,7 +528,6 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             nums = [str(selection)]
         else:
              # Fallback to regex
-             import re
              nums = re.findall(r'\d+', body)
         
         if not nums:
