@@ -47,7 +47,7 @@ export default function ScenarioTesterClient() {
         setResults([])
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/test/scenario`, {
+            const response = await fetch('/api/test/scenario', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
