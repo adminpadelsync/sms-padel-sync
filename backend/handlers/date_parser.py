@@ -7,14 +7,35 @@ from datetime import datetime
 from typing import Tuple, Optional
 import re
 
-try:
-    import dateparser
-    DATEPARSER_AVAILABLE = True
-except ImportError:
-    DATEPARSER_AVAILABLE = False
-    print("[WARNING] dateparser not installed - using dateutil fallback")
+DATEPARSER_AVAILABLE = None
+DATEUTIL_AVAILABLE = None
+SIX_AVAILABLE = None
 
-import dateutil.parser
+def _check_dependencies():
+    global DATEPARSER_AVAILABLE, DATEUTIL_AVAILABLE, SIX_AVAILABLE
+    if DATEPARSER_AVAILABLE is not None:
+        return
+
+    try:
+        import dateparser
+        DATEPARSER_AVAILABLE = True
+    except ImportError:
+        DATEPARSER_AVAILABLE = False
+        print("[WARNING] dateparser not installed")
+
+    try:
+        import dateutil.parser
+        DATEUTIL_AVAILABLE = True
+    except ImportError:
+        DATEUTIL_AVAILABLE = False
+        print("[WARNING] dateutil not installed")
+        
+    try:
+        import six
+        SIX_AVAILABLE = True
+    except ImportError:
+        SIX_AVAILABLE = False
+        print("[WARNING] six not installed")
 
 
 # SMS shorthand mappings - common texting abbreviations
@@ -125,9 +146,16 @@ def parse_natural_date(
     if not text or not text.strip():
         return None, None, None
     
+    _check_dependencies()
+    
     # If dateparser is not available, use fallback logic
     if not DATEPARSER_AVAILABLE:
+        if not DATEUTIL_AVAILABLE:
+            print("[date_parser] No parsing libraries available (dateparser/dateutil missing)")
+            return None, None, None
+            
         try:
+            import dateutil.parser
             normalized_text = normalize_sms_text(text)
             
             # Basic noise stripping
@@ -157,19 +185,13 @@ def parse_natural_date(
             if not cleaned_text and not has_relative:
                 return None, None, None
                 
-            # If we only have relative (e.g. "today") but no time, default to 6pm?
-            # Actually, if it's "today" and it's morning, "4pm" would be parsed by dateutil
-            
             # Try parsing the remaining part with dateutil
-            # fuzzy=True is important here
             parsed_time = dateutil.parser.parse(cleaned_text, default=base_date, fuzzy=True)
             
             # Buffer/Grace period: allow requests up to 1 hour in the past 
             buffer_time = now_in_tz - timedelta(hours=1)
             
             if parsed_time < buffer_time:
-                # If they said "today" but the time is past, maybe they meant tomorrow?
-                # For now, let's just reject to be safe as per existing logic
                 return None, None, None
             
             human_readable = parsed_time.strftime("%a, %b %d at %I:%M %p")
@@ -179,6 +201,9 @@ def parse_natural_date(
         except Exception as fallback_err:
             print(f"[date_parser] Fallback failed for '{text}': {fallback_err}")
             return None, None, None
+    
+    # If we are here, dateparser IS available
+    import dateparser
     
     # Configure dateparser to prefer future dates
     settings = {
@@ -193,8 +218,7 @@ def parse_natural_date(
         # Normalize SMS shorthand before parsing
         normalized_text = normalize_sms_text(text)
         
-        # Strip common noise words that aren't dates but often appear in SMS
-        # like "play around", "at", "match", "request", "game"
+        # Strip common noise words
         noise_words = [
             r'\bplay\b', r'\bmatch\b', r'\bgame\b', r'\baround\b', r'\bround\b', 
             r'\bat\b', r'\bi\b', r'\bwanted\b', r'\btry\b', r'\bto\b', r'\bfor\b',
@@ -215,7 +239,6 @@ def parse_natural_date(
             return None, None, None
         
         # Check if the parsed date is in the past
-        # CRITICAL: We must compare apples to apples (New York vs New York)
         import pytz
         from datetime import timedelta
         tz = pytz.timezone(timezone)
@@ -224,7 +247,6 @@ def parse_natural_date(
         now_in_tz = datetime.now(tz).replace(tzinfo=None)
         
         # Buffer/Grace period: allow requests up to 1 hour in the past 
-        # (useful for same-hour requests or clock skew during testing)
         buffer_time = now_in_tz - timedelta(hours=1)
         
         if parsed < buffer_time:
