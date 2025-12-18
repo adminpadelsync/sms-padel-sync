@@ -108,10 +108,30 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     )
 
     try:
-        # Use configurable model
+        # Use configurable model with retry logic
+        import time
+        import random
+
         model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash")
         model = genai.GenerativeModel(model_name)
-        response = model.generate_content(prompt)
+        
+        max_retries = 3
+        retry_delay = 1.0  # Initial delay in seconds
+        
+        for attempt in range(max_retries + 1):
+            try:
+                response = model.generate_content(prompt)
+                break # Success!
+            except Exception as e:
+                # Check for 429 Rate Limit
+                if "429" in str(e) and attempt < max_retries:
+                    # Exponential backoff with jitter
+                    sleep_time = retry_delay * (2 ** attempt) + (random.random() * 0.5)
+                    print(f"[REASONER] 429 Rate Limit hit. Retrying in {sleep_time:.2f}s (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(sleep_time)
+                else:
+                    # Reraise if not 429 or max retries reached
+                    raise e
 
         # Attempt to parse JSON from response
         res_text = response.text.strip()

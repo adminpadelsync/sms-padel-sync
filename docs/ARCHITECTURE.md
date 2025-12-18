@@ -67,3 +67,15 @@ The system is "tuned" using few-shot prompting within `backend/logic/reasoner.py
 
 ### 3. Scenario Tester
 The **Conversational Scenario Tester** (`/dashboard/admin/scenarios`) is the primary tool for verifying that prompt changes have the desired effect without affecting live SMS traffic. Always run your "Golden Dataset" of test cases here after modifying the prompt.
+
+### 4. Gemini API Rate Limits (429 Error)
+If you encounter `429 Resource exhausted`, it means you've hit the rate limit of the "Free" tier of Google AI Studio. 
+
+#### Immediate Mitigation
+-   The Reasoner now includes a **Retry Loop** with exponential backoff. It will automatically wait a few seconds and try again up to 3 times before failing.
+
+#### Permanent Solution (Highly Recommended)
+To support a production environment with multiple users, you should upgrade to a **Pay-as-you-go** plan:
+1.  Go to [Google AI Studio Settings](https://aistudio.google.com/app/settings/billing).
+2.  Enable Billing for your Google Cloud project.
+3.  This increases the rate limit from a few requests per minute to significantly higher thresholds suitable for production.
