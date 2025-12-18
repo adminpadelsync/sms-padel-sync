@@ -366,10 +366,17 @@ async def trigger_feedback_collection():
 @router.api_route("/cron/invite-timeout", methods=["GET", "POST"])
 async def process_invite_timeouts():
     """Cron endpoint to process expired invites and send replacements."""
-    from matchmaker import process_expired_invites
+    from matchmaker import process_expired_invites, process_pending_matches
     try:
+        # 1. Process expired invites (replacement logic)
         new_invites = process_expired_invites()
-        return {"message": f"Processed expired invites, sent {new_invites} replacement(s)"}
+        
+        # 2. Process pending matches with no active invites (catch-up logic)
+        catch_up_invites = process_pending_matches()
+        
+        return {
+            "message": f"Processed invites: {new_invites} replacements, {catch_up_invites} catch-up invites sent."
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

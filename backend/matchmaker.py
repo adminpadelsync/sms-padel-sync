@@ -1,6 +1,7 @@
 from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta
+from logic_utils import is_quiet_hours
 
 
 # Configuration
@@ -29,6 +30,12 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         print("Match not found.")
         return 0
     match = match_res.data[0]
+    club_id = match.get("club_id")
+
+    # Proactive invites should be blocked during quiet hours
+    if is_quiet_hours(club_id):
+        print(f"[QUIET HOURS] Skipping proactive invites for club {club_id}")
+        return 0
     
     # Check if match is still pending/active
     if match["status"] not in ["pending", "voting"]:
@@ -42,8 +49,6 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         print("Requester not found.")
         return 0
     requester = player_res.data[0]
-    
-    club_id = match["club_id"]
     
     # Fetch club name for SMS messages
     club_name = "the club"
@@ -277,3 +282,34 @@ def process_expired_invites():
             print(f"Sent {new_invites} replacement invites for match {match_id}")
     
     return total_new_invites
+
+
+def process_pending_matches():
+    """
+    Find matches that are pending/voting but have no active invites
+    (likely due to quiet hours or initial creation) and send invites.
+    """
+    print("Processing pending matches for invites...")
+    
+    # Find matches in pending/voting status
+    matches = supabase.table("matches").select("match_id, status").in_("status", ["pending", "voting"]).execute()
+    
+    if not matches.data:
+        return 0
+        
+    total_invites = 0
+    for match in matches.data:
+        match_id = match["match_id"]
+        
+        # Check if there are any active (sent) invites
+        active_invites = supabase.table("match_invites").select("invite_id").eq("match_id", match_id).eq("status", "sent").execute()
+        
+        if not active_invites.data:
+            # If no active invites, try to invite players
+            # We use batch 1 since it's likely the first attempt or restart
+            invites = find_and_invite_players(match_id, batch_number=1)
+            total_invites += invites
+            if invites > 0:
+                print(f"Sent {invites} catch-up invites for match {match_id}")
+                
+    return total_invites

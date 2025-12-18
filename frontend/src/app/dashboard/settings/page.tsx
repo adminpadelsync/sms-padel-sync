@@ -55,10 +55,19 @@ export default function SettingsPage() {
 
     const bookingSystems = [
         { id: 'playtomic', name: 'Playtomic' },
-        { id: 'playbypoint', name: 'PlayByPoint' },
-        { id: 'other', name: 'Other' }
+        { id: 'matchi', name: 'Matchi' },
+        { id: 'setteo', name: 'Setteo' },
+        { id: 'manual', name: 'Manual / Other' },
     ]
 
+    const formatHour = (hour: number) => {
+        if (hour === 0) return '12 AM'
+        if (hour === 12) return '12 PM'
+        if (hour < 12) return `${hour} AM`
+        return `${hour - 12} PM`
+    }
+
+    const hours = Array.from({ length: 24 }, (_, i) => i)
     useEffect(() => {
         const storedClubId = localStorage.getItem('selectedClubId')
         fetchClub(storedClubId)
@@ -322,27 +331,44 @@ export default function SettingsPage() {
 
                         {/* Quiet Hours */}
                         <div className="mt-8 pt-6 border-t border-gray-100">
-                            <h4 className="text-lg font-bold text-gray-900 mb-4">SMS Quiet Hours</h4>
-                            <p className="text-sm text-gray-600 mb-6">Prevent feedback SMS from being sent during these hours (EST). Default is 9 PM to 8 AM.</p>
+                            <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-lg font-bold text-gray-900">SMS Quiet Hours</h4>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    EST Timezone
+                                </span>
+                            </div>
+
+                            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                                Quiet Hours prevent <strong>proactive</strong> messages like Match Invites and Feedback Requests from being sent during sleep times.
+                                Immediate/reactive responses to user commands (like <code className="text-indigo-600 font-mono">PLAY</code>, <code className="text-indigo-600 font-mono">YES</code>, <code className="text-indigo-600 font-mono">MATCHES</code>) will always be sent 24/7.
+                            </p>
 
                             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Hour (24h format, e.g. 21 for 9 PM)</label>
-                                    <input
-                                        type="number" min="0" max="23"
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Quiet Hours Start</label>
+                                    <select
                                         value={feedbackSettings.quiet_hours_start}
-                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, quiet_hours_start: parseInt(e.target.value) || 0 }))}
-                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                    />
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, quiet_hours_start: parseInt(e.target.value) }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4 bg-white"
+                                    >
+                                        {hours.map(h => (
+                                            <option key={h} value={h}>{formatHour(h)}</option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500">Messages will stop being sent starting at this time.</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Hour (24h format, e.g. 8 for 8 AM)</label>
-                                    <input
-                                        type="number" min="0" max="23"
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Quiet Hours End</label>
+                                    <select
                                         value={feedbackSettings.quiet_hours_end}
-                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, quiet_hours_end: parseInt(e.target.value) || 0 }))}
-                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                    />
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, quiet_hours_end: parseInt(e.target.value) }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4 bg-white"
+                                    >
+                                        {hours.map(h => (
+                                            <option key={h} value={h}>{formatHour(h)}</option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500">Messages will resume being sent at this time.</p>
                                 </div>
                             </div>
                         </div>
