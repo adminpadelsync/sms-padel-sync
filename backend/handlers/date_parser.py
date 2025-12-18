@@ -19,23 +19,29 @@ def _check_dependencies():
     try:
         import dateparser
         DATEPARSER_AVAILABLE = True
-    except ImportError:
+    except Exception as e:
         DATEPARSER_AVAILABLE = False
-        print("[WARNING] dateparser not installed")
+        print(f"[ERROR] dateparser import failed: {e}")
 
     try:
         import dateutil.parser
         DATEUTIL_AVAILABLE = True
-    except ImportError:
+    except Exception as e:
         DATEUTIL_AVAILABLE = False
-        print("[WARNING] dateutil not installed")
+        print(f"[ERROR] dateutil import failed: {e}")
         
     try:
         import six
         SIX_AVAILABLE = True
-    except ImportError:
+        print(f"[DEBUG] six version: {getattr(six, '__version__', 'unknown')}")
+        try:
+            from six.moves import _thread
+            print("[DEBUG] six.moves is available")
+        except Exception as e:
+             print(f"[ERROR] six.moves check failed: {e}")
+    except Exception as e:
         SIX_AVAILABLE = False
-        print("[WARNING] six not installed")
+        print(f"[ERROR] six import failed: {e}")
 
 
 # SMS shorthand mappings - common texting abbreviations
