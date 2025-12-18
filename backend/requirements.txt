@@ -19,11 +19,7 @@ requests==2.31.0
 pytz==2025.1
 
 # AI & NLP
-# Note: dateparser and dateutil rely on 'six'. We let pip resolve the version.
 google-genai==0.3.0
-dateparser>=1.2.0
-python-dateutil==2.9.0.post0
-six>=1.16.0
 
 # Auth & Security
 PyJWT==2.10.1
