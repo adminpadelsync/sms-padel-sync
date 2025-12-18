@@ -91,15 +91,23 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         # Fallback to UNKNOWN if no API key
         return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Missing GEMINI_API_KEY"}')
 
+    prompt = PROMPT_TEMPLATE.format(
+        message=message,
+        current_state=current_state,
+        user_profile=json.dumps(user_profile or {}),
+    )
+
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = PROMPT_TEMPLATE.format(
-            message=message,
-            current_state=current_state,
-            user_profile=json.dumps(user_profile or {}),
-        )
-        
-        response = model.generate_content(prompt)
+        # Try primary model (Flash - faster/cheaper)
+        try:
+             model = genai.GenerativeModel('gemini-1.5-flash')
+             response = model.generate_content(prompt)
+        except Exception:
+             # Fallback to Pro (older but reliable)
+             print("Warning: gemini-1.5-flash failed, falling back to gemini-pro")
+             model = genai.GenerativeModel('gemini-pro')
+             response = model.generate_content(prompt)
+
         # Attempt to parse JSON from response
         res_text = response.text.strip()
         if "```json" in res_text:
