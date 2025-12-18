@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PlayerColumn } from './player-column'
-import { ClubSettingsPanel } from './club-settings-panel'
 
 interface Player {
     player_id: string
@@ -842,12 +841,7 @@ Example: MAYBE 1`
                     </div>
                 )}
 
-                {/* Club Settings Panel */}
-                {testMode && currentClubId && (
-                    <div className="mb-6">
-                        <ClubSettingsPanel clubId={currentClubId} />
-                    </div>
-                )}
+
 
                 {/* Player Columns */}
                 {selectedPlayers.length === 0 ? (
