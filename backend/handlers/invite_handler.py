@@ -189,8 +189,17 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                         player_list_items.append(f"  - {p['name']} ({p['declared_skill_level']})")
                 
                 player_list = "\n".join(player_list_items) if player_list_items else "  - You!"
+                
+                # Format time logic
+                try:
+                    dt = datetime.fromisoformat(updated_match['scheduled_time'].replace('Z', '+00:00'))
+                    formatted_time = dt.strftime("%a %I:%M%p").replace(":00", "").lower()
+                except:
+                    formatted_time = updated_match['scheduled_time']
+
                 response_msg = (
-                    f"✅ {get_club_name()}: You're in! ({new_player_count}/4 confirmed)\n\n"
+                    f"✅ {get_club_name()}: You're in! ({new_player_count}/4 confirmed)\n"
+                    f"📅 {formatted_time}\n\n"
                     f"So far:\n{player_list}\n\n"
                     f"We need {spots_left} more player{'s' if spots_left > 1 else ''} to confirm the match."
                 )
