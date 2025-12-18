@@ -108,12 +108,15 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     # 5. COMMAND PROCESSING (For IDLE state or Global Interrupts)
     if player and not current_state:
         cmd = body.lower().strip()
+        print(f"[SMS DEBUG] Entering command processing: cmd='{cmd}', intent='{intent}', conf={confidence}")
         
         # Check for Invite Responses
         # Patterns: YES, NO, MAYBE, 1, 1Y, 1N, 2Y, 2N, A, B, AB (voting)
         # Get ALL active invites for this player
+        print(f"[SMS DEBUG] Fetching invites for player {player['player_id']}")
         all_invites_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute()
         all_sent_invites = all_invites_res.data if all_invites_res.data else []
+        print(f"[SMS DEBUG] Found {len(all_sent_invites)} pending invites")
         
         if all_sent_invites:
             # Parse numbered responses: 1, 1Y, 1N, 2, 2Y, 2N, etc.
@@ -159,10 +162,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
 
 
         if cmd == "reset":
-             # Debugging tool to restart flow
+             print(f"[SMS DEBUG] Processing RESET command")
              pass
         elif cmd == "play" or (intent == "START_MATCH" and confidence > 0.8):
-            print(f"[DEBUG] PLAY intent detected from {from_number}. Club: {club_name}")
+            print(f"[SMS DEBUG] Routing to handle_match_request. cmd='{cmd}', intent='{intent}'")
             try:
                 handle_match_request(from_number, body, player, reasoner_result.entities)
             except Exception as e:

@@ -12,7 +12,9 @@ try:
     DATEPARSER_AVAILABLE = True
 except ImportError:
     DATEPARSER_AVAILABLE = False
-    print("[WARNING] dateparser not installed - NLP date parsing disabled")
+    print("[WARNING] dateparser not installed - using dateutil fallback")
+
+import dateutil.parser
 
 
 # SMS shorthand mappings - common texting abbreviations
@@ -123,9 +125,60 @@ def parse_natural_date(
     if not text or not text.strip():
         return None, None, None
     
-    # If dateparser is not available, return None to fall back to strict format
+    # If dateparser is not available, use fallback logic
     if not DATEPARSER_AVAILABLE:
-        return None, None, None
+        try:
+            normalized_text = normalize_sms_text(text)
+            
+            # Basic noise stripping
+            noise_words = [r'\bplay\b', r'\bmatch\b', r'\bgame\b', r'\baround\b', r'\bat\b']
+            cleaned_text = normalized_text
+            for noise in noise_words:
+                cleaned_text = re.sub(noise, '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = ' '.join(cleaned_text.split())
+            
+            # Manual handle for "today" and "tomorrow" 
+            import pytz
+            from datetime import timedelta
+            tz = pytz.timezone(timezone)
+            now_in_tz = datetime.now(tz).replace(tzinfo=None)
+            
+            base_date = now_in_tz
+            has_relative = False
+            if "tomorrow" in cleaned_text:
+                base_date = now_in_tz + timedelta(days=1)
+                cleaned_text = cleaned_text.replace("tomorrow", "").strip()
+                has_relative = True
+            elif "today" in cleaned_text:
+                cleaned_text = cleaned_text.replace("today", "").strip()
+                has_relative = True
+            
+            # If after removal, there is nothing left and no relative word, fail
+            if not cleaned_text and not has_relative:
+                return None, None, None
+                
+            # If we only have relative (e.g. "today") but no time, default to 6pm?
+            # Actually, if it's "today" and it's morning, "4pm" would be parsed by dateutil
+            
+            # Try parsing the remaining part with dateutil
+            # fuzzy=True is important here
+            parsed_time = dateutil.parser.parse(cleaned_text, default=base_date, fuzzy=True)
+            
+            # Buffer/Grace period: allow requests up to 1 hour in the past 
+            buffer_time = now_in_tz - timedelta(hours=1)
+            
+            if parsed_time < buffer_time:
+                # If they said "today" but the time is past, maybe they meant tomorrow?
+                # For now, let's just reject to be safe as per existing logic
+                return None, None, None
+            
+            human_readable = parsed_time.strftime("%a, %b %d at %I:%M %p")
+            print(f"[date_parser] Fallback Success! '{text}' -> {human_readable}")
+            return parsed_time, human_readable, parsed_time.isoformat()
+            
+        except Exception as fallback_err:
+            print(f"[date_parser] Fallback failed for '{text}': {fallback_err}")
+            return None, None, None
     
     # Configure dateparser to prefer future dates
     settings = {
