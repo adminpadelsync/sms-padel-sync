@@ -1,7 +1,7 @@
 import os
 import json
-from google import genai
-from google.genai import types
+# Lazy import to prevent Vercel boot crashes
+# from google import genai 
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
@@ -114,6 +114,20 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     )
 
     try:
+        # Lazy Import for Safety
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as ie:
+            print(f"[CRITICAL] Failed to import google-genai: {ie}")
+            # Try to debug namespace
+            try:
+                import google
+                print(f"[DEBUG] google package path: {getattr(google, '__path__', 'unknown')}")
+            except:
+                pass
+            return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "Dependency Error: {ie}"}}')
+
         # Client initialization
         import time
         import random
@@ -161,6 +175,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         
         # Try to list available models to help debug
         try:
+            from google import genai
             debug_client = genai.Client(api_key=api_key)
             available_models = []
             for m in debug_client.models.list():
