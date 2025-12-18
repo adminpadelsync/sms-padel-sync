@@ -713,6 +713,16 @@ Example: MAYBE 1`
     return (
         <div className="min-h-screen bg-gray-50 p-6">
             <div className="max-w-7xl mx-auto">
+                {/* Breadcrumb */}
+                <div className="mb-6">
+                    <a
+                        href="/dashboard/admin"
+                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1 transition-colors"
+                    >
+                        ← Back to Admin
+                    </a>
+                </div>
+
                 {/* Header */}
                 <div className="mb-6">
                     <div className="flex items-center gap-3 mb-2">

@@ -89,6 +89,30 @@ export default function AdminPage() {
                     )}
                 </div>
 
+                <div className="bg-white rounded-lg shadow p-6 max-w-2xl border border-gray-200">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900">SMS Simulator</h2>
+                            <p className="text-gray-500 mt-1 max-w-md">
+                                Test SMS match flow with simulated player responses. Verify logic for invites, confirmations, and feedback without sending real messages.
+                            </p>
+                        </div>
+                        <div className="bg-indigo-50 p-2 rounded-lg">
+                            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div className="mt-6">
+                        <a
+                            href="/dashboard/admin/simulator"
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            Open SMS Simulator
+                        </a>
+                    </div>
+                </div>
+
                 <div className="bg-white rounded-lg shadow p-6 max-w-2xl border border-gray-200 opacity-60">
                     <div className="flex items-start justify-between">
                         <div>
