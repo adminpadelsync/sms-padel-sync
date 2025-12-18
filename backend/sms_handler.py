@@ -161,8 +161,8 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         if cmd == "reset":
              # Debugging tool to restart flow
              pass
-        elif cmd == "play":
-            print(f"[DEBUG] PLAY command received from {from_number}. Club: {club_name}")
+        elif cmd == "play" or (intent == "START_MATCH" and confidence > 0.8):
+            print(f"[DEBUG] PLAY intent detected from {from_number}. Club: {club_name}")
             try:
                 handle_match_request(from_number, body, player, reasoner_result.entities)
             except Exception as e:
@@ -237,7 +237,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             )
             send_sms(from_number, help_text)
             return
-        elif cmd == "matches":
+        elif cmd == "matches" or (intent == "CHECK_STATUS" and confidence > 0.8):
             try:
                 # Show player's matches - includes both matches they requested AND matches they were invited to
                 player_id = player["player_id"]
@@ -419,7 +419,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         elif cmd == "status":
             send_sms(from_number, "📊 Reply MATCHES to see your match invites with details.")
             return
-        elif cmd == "groups":
+        elif cmd == "groups" or (intent == "JOIN_GROUP" and confidence > 0.8):
             # List public groups
             try:
                 public_groups = supabase.table("player_groups").select("group_id, name").eq("club_id", club_id).eq("visibility", "public").execute().data or []

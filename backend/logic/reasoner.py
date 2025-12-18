@@ -85,7 +85,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     # Priority Keywords (Global Interrupts)
     if body_clean == "RESET":
         return ReasonerResult("RESET", 1.0, {})
-    if body_clean in ["PLAY", "START"] or body_clean.startswith("PLAY"):
+    if body_clean in ["PLAY", "START"]:
         return ReasonerResult("START_MATCH", 1.0, {})
     if body_clean == "GROUPS":
         return ReasonerResult("JOIN_GROUP", 1.0, {})
