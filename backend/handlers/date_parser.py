@@ -145,7 +145,8 @@ def parse_natural_date(
         noise_words = [
             r'\bplay\b', r'\bmatch\b', r'\bgame\b', r'\baround\b', r'\bround\b', 
             r'\bat\b', r'\bi\b', r'\bwanted\b', r'\btry\b', r'\bto\b', r'\bfor\b',
-            r'\bplease\b', r'\bcan\b', r'\bu\b', r'\byou\b', r'\bwant\b', r'\bwould\b', r'\blike\b'
+            r'\bplease\b', r'\bcan\b', r'\bu\b', r'\byou\b', r'\bwant\b', r'\bwould\b', r'\blike\b',
+            r'\bit\b', r'\bthe\b', r'\bsomething\b', r'\barnd\b'
         ]
         cleaned_text = normalized_text
         for noise in noise_words:
@@ -154,31 +155,35 @@ def parse_natural_date(
         # Clean up double spaces
         cleaned_text = ' '.join(cleaned_text.split())
         
-        print(f"[date_parser] Parsing cleaned text: '{cleaned_text}' (original: '{text}')")
         parsed = dateparser.parse(cleaned_text, settings=settings)
         
         if parsed is None:
+            print(f"[date_parser] dateparser.parse returned None for cleaned: '{cleaned_text}' (orig: '{text}')")
             return None, None, None
         
         # Check if the parsed date is in the past
-        now = datetime.now()
-        if parsed < now:
+        # CRITICAL: We must compare apples to apples (New York vs New York)
+        import pytz
+        tz = pytz.timezone(timezone)
+        now_in_tz = datetime.now(tz).replace(tzinfo=None)
+        
+        if parsed < now_in_tz:
+            print(f"[date_parser] Rejecting past date: {parsed} (current time in {timezone}: {now_in_tz})")
             # If it's earlier today, it's probably meant for tomorrow
             # But for explicit past dates, we should reject
-            # dateparser with PREFER_DATES_FROM='future' should handle most cases
             return None, None, None
         
         # Format for human-readable confirmation
-        # Example: "Wed, Dec 11 at 6:00 PM"
         human_readable = parsed.strftime("%a, %b %d at %I:%M %p")
-        
-        # ISO format for database storage
         iso_format = parsed.isoformat()
         
+        print(f"[date_parser] Success! Parsed '{text}' -> {human_readable}")
         return parsed, human_readable, iso_format
         
     except Exception as e:
+        import traceback
         print(f"[date_parser] Error parsing '{text}': {e}")
+        traceback.print_exc()
         return None, None, None
 
 
