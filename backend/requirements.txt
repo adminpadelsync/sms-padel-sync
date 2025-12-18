@@ -1,84 +1,30 @@
-six==1.16.0
-
 # Core Framework
 fastapi==0.121.3
 uvicorn==0.38.0
-starlette==0.49.3
 python-multipart==0.0.9
 
-# Supabase / Database
+# Subapase / Database
 supabase==2.24.0
-supabase-auth==2.24.0
-supabase-functions==2.24.0
-postgrest==2.24.0
-storage3==2.24.0
-realtime==2.24.0
 
-# SMS
+# SMS & Communication
 twilio==9.8.6
 
-# Redis (state management)
+# State Management
 redis==7.0.1
 
-# Data Validation
+# Utilities
+python-dotenv==1.0.0
 pydantic==2.12.4
-pydantic-settings==2.11.0
-pydantic_core==2.41.5
-annotated-types==0.7.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
+requests==2.31.0
+pytz==2025.1
 
-# Date/Time Parsing
+# AI & NLP
+# Note: dateparser and dateutil rely on 'six'. We let pip resolve the version.
+google-generativeai==0.8.4
 dateparser>=1.2.0
 python-dateutil==2.9.0.post0
-pytz==2025.2
-
-# HTTP Clients
-requests==2.31.0
-httpx==0.28.1
-httpcore==1.0.9
-aiohttp==3.9.1
-aiosignal==1.4.0
-frozenlist==1.7.0
-multidict==6.6.4
-propcache==0.3.2
-yarl==1.20.1
-
-# Async Support
-anyio==4.11.0
-sniffio==1.3.1
-h11==0.16.0
-h2==4.3.0
-hpack==4.1.0
-hyperframe==6.1.0
-
-# Environment / Config
-python-dotenv==1.0.0
-
-# Cryptography / Auth
-cryptography==46.0.3
-cffi==2.0.0
-pycparser==2.23
-PyJWT==2.10.1
-
-# Common Utilities
 six>=1.16.0
-certifi==2025.1.31
-charset-normalizer==3.4.1
-idna==3.10
-urllib3==2.3.0
-attrs==25.3.0
-exceptiongroup==1.3.0
-packaging==24.0
-deprecation==2.1.0
-StrEnum==0.4.15
-regex==2024.11.6
-zipp==3.23.0
-importlib_metadata==8.7.0
-importlib_resources==6.4.0
 
-# WebSockets (for Supabase realtime)
-websockets==15.0.1
-
-# AI / NLP
-google-generativeai==0.8.4
+# Auth & Security
+PyJWT==2.10.1
+cryptography>=43.0.0
