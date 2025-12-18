@@ -122,4 +122,15 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         )
     except Exception as e:
         print(f"Error in reasoning: {e}")
-        return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "API Error: {str(e)}"}}')
+        
+        # Try to list available models to help debug
+        try:
+            available_models = []
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    available_models.append(m.name)
+            error_msg = f"API Error: {str(e)}. Available Models: {', '.join(available_models)}"
+        except Exception as list_err:
+            error_msg = f"API Error: {str(e)}. Could not list models: {str(list_err)}"
+            
+        return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "{error_msg}"}}')
