@@ -89,7 +89,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     # 3. Slow Path (Gemini)
     if not api_key:
         # Fallback to UNKNOWN if no API key
-        return ReasonerResult("UNKNOWN", 0.0, {})
+        return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Missing GEMINI_API_KEY"}')
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -114,4 +114,4 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         )
     except Exception as e:
         print(f"Error in reasoning: {e}")
-        return ReasonerResult("UNKNOWN", 0.0, {})
+        return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "API Error: {str(e)}"}}')
