@@ -23,9 +23,19 @@ export default function ScenarioTesterClient() {
         { user_input: 'Hello' },
         { user_input: 'I want to play on Sunday at 4pm' }
     ])
+    const [initialState, setInitialState] = useState('IDLE')
     const [results, setResults] = useState<StepResult[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    const AVAILABLE_STATES = [
+        'IDLE',
+        'WAITING_NAME',
+        'STATE_MATCH_REQUEST_DATE',
+        'WAITING_FEEDBACK',
+        'BROWSING_GROUPS',
+        'UPDATING_AVAILABILITY'
+    ]
 
     const addStep = () => {
         setSteps([...steps, { user_input: '' }])
@@ -53,7 +63,7 @@ export default function ScenarioTesterClient() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    initial_state: 'IDLE',
+                    initial_state: initialState,
                     steps: steps.filter(s => s.user_input.trim())
                 }),
             })
@@ -83,7 +93,26 @@ export default function ScenarioTesterClient() {
                 {/* Input Column */}
                 <div className="space-y-4">
                     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <h2 className="text-lg font-semibold mb-4 text-gray-800">Scenario Input</h2>
+                        <h2 className="text-lg font-semibold mb-4 text-gray-800">Scenario Configuration</h2>
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Initial State (Mock context)
+                            </label>
+                            <select
+                                value={initialState}
+                                onChange={(e) => setInitialState(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-indigo-50 font-mono text-sm"
+                            >
+                                {AVAILABLE_STATES.map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500 italic">
+                                Simulate the system state BEFORE the first message.
+                            </p>
+                        </div>
+
+                        <h2 className="text-lg font-semibold mb-4 text-gray-800 border-t pt-4">Scenario Steps</h2>
                         <div className="space-y-3">
                             {steps.map((step, index) => (
                                 <div key={index} className="flex gap-2">

@@ -738,13 +738,19 @@ async def run_scenario(request: ScenarioRequest = None):
             reply_action = "NONE"
             
             if reasoner_result.intent == "START_MATCH":
-                next_state = "MATCH_REQUEST_DATE"
+                next_state = "STATE_MATCH_REQUEST_DATE"
                 reply_action = "ASK_DATE"
             elif reasoner_result.intent == "JOIN_GROUP":
                 next_state = "BROWSING_GROUPS"
                 reply_action = "LIST_GROUPS"
-            elif reasoner_result.intent == "Check_STATUS":
+            elif reasoner_result.intent == "SUBMIT_FEEDBACK" and current_state == "WAITING_FEEDBACK":
+                next_state = "IDLE"
+                reply_action = "THANKS_FEEDBACK"
+            elif reasoner_result.intent == "CHECK_STATUS":
                 reply_action = "SHOW_MATCHES"
+            elif reasoner_result.intent == "RESET":
+                next_state = "IDLE"
+                reply_action = "SYSTEM_RESET"
                  
             # Add result
             results.append({
