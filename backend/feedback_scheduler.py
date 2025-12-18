@@ -115,6 +115,46 @@ def get_requests_needing_reminder():
     return requests_to_remind
 
 
+import pytz
+
+def is_quiet_hours(club_id: str = None) -> bool:
+    """
+    Check if current time is within quiet hours for a specific club.
+    Default quiet hours: 9 PM - 8 AM ET.
+    """
+    try:
+        # Default settings
+        start_hour = 21  # 9 PM
+        end_hour = 8     # 8 AM
+        
+        if club_id:
+            settings = get_club_settings(club_id)
+            start_hour = int(settings.get("quiet_hours_start", 21))
+            end_hour = int(settings.get("quiet_hours_end", 8))
+            
+        # Get current time in ET
+        tz = pytz.timezone('America/New_York')
+        now_et = datetime.now(tz)
+        current_hour = now_et.hour
+        
+        # Check if in quiet window
+        # Case 1: Window crosses midnight (e.g. 21 to 8)
+        if start_hour > end_hour:
+            if current_hour >= start_hour or current_hour < end_hour:
+                print(f"[QUIET HOURS] Skipping SMS for club {club_id}: {current_hour}:00 is between {start_hour}:00 and {end_hour}:00")
+                return True
+        # Case 2: Window within same day (unlikely but possible, e.g. 1AM to 5AM)
+        else:
+            if start_hour <= current_hour < end_hour:
+                print(f"[QUIET HOURS] Skipping SMS for club {club_id}: {current_hour}:00 is between {start_hour}:00 and {end_hour}:00")
+                return True
+                
+        return False
+    except Exception as e:
+        print(f"Error checking quiet hours: {e}")
+        return False
+
+
 def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = False, force: bool = False):
     """
     Send feedback SMS to all players in a match.
@@ -125,6 +165,11 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         force: If True, resend even if already sent
     """
     match_id = match["match_id"]
+    club_id = match.get("club_id")
+    
+    # Check quiet hours unless manually triggered
+    if not is_manual_trigger and is_quiet_hours(club_id):
+        return 0
     
     # Get all player IDs from both teams
     all_players = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
@@ -134,7 +179,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         print(f"Match {match_id} doesn't have 4 players, skipping feedback")
         return 0
     
-    # Check if we already sent requests for this match
+    # Check if we already sent requests for this match (optimization to avoid DB attempts)
     existing = supabase.table("feedback_requests").select("player_id").eq(
         "match_id", match_id
     ).execute()
@@ -164,11 +209,35 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         
         if len(other_players) != 3:
             continue
+
+        # CRITICAL FIX: "Claim" the request in DB first to prevent race conditions
+        try:
+            if player_id in existing_player_ids:
+                if force:
+                    # Update existing
+                    supabase.table("feedback_requests").update({
+                        "initial_sent_at": datetime.utcnow().isoformat(),
+                        "reminder_sent_at": None,
+                        "response_received_at": None
+                    }).eq("match_id", match_id).eq("player_id", player_id).execute()
+                else:
+                    continue
+            else:
+                # Insert new - if this fails due to unique constraint, we know another process handled it
+                supabase.table("feedback_requests").insert({
+                    "match_id": match_id,
+                    "player_id": player_id,
+                    "initial_sent_at": datetime.utcnow().isoformat()
+                }).execute()
+        except Exception as e:
+            # Likely a race condition where another process inserted it just now
+            print(f"Skipping feedback for {player_id} in {match_id}: likely duplicate process ({e})")
+            continue
         
         # Get club name for the message
         club_name = "the club"
-        if match.get("club_id"):
-            club_res = supabase.table("clubs").select("name").eq("club_id", match["club_id"]).execute()
+        if club_id:
+            club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
             if club_res.data:
                 club_name = club_res.data[0]["name"]
         
@@ -199,23 +268,15 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         
         # Send SMS
         if send_sms(player["phone_number"], message):
-            # Record or Update the request
-            if player_id in existing_player_ids:
-                # Update existing to reset lifecycle
-                supabase.table("feedback_requests").update({
-                    "initial_sent_at": datetime.utcnow().isoformat(),
-                    "reminder_sent_at": None,
-                    "response_received_at": None
-                }).eq("match_id", match_id).eq("player_id", player_id).execute()
-            else:
-                # Insert new
-                supabase.table("feedback_requests").insert({
-                    "match_id": match_id,
-                    "player_id": player_id,
-                    "initial_sent_at": datetime.utcnow().isoformat()
-                }).execute()
-                
             sent_count += 1
+        else:
+            # Rollback: if sending failed, delete the request record so we retry later
+            print(f"Failed to send SMS to {player['phone_number']}, rolling back DB record")
+            try:
+                if not force: # Only delete if it was a new insert
+                    supabase.table("feedback_requests").delete().eq("match_id", match_id).eq("player_id", player_id).execute()
+            except Exception as e:
+                print(f"Error rolling back feedback request: {e}")
     
     return sent_count
 
@@ -227,8 +288,28 @@ def send_reminder_for_request(request: dict):
     
     if not match or not player:
         return False
+        
+    # Check quiet hours
+    if is_quiet_hours(match.get("club_id")):
+        return False
     
     match_id = match["match_id"]
+    
+    # CRITICAL FIX: "Claim" the reminder first
+    # We update reminder_sent_at to NOW, but only if it's currently NULL
+    try:
+        update_res = supabase.table("feedback_requests").update({
+            "reminder_sent_at": datetime.utcnow().isoformat()
+        }).eq("request_id", request["request_id"]).is_("reminder_sent_at", "null").execute()
+        
+        # If no rows were updated, it means another process beat us to it or it was already sent
+        if not update_res.data:
+            print(f"Skipping reminder for request {request['request_id']}: already sent or claimed")
+            return False
+            
+    except Exception as e:
+        print(f"Error claiming reminder for request {request['request_id']}: {e}")
+        return False
     
     # Get all players in match for context
     all_player_ids = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
@@ -243,6 +324,10 @@ def send_reminder_for_request(request: dict):
     other_players = [player_map[pid] for pid in all_player_ids if pid != player["player_id"]]
     
     if len(other_players) != 3:
+        # Revert the claim since we can't send
+        supabase.table("feedback_requests").update({
+            "reminder_sent_at": None
+        }).eq("request_id", request["request_id"]).execute()
         return False
     
     # Get club name for the message
@@ -281,13 +366,14 @@ Reply with 3 numbers (e.g., "8 7 9") or SKIP"""
         r.expire(key, 86400)
     
     if send_sms(player["phone_number"], message):
-        # Mark reminder as sent
-        supabase.table("feedback_requests").update({
-            "reminder_sent_at": datetime.utcnow().isoformat()
-        }).eq("request_id", request["request_id"]).execute()
         return True
-    
-    return False
+    else:
+        # Revert the claim if SMS failed
+        print(f"Failed to send reminder SMS to {player['phone_number']}, reverting claim")
+        supabase.table("feedback_requests").update({
+            "reminder_sent_at": None
+        }).eq("request_id", request["request_id"]).execute()
+        return False
 
 
 def run_feedback_scheduler():

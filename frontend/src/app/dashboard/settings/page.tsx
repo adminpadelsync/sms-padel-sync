@@ -17,6 +17,8 @@ interface Club {
     settings: {
         feedback_delay_hours?: number
         feedback_reminder_delay_hours?: number
+        quiet_hours_start?: number
+        quiet_hours_end?: number
     } | null
 }
 
@@ -46,7 +48,9 @@ export default function SettingsPage() {
 
     const [feedbackSettings, setFeedbackSettings] = useState({
         feedback_delay_hours: 3.0,
-        feedback_reminder_delay_hours: 4.0
+        feedback_reminder_delay_hours: 4.0,
+        quiet_hours_start: 21,
+        quiet_hours_end: 8
     })
 
     const bookingSystems = [
@@ -110,7 +114,9 @@ export default function SettingsPage() {
                     // Populate settings
                     setFeedbackSettings({
                         feedback_delay_hours: clubData.settings?.feedback_delay_hours ?? 3.0,
-                        feedback_reminder_delay_hours: clubData.settings?.feedback_reminder_delay_hours ?? 4.0
+                        feedback_reminder_delay_hours: clubData.settings?.feedback_reminder_delay_hours ?? 4.0,
+                        quiet_hours_start: clubData.settings?.quiet_hours_start ?? 21,
+                        quiet_hours_end: clubData.settings?.quiet_hours_end ?? 8
                     })
                 }
             }
@@ -311,6 +317,33 @@ export default function SettingsPage() {
                                     onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_reminder_delay_hours: parseFloat(e.target.value) || 0 }))}
                                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
                                 />
+                            </div>
+                        </div>
+
+                        {/* Quiet Hours */}
+                        <div className="mt-8 pt-6 border-t border-gray-100">
+                            <h4 className="text-lg font-bold text-gray-900 mb-4">SMS Quiet Hours</h4>
+                            <p className="text-sm text-gray-600 mb-6">Prevent feedback SMS from being sent during these hours (EST). Default is 9 PM to 8 AM.</p>
+
+                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Hour (24h format, e.g. 21 for 9 PM)</label>
+                                    <input
+                                        type="number" min="0" max="23"
+                                        value={feedbackSettings.quiet_hours_start}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, quiet_hours_start: parseInt(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Hour (24h format, e.g. 8 for 8 AM)</label>
+                                    <input
+                                        type="number" min="0" max="23"
+                                        value={feedbackSettings.quiet_hours_end}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, quiet_hours_end: parseInt(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </section>
