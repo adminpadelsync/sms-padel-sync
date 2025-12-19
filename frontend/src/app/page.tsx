@@ -205,6 +205,7 @@ export default function Home() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link href="/privacy" className="hover:text-foreground">Privacy Policy</Link></li>
                 <li><Link href="/terms" className="hover:text-foreground">Terms of Service</Link></li>
+                <li><Link href="/messaging-terms" className="hover:text-foreground">Messaging Terms</Link></li>
               </ul>
             </div>
           </div>
