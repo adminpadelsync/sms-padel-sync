@@ -25,14 +25,27 @@ export default function NewClubPage() {
         main_phone: '',
         booking_system: 'playtomic',
         twilio_phone_number: '',
-        court_count: 4
+        court_count: 4,
+        timezone: 'America/New_York'
     })
+
 
     const bookingSystems = [
         { id: 'playtomic', name: 'Playtomic' },
         { id: 'playbypoint', name: 'PlayByPoint' },
         { id: 'other', name: 'Other' }
     ]
+
+    const timezones = [
+        { id: 'America/New_York', name: 'Eastern Time (ET)' },
+        { id: 'America/Chicago', name: 'Central Time (CT)' },
+        { id: 'America/Denver', name: 'Mountain Time (MT)' },
+        { id: 'America/Los_Angeles', name: 'Pacific Time (PT)' },
+        { id: 'America/Phoenix', name: 'Arizona (MST)' },
+        { id: 'America/Anchorage', name: 'Alaska (AKT)' },
+        { id: 'Pacific/Honolulu', name: 'Hawaii (HST)' },
+    ]
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -213,7 +226,24 @@ export default function NewClubPage() {
                                         className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
                                     />
                                 </div>
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="timezone" className="block text-base font-bold text-gray-800 mb-2">
+                                        Timezone
+                                    </label>
+                                    <select
+                                        id="timezone"
+                                        name="timezone"
+                                        value={formData.timezone}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4 bg-white"
+                                    >
+                                        {timezones.map(tz => (
+                                            <option key={tz.id} value={tz.id}>{tz.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
+
                         </section>
 
                         {/* Section: Contact Details */}

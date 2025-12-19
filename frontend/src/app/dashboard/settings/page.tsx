@@ -14,7 +14,10 @@ interface Club {
     poc_phone?: string
     main_phone?: string
     booking_system?: string
+    timezone?: string
+
     settings: {
+
         feedback_delay_hours?: number
         feedback_reminder_delay_hours?: number
         quiet_hours_start?: number
@@ -36,7 +39,9 @@ export default function SettingsPage() {
         main_phone: '',
         booking_system: 'playtomic',
         twilio_phone_number: '',
+        timezone: 'America/New_York'
     })
+
 
     // Address broken down
     const [addressFields, setAddressFields] = useState({
@@ -59,6 +64,17 @@ export default function SettingsPage() {
         { id: 'setteo', name: 'Setteo' },
         { id: 'manual', name: 'Manual / Other' },
     ]
+
+    const timezones = [
+        { id: 'America/New_York', name: 'Eastern Time (ET)' },
+        { id: 'America/Chicago', name: 'Central Time (CT)' },
+        { id: 'America/Denver', name: 'Mountain Time (MT)' },
+        { id: 'America/Los_Angeles', name: 'Pacific Time (PT)' },
+        { id: 'America/Phoenix', name: 'Arizona (MST)' },
+        { id: 'America/Anchorage', name: 'Alaska (AKT)' },
+        { id: 'Pacific/Honolulu', name: 'Hawaii (HST)' },
+    ]
+
 
     const formatHour = (hour: number) => {
         if (hour === 0) return '12 AM'
@@ -96,7 +112,9 @@ export default function SettingsPage() {
                         main_phone: clubData.main_phone || '',
                         booking_system: clubData.booking_system || 'playtomic',
                         twilio_phone_number: clubData.phone_number || '',
+                        timezone: clubData.timezone || 'America/New_York',
                     })
+
 
                     // Parse address
                     if (clubData.address) {
@@ -156,8 +174,10 @@ export default function SettingsPage() {
                     poc_name: formData.poc_name || null,
                     poc_phone: formData.poc_phone || null,
                     main_phone: formData.main_phone || null,
-                    booking_system: formData.booking_system || null
+                    booking_system: formData.booking_system || null,
+                    timezone: formData.timezone
                 })
+
             })
 
             if (!clubResponse.ok) throw new Error('Failed to update club info')
@@ -333,10 +353,20 @@ export default function SettingsPage() {
                         <div className="mt-8 pt-6 border-t border-gray-100">
                             <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-lg font-bold text-gray-900">SMS Quiet Hours</h4>
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    EST Timezone
-                                </span>
+                                <div className="flex items-center gap-3">
+                                    <select
+                                        name="timezone"
+                                        value={formData.timezone}
+                                        onChange={handleChange}
+                                        className="text-xs font-medium bg-blue-100 text-blue-800 rounded-full px-3 py-1 border-none focus:ring-0 cursor-pointer"
+                                    >
+                                        {timezones.map(tz => (
+                                            <option key={tz.id} value={tz.id}>{tz.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
+
 
                             <p className="text-sm text-gray-600 mb-6 leading-relaxed">
                                 Quiet Hours prevent <strong>proactive</strong> messages like Match Invites and Feedback Requests from being sent during sleep times.

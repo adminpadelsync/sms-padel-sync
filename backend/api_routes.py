@@ -68,6 +68,8 @@ class ClubUpdate(BaseModel):
     poc_phone: Optional[str] = None
     main_phone: Optional[str] = None
     booking_system: Optional[str] = None
+    timezone: Optional[str] = None
+
 
 @router.post("/clubs")
 async def create_club(request: CreateClubRequest):
@@ -145,6 +147,9 @@ async def update_club(club_id: str, updates: ClubUpdate):
             update_data["main_phone"] = updates.main_phone
         if updates.booking_system is not None:
             update_data["booking_system"] = updates.booking_system
+        if updates.timezone is not None:
+            update_data["timezone"] = updates.timezone
+
         
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")

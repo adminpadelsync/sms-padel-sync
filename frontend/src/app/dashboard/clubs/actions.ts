@@ -12,7 +12,9 @@ export interface CreateClubData {
     booking_system?: string
     twilio_phone_number: string
     court_count: number
+    timezone?: string
 }
+
 
 export async function createClub(data: CreateClubData) {
     const supabase = await createClient()
@@ -47,7 +49,9 @@ export async function createClub(data: CreateClubData) {
                 poc_phone: data.poc_phone,
                 main_phone: data.main_phone,
                 booking_system: data.booking_system,
+                timezone: data.timezone || 'America/New_York',
                 active: true,
+
                 settings: {}
             })
             .select()
