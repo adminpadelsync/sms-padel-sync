@@ -50,8 +50,11 @@ from database import supabase
 from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
+from logic_utils import get_club_timezone
 from handlers.date_parser import parse_natural_date
+
 from error_logger import log_match_error
+
 
 
 # Default match preferences
@@ -72,6 +75,10 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
     human_readable = None
     iso_format = None
     
+    # Get club's timezone
+    club_id = player.get("club_id")
+    timezone_str = get_club_timezone(club_id) if club_id else "America/New_York"
+    
     if entities:
         # Check if we have a date and time entity
         ent_date = entities.get("date")
@@ -80,7 +87,7 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             # Reconstruct string for parser or use directly if already parsed
             # For now, we Re-parse the entities to ensure consistent formatting
             ent_msg = f"{ent_date or ''} {ent_time or ''}".strip()
-            parsed_dt, human_readable, iso_format = parse_natural_date(ent_msg)
+            parsed_dt, human_readable, iso_format = parse_natural_date(ent_msg, timezone=timezone_str)
 
     # 2. Fallback to parsing the body if no entities or entities failed
     if parsed_dt is None:
@@ -90,7 +97,8 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             return
         
         # Try NLP parsing
-        parsed_dt, human_readable, iso_format = parse_natural_date(date_str)
+        parsed_dt, human_readable, iso_format = parse_natural_date(date_str, timezone=timezone_str)
+
     
     if parsed_dt is None:
         # Fallback: Try strict YYYY-MM-DD HH:MM format
@@ -274,7 +282,10 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         return
     
     # Try parsing as a new date/time
-    parsed_dt, human_readable, iso_format = parse_natural_date(response)
+    club_id = player.get("club_id")
+    timezone_str = get_club_timezone(club_id) if club_id else "America/New_York"
+    parsed_dt, human_readable, iso_format = parse_natural_date(response, timezone=timezone_str)
+
     
     if parsed_dt is not None:
         _send_preferences_confirmation(from_number, human_readable, iso_format, player)
@@ -335,7 +346,10 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
         return
     
     # Check if user entered a new time instead of a number
-    parsed_dt, human_readable, iso_format = parse_natural_date(selection)
+    club_id = player.get("club_id")
+    timezone_str = get_club_timezone(club_id) if club_id else "America/New_York"
+    parsed_dt, human_readable, iso_format = parse_natural_date(selection, timezone=timezone_str)
+
     if parsed_dt is not None:
         # Re-show group selection with new time
         groups_list = ""

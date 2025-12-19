@@ -12,12 +12,12 @@ Configurable per club:
 
 from datetime import datetime, timedelta
 from database import supabase
-import pytz
-from twilio_client import send_sms
-from logic_utils import get_club_settings, is_quiet_hours
+from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone
 import sms_constants as msg
 from redis_client import get_redis_client
 import json
+import pytz
+
 
 DEFAULT_FEEDBACK_DELAY_HOURS = 3.0
 DEFAULT_REMINDER_DELAY_HOURS = 4.0
@@ -26,22 +26,29 @@ DEFAULT_REMINDER_DELAY_HOURS = 4.0
 def get_matches_needing_feedback():
     """
     Find matches that started X hours ago and need initial feedback requests.
-    Groups by club to respect per-club feedback delay settings.
+    Groups by club to respect per-club feedback delay settings and timezone.
     """
     matches_to_process = []
     
     # Get all clubs
-    clubs_result = supabase.table("clubs").select("club_id, settings").eq("active", True).execute()
+    clubs_result = supabase.table("clubs").select("club_id, settings, timezone").eq("active", True).execute()
     
     for club in clubs_result.data:
         club_id = club["club_id"]
         settings = club.get("settings") or {}
+        timezone_str = club.get("timezone") or "America/New_York"
         delay_hours = float(settings.get("feedback_delay_hours", DEFAULT_FEEDBACK_DELAY_HOURS))
         
-        # Calculate the time window
-        now = datetime.utcnow()
-        cutoff_time = now - timedelta(hours=delay_hours)
-        lookback_limit = now - timedelta(hours=48)
+        # Calculate the time window in the club's local time
+        try:
+            tz = pytz.timezone(timezone_str)
+        except Exception:
+            tz = pytz.timezone("America/New_York")
+            
+        # Get current local time and convert back to naive for comparison with DB
+        now_local = datetime.now(tz).replace(tzinfo=None)
+        cutoff_time = now_local - timedelta(hours=delay_hours)
+        lookback_limit = now_local - timedelta(hours=48)
         
         # Query matches for this club
         result = supabase.table("matches").select("*").eq(
@@ -61,6 +68,7 @@ def get_matches_needing_feedback():
     return matches_to_process
 
 
+
 def get_requests_needing_reminder():
     """
     Find feedback requests that were sent X hours ago but have no response.
@@ -68,21 +76,35 @@ def get_requests_needing_reminder():
     """
     requests_to_remind = []
     
-    # Get all clubs for their reminder settings
-    clubs_result = supabase.table("clubs").select("club_id, settings").eq("active", True).execute()
+    # Get all clubs for their reminder settings and timezone
+    clubs_result = supabase.table("clubs").select("club_id, settings, timezone").eq("active", True).execute()
     
     for club in clubs_result.data:
         club_id = club["club_id"]
         settings = club.get("settings") or {}
+        timezone_str = club.get("timezone") or "America/New_York"
         reminder_hours = float(settings.get("feedback_reminder_delay_hours", DEFAULT_REMINDER_DELAY_HOURS))
         
-        # Find requests that need reminders
-        now = datetime.utcnow()
-        cutoff_time = now - timedelta(hours=reminder_hours)
-        lookback_limit = now - timedelta(hours=48)
+        # Calculate timezone-aware cutoff times
+        try:
+            tz = pytz.timezone(timezone_str)
+        except Exception:
+            tz = pytz.timezone("America/New_York")
+            
+        # Requests are stored with UTC ISO strings usually, but let's check.
+        # However, initial_sent_at is stored via datetime.utcnow().isoformat() in this file.
+        # So for initial_sent_at, we SHOULD use utcnow().
         
+        now_utc = datetime.utcnow()
+        cutoff_time = now_utc - timedelta(hours=reminder_hours)
+        lookback_limit = now_utc - timedelta(hours=48)
+        
+        # Find requests that need reminders for matches in this club
+        # Note: we need to join with matches to filter by club_id
         result = supabase.table("feedback_requests").select(
-            "*, matches(*), players(*)"
+            "*, matches!inner(*), players(*)"
+        ).eq(
+            "matches.club_id", club_id
         ).gte(
             "initial_sent_at", lookback_limit.isoformat()
         ).lte(
@@ -96,6 +118,7 @@ def get_requests_needing_reminder():
         requests_to_remind.extend(result.data)
     
     return requests_to_remind
+
 
 
 def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = False, force: bool = False):

@@ -12,20 +12,37 @@ def get_club_settings(club_id: str) -> dict:
         print(f"Error getting club settings: {e}")
     return {}
 
+def get_club_timezone(club_id: str) -> str:
+    """Retrieve the timezone for a given club, defaulting to America/New_York."""
+    try:
+        result = supabase.table("clubs").select("timezone").eq("club_id", club_id).execute()
+        if result.data and result.data[0].get("timezone"):
+            return result.data[0]["timezone"]
+    except Exception as e:
+        # Fallback if column doesn't exist or query fails
+        print(f"Note: Could not fetch timezone for club {club_id}, defaulting to America/New_York: {e}")
+    return "America/New_York"
+
+
 def is_quiet_hours(club_id: str) -> bool:
     """
     Check if current time is within quiet hours for a specific club.
-    Default quiet hours are 9:00 PM to 8:00 AM ET.
+    Default quiet hours are 9:00 PM to 8:00 AM in the club's local timezone.
     """
     settings = get_club_settings(club_id)
+    timezone_str = get_club_timezone(club_id)
     
     # Get hours (0-23 format)
     # Default: 9 PM (21) to 8 AM (8)
     quiet_start = settings.get("quiet_hours_start", 21)
     quiet_end = settings.get("quiet_hours_end", 8)
     
-    # Get current time in New York
-    tz = pytz.timezone("America/New_York")
+    # Get current time in club's timezone
+    try:
+        tz = pytz.timezone(timezone_str)
+    except Exception:
+        tz = pytz.timezone("America/New_York")
+        
     now = datetime.now(tz)
     current_hour = now.hour
     
@@ -42,3 +59,4 @@ def is_quiet_hours(club_id: str) -> bool:
             return True
             
     return False
+
