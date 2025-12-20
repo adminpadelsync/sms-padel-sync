@@ -487,6 +487,8 @@ async def get_match_feedback(match_id: str):
 class ClubSettingsUpdate(BaseModel):
     feedback_delay_hours: Optional[float] = None
     feedback_reminder_delay_hours: Optional[float] = None
+    quiet_hours_start: Optional[int] = None
+    quiet_hours_end: Optional[int] = None
 
 
 @router.get("/clubs/{club_id}/settings")
@@ -502,7 +504,9 @@ async def get_club_settings(club_id: str):
         # Return with defaults
         return {
             "feedback_delay_hours": settings.get("feedback_delay_hours", 3.0),
-            "feedback_reminder_delay_hours": settings.get("feedback_reminder_delay_hours", 4.0)
+            "feedback_reminder_delay_hours": settings.get("feedback_reminder_delay_hours", 4.0),
+            "quiet_hours_start": settings.get("quiet_hours_start", 21),
+            "quiet_hours_end": settings.get("quiet_hours_end", 8)
         }
     except HTTPException:
         raise
@@ -527,6 +531,10 @@ async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
             current_settings["feedback_delay_hours"] = updates.feedback_delay_hours
         if updates.feedback_reminder_delay_hours is not None:
             current_settings["feedback_reminder_delay_hours"] = updates.feedback_reminder_delay_hours
+        if updates.quiet_hours_start is not None:
+            current_settings["quiet_hours_start"] = updates.quiet_hours_start
+        if updates.quiet_hours_end is not None:
+            current_settings["quiet_hours_end"] = updates.quiet_hours_end
         
         # Save
         supabase.table("clubs").update({

@@ -21,6 +21,7 @@ import pytz
 
 DEFAULT_FEEDBACK_DELAY_HOURS = 3.0
 DEFAULT_REMINDER_DELAY_HOURS = 4.0
+ASSUMED_MATCH_DURATION_HOURS = 1.5 # Padel matches are typically 90 mins
 
 
 def get_matches_needing_feedback():
@@ -47,7 +48,8 @@ def get_matches_needing_feedback():
             
         # Get current local time and convert back to naive for comparison with DB
         now_local = datetime.now(tz).replace(tzinfo=None)
-        cutoff_time = now_local - timedelta(hours=delay_hours)
+        # Delay is counted from match END, so add assumed duration to the offset
+        cutoff_time = now_local - timedelta(hours=delay_hours + ASSUMED_MATCH_DURATION_HOURS)
         lookback_limit = now_local - timedelta(hours=48)
         
         # Query matches for this club

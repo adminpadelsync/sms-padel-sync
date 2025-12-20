@@ -62,6 +62,7 @@ export default function SettingsPage() {
         { id: 'playtomic', name: 'Playtomic' },
         { id: 'matchi', name: 'Matchi' },
         { id: 'setteo', name: 'Setteo' },
+        { id: 'playbypoint', name: 'Playbypoint' },
         { id: 'manual', name: 'Manual / Other' },
     ]
 
@@ -242,14 +243,14 @@ export default function SettingsPage() {
 
                 <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100 p-8 sm:p-10 space-y-10">
 
-                    {/* 1. General Info */}
+                    {/* 1. Club Information */}
                     <section>
                         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
                             <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">1</span>
-                            General Information
+                            Club Information
                         </h3>
                         <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
-                            <div className="sm:col-span-2">
+                            <div className="sm:col-span-1">
                                 <label className="block text-base font-bold text-gray-800 mb-2">Club Name</label>
                                 <input
                                     type="text"
@@ -258,6 +259,20 @@ export default function SettingsPage() {
                                     onChange={handleChange}
                                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
                                 />
+                            </div>
+
+                            <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Time Zone</label>
+                                <select
+                                    name="timezone"
+                                    value={formData.timezone}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4 bg-white"
+                                >
+                                    {timezones.map(tz => (
+                                        <option key={tz.id} value={tz.id}>{tz.name}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             {/* Address Breakdown */}
@@ -278,6 +293,11 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Main Club Phone</label>
+                                <input type="text" name="main_phone" value={formData.main_phone} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
+                            </div>
+
+                            <div className="sm:col-span-1">
                                 <label className="block text-base font-bold text-gray-800 mb-2">Booking System</label>
                                 <select
                                     name="booking_system"
@@ -290,10 +310,24 @@ export default function SettingsPage() {
                                     ))}
                                 </select>
                             </div>
+
+                            <div className="sm:col-span-2">
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
+                                    <label className="block text-base font-bold text-blue-900 mb-2">Twilio Phone Number</label>
+                                    <input
+                                        type="text"
+                                        name="twilio_phone_number"
+                                        value={formData.twilio_phone_number}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-blue-200 text-blue-900 placeholder-blue-300 focus:ring-blue-500 focus:border-blue-500 text-lg py-3 px-4"
+                                    />
+                                    <p className="mt-2 text-sm text-blue-700">ℹ️ The automated system sends messages from this number.</p>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
-                    {/* 2. Contact Info */}
+                    {/* 2. Contact Information */}
                     <section>
                         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
                             <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">2</span>
@@ -301,72 +335,28 @@ export default function SettingsPage() {
                         </h3>
                         <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
                             <div className="sm:col-span-1">
-                                <label className="block text-base font-bold text-gray-800 mb-2">POC Name</label>
+                                <label className="block text-base font-bold text-gray-800 mb-2">Contact Person Name</label>
                                 <input type="text" name="poc_name" value={formData.poc_name} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
                             </div>
                             <div className="sm:col-span-1">
-                                <label className="block text-base font-bold text-gray-800 mb-2">POC Phone</label>
+                                <label className="block text-base font-bold text-gray-800 mb-2">Contact Person Phone</label>
                                 <input type="text" name="poc_phone" value={formData.poc_phone} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
-                            </div>
-                            <div className="sm:col-span-1">
-                                <label className="block text-base font-bold text-gray-800 mb-2">Main Club Phone</label>
-                                <input type="text" name="main_phone" value={formData.main_phone} onChange={handleChange} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4" />
                             </div>
                         </div>
                     </section>
 
-                    {/* 3. System Integration & Settings */}
+                    {/* 3. Messaging & Feedback Settings */}
                     <section>
                         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
                             <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">3</span>
-                            System Settings
+                            Messaging & Feedback
                         </h3>
 
-                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sm:col-span-2 mb-6">
-                            <label className="block text-base font-bold text-blue-900 mb-2">Twilio Phone Number</label>
-                            <input type="text" name="twilio_phone_number" value={formData.twilio_phone_number} onChange={handleChange} className="block w-full rounded-lg border-blue-200 text-blue-900 placeholder-blue-300 focus:ring-blue-500 focus:border-blue-500 text-lg py-3 px-4" />
-                            <p className="mt-2 text-sm text-blue-700">ℹ️ Active SMS number (+1XXXXXXXXXX).</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Request Delay (Hours)</label>
-                                <input
-                                    type="number" step="0.5"
-                                    value={feedbackSettings.feedback_delay_hours}
-                                    onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_delay_hours: parseFloat(e.target.value) || 0 }))}
-                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Reminder Delay (Hours)</label>
-                                <input
-                                    type="number" step="0.5"
-                                    value={feedbackSettings.feedback_reminder_delay_hours}
-                                    onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_reminder_delay_hours: parseFloat(e.target.value) || 0 }))}
-                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                />
-                            </div>
-                        </div>
-
                         {/* Quiet Hours */}
-                        <div className="mt-8 pt-6 border-t border-gray-100">
+                        <div className="mb-10">
                             <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-lg font-bold text-gray-900">SMS Quiet Hours</h4>
-                                <div className="flex items-center gap-3">
-                                    <select
-                                        name="timezone"
-                                        value={formData.timezone}
-                                        onChange={handleChange}
-                                        className="text-xs font-medium bg-blue-100 text-blue-800 rounded-full px-3 py-1 border-none focus:ring-0 cursor-pointer"
-                                    >
-                                        {timezones.map(tz => (
-                                            <option key={tz.id} value={tz.id}>{tz.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
                             </div>
-
 
                             <p className="text-sm text-gray-600 mb-6 leading-relaxed">
                                 Quiet Hours prevent <strong>proactive</strong> messages like Match Invites and Feedback Requests from being sent during sleep times.
@@ -399,6 +389,37 @@ export default function SettingsPage() {
                                         ))}
                                     </select>
                                     <p className="mt-1 text-xs text-gray-500">Messages will resume being sent at this time.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Feedback Delays */}
+                        <div className="pt-6 border-t border-gray-100">
+                            <h4 className="text-lg font-bold text-gray-900 mb-4">Feedback Settings</h4>
+                            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                                Configure when the system collects feedback from players after a match is completed.
+                            </p>
+
+                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Request Delay (Hours)</label>
+                                    <input
+                                        type="number" step="0.5"
+                                        value={feedbackSettings.feedback_delay_hours}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_delay_hours: parseFloat(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Hours to wait after a match ends before sending the initial feedback request.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Reminder Delay (Hours)</label>
+                                    <input
+                                        type="number" step="0.5"
+                                        value={feedbackSettings.feedback_reminder_delay_hours}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_reminder_delay_hours: parseFloat(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Hours to wait after the initial request before sending a reminder if no response is received.</p>
                                 </div>
                             </div>
                         </div>
