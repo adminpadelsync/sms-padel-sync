@@ -112,6 +112,13 @@ const nextConfig: NextConfig = {
             ? 'http://localhost:8001/api/debug-routes'
             : `${apiUrl || ''}/api/debug-routes`,
       },
+      {
+        source: '/api/assessment/:path*',
+        destination:
+          process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8001/api/assessment/:path*'
+            : `${process.env.API_URL || ''}/api/assessment/:path*`,
+      },
     ]
   },
 };
