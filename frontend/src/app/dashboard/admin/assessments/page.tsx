@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User } from 'lucide-react';
+import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User, MessageSquare } from 'lucide-react';
+import { QUESTIONS } from '@/utils/assessment-constants';
 
 interface AssessmentResult {
     id: string;
@@ -176,8 +177,29 @@ export default function AssessmentViewerPage() {
 
                             <div>
                                 <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4 text-indigo-600" />
+                                    Detailed Responses
+                                </h4>
+                                <div className="space-y-4">
+                                    {QUESTIONS.map((q, idx) => {
+                                        const answerValue = selectedResult.responses[q.id];
+                                        const selectedOption = q.options.find(opt => opt.value === answerValue);
+                                        return (
+                                            <div key={q.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                                <div className="text-xs font-bold text-gray-400 uppercase mb-1">Question {idx + 1}: {q.question}</div>
+                                                <div className="text-sm font-semibold text-gray-900">
+                                                    Answer: {answerValue}: {selectedOption?.text || 'N/A'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <Target className="w-4 h-4 text-indigo-600" />
-                                    Responses JSON
+                                    Raw Data (JSON)
                                 </h4>
                                 <pre className="bg-gray-900 text-indigo-300 p-4 rounded-xl text-xs overflow-x-auto">
                                     {JSON.stringify(selectedResult.responses, null, 2)}
