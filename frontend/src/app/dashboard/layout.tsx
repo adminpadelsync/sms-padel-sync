@@ -15,6 +15,7 @@ export default function DashboardLayout({
     const pathname = usePathname()
     const [isCollapsed, setIsCollapsed] = useState(false)
     const [isHovering, setIsHovering] = useState(false)
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
     // Load collapsed state from localStorage on mount
     useEffect(() => {
@@ -93,8 +94,71 @@ export default function DashboardLayout({
     const showExpanded = !isCollapsed || isHovering
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
-            {/* Sidebar */}
+        <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+            {/* Mobile Header */}
+            <div className="md:hidden flex items-center justify-between h-16 px-4 border-b border-gray-200 bg-white sticky top-0 z-50">
+                <span className="text-xl font-bold text-indigo-600">Padel Sync</span>
+                <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+            </div>
+
+            {/* Mobile Sidebar Overlay */}
+            {isMobileMenuOpen && (
+                <div
+                    className="md:hidden fixed inset-0 z-[60] bg-gray-600 bg-opacity-75 transition-opacity"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
+            {/* Mobile Sidebar Drawer */}
+            <div
+                className={`md:hidden fixed inset-y-0 left-0 z-[70] w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+                    }`}
+            >
+                <div className="flex flex-col h-full">
+                    <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
+                        <span className="text-xl font-bold text-indigo-600">Padel Sync</span>
+                        <button
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <nav className="flex-grow mt-5 px-2 space-y-1 overflow-y-auto">
+                        {navigation.map((item) => {
+                            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href))
+                            return (
+                                <Link
+                                    key={item.name}
+                                    href={item.href}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`group flex items-center px-2 py-2.5 text-sm font-medium rounded-md transition-colors ${isActive
+                                        ? 'bg-indigo-50 text-indigo-600'
+                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        }`}
+                                >
+                                    <span className="flex-shrink-0">{item.icon}</span>
+                                    <span className="ml-3">{item.name}</span>
+                                </Link>
+                            )
+                        })}
+                    </nav>
+                    <div className="flex-shrink-0 border-t border-gray-200 p-4">
+                        <LogoutButton />
+                    </div>
+                </div>
+            </div>
+
+            {/* Desktop Sidebar */}
             <div
                 className={`hidden md:flex md:flex-col fixed inset-y-0 z-50 transition-all duration-300 ease-in-out ${showExpanded ? 'md:w-64' : 'md:w-16'
                     }`}

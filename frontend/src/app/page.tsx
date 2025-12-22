@@ -1,9 +1,16 @@
+'use client'
+
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MessageSquare, Calendar, Users, CheckCircle, ArrowRight, Menu, Zap, Smartphone, ShieldCheck } from 'lucide-react';
+import { MessageSquare, Calendar, Users, CheckCircle, ArrowRight, Menu, X, Zap, Smartphone, ShieldCheck } from 'lucide-react';
 import { ContactForm } from '@/components/landing-form';
 
 export default function Home() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground selection:bg-primary/20">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -19,10 +26,32 @@ export default function Home() {
               Login
             </Link>
           </nav>
-          <button className="md:hidden p-2 text-muted-foreground">
-            <Menu className="w-6 h-6" />
+          <button
+            className="md:hidden p-2 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={toggleMenu}
+            aria-label="Toggle menu"
+          >
+            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {isMenuOpen && (
+          <div className="md:hidden border-b bg-background animate-in slide-in-from-top duration-300">
+            <nav className="flex flex-col p-4 space-y-4 text-sm font-medium">
+              <Link href="#features" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => setIsMenuOpen(false)}>Features</Link>
+              <Link href="/assessment" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => setIsMenuOpen(false)}>Skill Assessment</Link>
+              <Link href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => setIsMenuOpen(false)}>How it Works</Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Login
+              </Link>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main className="flex-1">
@@ -35,8 +64,8 @@ export default function Home() {
                   <span className="flex h-2 w-2 rounded-full bg-green-500 mr-2"></span>
                   AI-Powered Padel Management
                 </div>
-                <h1 className="text-4xl font-extrabold tracking-tight lg:text-6xl text-balance leading-tight">
-                  Maximize Court Utilization with <br />
+                <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl text-balance leading-tight">
+                  Maximize Court Utilization with <br className="hidden sm:block" />
                   <span className="text-primary">AI-Driven Matchmaking.</span>
                 </h1>
                 <p className="text-lg text-muted-foreground max-w-[600px] mx-auto lg:mx-0 text-balance leading-relaxed">
