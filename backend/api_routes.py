@@ -847,6 +847,16 @@ async def run_scenario(request: ScenarioRequest = None):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/assessment/results")
+async def get_assessment_results():
+    """Get all player level assessment results."""
+    from database import supabase
+    try:
+        result = supabase.table("assessment_results").select("*").order("created_at", desc=True).execute()
+        return {"results": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/assessment/results")
 async def save_assessment_result(request: AssessmentResultRequest):
     """Save a player's level assessment result."""
