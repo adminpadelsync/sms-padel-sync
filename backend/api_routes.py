@@ -39,6 +39,12 @@ class AddPlayerRequest(BaseModel):
 class SendInvitesRequest(BaseModel):
     player_ids: List[str]
 
+class AssessmentResultRequest(BaseModel):
+    player_name: Optional[str] = None
+    responses: Dict[str, Any]
+    rating: float
+    breakdown: Optional[Dict[str, Any]] = None
+
 @router.get("/clubs")
 async def get_clubs():
     """Get all active clubs."""
@@ -835,4 +841,22 @@ async def run_scenario(request: ScenarioRequest = None):
     except Exception as e:
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/assessment/results")
+async def save_assessment_result(request: AssessmentResultRequest):
+    """Save a player's level assessment result."""
+    from database import supabase
+    try:
+        data = {
+            "player_name": request.player_name,
+            "responses": request.responses,
+            "rating": request.rating,
+            "breakdown": request.breakdown
+        }
+        result = supabase.table("assessment_results").insert(data).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to save assessment result")
+        
+        return {"result": result.data[0], "message": "Assessment result saved successfully"}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

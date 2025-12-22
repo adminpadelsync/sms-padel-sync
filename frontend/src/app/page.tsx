@@ -13,6 +13,7 @@ export default function Home() {
           </div>
           <nav className="hidden md:flex gap-6 items-center text-sm font-medium">
             <Link href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</Link>
+            <Link href="/assessment" className="text-muted-foreground hover:text-foreground transition-colors">Skill Assessment</Link>
             <Link href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">How it Works</Link>
             <Link href="/login" className="px-4 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
               Login
@@ -47,8 +48,8 @@ export default function Home() {
                     Optimize My Club
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
-                  <Link href="#features" className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
-                    See How It Works
+                  <Link href="/assessment" className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
+                    Take Skill Assessment
                   </Link>
                 </div>
                 <div className="pt-4 flex items-center justify-center lg:justify-start gap-4 text-sm text-muted-foreground">
