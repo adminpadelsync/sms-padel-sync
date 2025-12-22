@@ -229,6 +229,7 @@ export function PadelAssessment() {
     const [name, setName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleAnswer = (value: number) => {
         const newAnswers = { ...answers, [QUESTIONS[currentQuestion].id]: value };
@@ -263,6 +264,7 @@ export function PadelAssessment() {
         if (!rating || !breakdown) return;
 
         setIsSubmitting(true);
+        setError(null);
         try {
             const response = await fetch('/api/assessment/results', {
                 method: 'POST',
@@ -279,9 +281,13 @@ export function PadelAssessment() {
 
             if (response.ok) {
                 setIsSaved(true);
+            } else {
+                const data = await response.json().catch(() => ({}));
+                setError(data.detail || 'Failed to save results. Please try again.');
             }
         } catch (error) {
             console.error('Failed to save assessment:', error);
+            setError('Network error. Please check your connection and try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -349,6 +355,11 @@ export function PadelAssessment() {
                                     <Info className="w-4 h-4 text-primary" />
                                     Save your result
                                 </h3>
+                                {error && (
+                                    <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-xl">
+                                        {error}
+                                    </div>
+                                )}
                                 <div className="flex flex-col sm:flex-row gap-3">
                                     <input
                                         type="text"

@@ -226,6 +226,17 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
                 all_player_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
                 
+                # Identify initiator (first player in team 1)
+                initiator_id = updated_match["team_1_players"][0] if updated_match["team_1_players"] else None
+                
+                # Fetch club details for the booking link
+                from logic_utils import get_booking_url
+                club_res = supabase.table("clubs").select("*").eq("club_id", updated_match["club_id"]).execute()
+                club = club_res.data[0] if club_res.data else {}
+                booking_url = get_booking_url(club)
+                club_phone = club.get("main_phone") or club.get("phone_number") or "[Club Phone]"
+                club_name = club.get("name", "the club")
+                
                 # Format the date/time nicely
                 try:
                     dt = datetime.fromisoformat(updated_match['scheduled_time'].replace('Z', '+00:00'))
@@ -247,13 +258,45 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
+                        phone = p_res.data[0]["phone_number"]
+                        
+                        if pid == initiator_id:
+                            # Special message for the initiator
+                            msg_text = msg.MSG_MATCH_CONFIRMED_INITIATOR.format(
+                                club_name=club_name,
+                                time=formatted_time,
+                                booking_url=booking_url,
+                                club_phone=club_phone
+                            )
+                        else:
+                            # Standard message for others
+                            msg_text = msg.MSG_MATCH_CONFIRMED.format(
+                                club_name=club_name,
+                                time=formatted_time
+                            )
+                        
                         confirmation_msg = (
-                            f"🎾 {get_club_name()}: MATCH CONFIRMED!\n\n"
+                            f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
                             f"📅 {formatted_time}\n\n"
                             f"👥 Players:\n{players_text}\n\n"
-                            f"See you on the court! 🏸"
+                            f"{msg_text if pid == initiator_id else 'See you on the court! 🏸'}"
                         )
-                        send_sms(p_res.data[0]["phone_number"], confirmation_msg)
+                        
+                        # If it's the initiator, we use the custom message entirely if possible, 
+                        # but the existing code builds a structured message. 
+                        # Let's override the last part.
+                        
+                        if pid == initiator_id:
+                             # Full custom message for initiator to include booking link and phone
+                             initiator_confirmation = (
+                                f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
+                                f"📅 {formatted_time}\n\n"
+                                f"👥 Players:\n{players_text}\n\n"
+                                f"Organizer: {msg_text}"
+                             )
+                             send_sms(phone, initiator_confirmation)
+                        else:
+                            send_sms(phone, confirmation_msg)
         return
 
     elif match["status"] == "confirmed":

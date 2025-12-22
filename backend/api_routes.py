@@ -65,6 +65,7 @@ class CreateClubRequest(BaseModel):
     poc_phone: Optional[str] = None
     main_phone: Optional[str] = None
     booking_system: Optional[str] = None
+    booking_slug: Optional[str] = None
 
 class ClubUpdate(BaseModel):
     name: Optional[str] = None
@@ -74,6 +75,7 @@ class ClubUpdate(BaseModel):
     poc_phone: Optional[str] = None
     main_phone: Optional[str] = None
     booking_system: Optional[str] = None
+    booking_slug: Optional[str] = None
     timezone: Optional[str] = None
 
 
@@ -91,6 +93,7 @@ async def create_club(request: CreateClubRequest):
             "poc_phone": request.poc_phone,
             "main_phone": request.main_phone,
             "booking_system": request.booking_system,
+            "booking_slug": request.booking_slug,
             "active": True
         }
         
@@ -153,6 +156,8 @@ async def update_club(club_id: str, updates: ClubUpdate):
             update_data["main_phone"] = updates.main_phone
         if updates.booking_system is not None:
             update_data["booking_system"] = updates.booking_system
+        if updates.booking_slug is not None:
+            update_data["booking_slug"] = updates.booking_slug
         if updates.timezone is not None:
             update_data["timezone"] = updates.timezone
 
@@ -846,6 +851,8 @@ async def run_scenario(request: ScenarioRequest = None):
 async def save_assessment_result(request: AssessmentResultRequest):
     """Save a player's level assessment result."""
     from database import supabase
+    import traceback
+    print(f"DEBUG: Received assessment result for {request.player_name}")
     try:
         data = {
             "player_name": request.player_name,
@@ -853,10 +860,16 @@ async def save_assessment_result(request: AssessmentResultRequest):
             "rating": request.rating,
             "breakdown": request.breakdown
         }
+        print(f"DEBUG: Inserting data into assessment_results: {data}")
         result = supabase.table("assessment_results").insert(data).execute()
+        
         if not result.data:
+            print("DEBUG: Failed to save assessment result - no data returned")
             raise HTTPException(status_code=500, detail="Failed to save assessment result")
         
+        print(f"DEBUG: Successfully saved assessment result: {result.data[0]['id']}")
         return {"result": result.data[0], "message": "Assessment result saved successfully"}
     except Exception as e:
+        print(f"DEBUG: Error saving assessment result: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

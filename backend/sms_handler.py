@@ -33,26 +33,37 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     club_id = None
     club_name = "the club"  # Default fallback
     if to_number:
-        club_res = supabase.table("clubs").select("club_id, name").eq("phone_number", to_number).execute()
+        club_res = supabase.table("clubs").select("club_id, name, booking_system").eq("phone_number", to_number).execute()
         if club_res.data:
             club_id = club_res.data[0]["club_id"]
             club_name = club_res.data[0]["name"]
+            booking_system = club_res.data[0].get("booking_system") or "Playtomic"
         else:
             # Unknown Twilio number - try first club as fallback
-            fallback = supabase.table("clubs").select("club_id, name").limit(1).execute()
+            fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
             if fallback.data:
                 club_id = fallback.data[0]["club_id"]
                 club_name = fallback.data[0].get("name", "the club")
+                booking_system = fallback.data[0].get("booking_system") or "Playtomic"
                 print(f"[WARNING] Unknown Twilio number {to_number}, using fallback club")
             else:
                 send_sms(from_number, "Sorry, this number is not configured for any club.")
                 return
     else:
         # No to_number provided (e.g., old test code) - use first club
-        fallback = supabase.table("clubs").select("club_id, name").limit(1).execute()
+        fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
         if fallback.data:
             club_id = fallback.data[0]["club_id"]
             club_name = fallback.data[0].get("name", "the club")
+            booking_system = fallback.data[0].get("booking_system") or "Playtomic"
+    
+    # Map booking system to readable name
+    booking_system_display = {
+        "playtomic": "Playtomic",
+        "playbypoint": "Play by Point",
+        "matchi": "Matchi",
+        "setteo": "Setteo"
+    }.get(booking_system.lower(), booking_system)
 
     # Set club name in context so all handlers can access it
     set_club_name(club_name)
@@ -451,7 +462,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
              return
         
         # Start onboarding - store club_id in state for later
-        send_sms(from_number, msg.MSG_WELCOME_NEW.format(club_name=club_name))
+        send_sms(from_number, msg.MSG_WELCOME_NEW.format(club_name=club_name, booking_system=booking_system_display))
         set_user_state(from_number, msg.STATE_WAITING_NAME, {"club_id": club_id, "club_name": club_name})
         return
 

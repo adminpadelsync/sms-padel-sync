@@ -14,6 +14,7 @@ interface Club {
     poc_phone?: string
     main_phone?: string
     booking_system?: string
+    booking_slug?: string
     timezone?: string
 
     settings: {
@@ -38,6 +39,7 @@ export default function SettingsPage() {
         poc_phone: '',
         main_phone: '',
         booking_system: 'playtomic',
+        booking_slug: '',
         twilio_phone_number: '',
         timezone: 'America/New_York'
     })
@@ -112,6 +114,7 @@ export default function SettingsPage() {
                         poc_phone: clubData.poc_phone || '',
                         main_phone: clubData.main_phone || '',
                         booking_system: clubData.booking_system || 'playtomic',
+                        booking_slug: clubData.booking_slug || '',
                         twilio_phone_number: clubData.phone_number || '',
                         timezone: clubData.timezone || 'America/New_York',
                     })
@@ -176,6 +179,7 @@ export default function SettingsPage() {
                     poc_phone: formData.poc_phone || null,
                     main_phone: formData.main_phone || null,
                     booking_system: formData.booking_system || null,
+                    booking_slug: formData.booking_slug || null,
                     timezone: formData.timezone
                 })
 
@@ -309,6 +313,19 @@ export default function SettingsPage() {
                                         <option key={sys.id} value={sys.id}>{sys.name}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div className="sm:col-span-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Club ID (for booking URL)</label>
+                                <input
+                                    type="text"
+                                    name="booking_slug"
+                                    value={formData.booking_slug}
+                                    onChange={handleChange}
+                                    placeholder="e.g. replay"
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
+                                />
+                                <p className="mt-1 text-xs text-gray-500">Hint: Go to your booking page and look at the URL (e.g. replay.playbypoint.com)</p>
                             </div>
 
                             <div className="sm:col-span-2">

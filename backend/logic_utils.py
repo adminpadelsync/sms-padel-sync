@@ -60,3 +60,21 @@ def is_quiet_hours(club_id: str) -> bool:
             
     return False
 
+
+def get_booking_url(club: dict) -> str:
+    """Generate a booking URL based on the club's booking system and slug."""
+    system = (club.get("booking_system") or "").lower()
+    slug = club.get("booking_slug")
+    
+    if system == "playbypoint" and slug:
+        return f"https://{slug}.playbypoint.com/book/{slug}"
+    elif system == "playtomic":
+        return "https://playtomic.io"
+    elif system == "matchi":
+        return "https://www.matchi.se"
+    
+    # Generic fallbacks
+    if system == "playbypoint":
+        return "https://playbypoint.com"
+    
+    return "the booking portal"
