@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User, MessageSquare, Edit2, Check, X } from 'lucide-react';
-import { QUESTIONS } from '@/utils/assessment-constants';
+import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User, MessageSquare, Edit2, Check, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { QUESTIONS, calculateRating, getRatingDescription } from '@/utils/assessment-constants';
 
 interface AssessmentResult {
     id: string;
@@ -25,6 +25,17 @@ export default function AssessmentViewerPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
+
+    // Simulator state
+    const [tempResponses, setTempResponses] = useState<Record<string, number>>({});
+    const [tempBreakdown, setTempBreakdown] = useState<any>(null);
+
+    useEffect(() => {
+        if (selectedResult) {
+            setTempResponses(selectedResult.responses);
+            setTempBreakdown(selectedResult.breakdown);
+        }
+    }, [selectedResult]);
 
     useEffect(() => {
         fetchResults();
@@ -59,6 +70,25 @@ export default function AssessmentViewerPage() {
             console.error('Failed to update name:', error);
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    const handleAdjustAnswer = (questionId: string, delta: number) => {
+        const q = QUESTIONS.find(q => q.id === questionId);
+        if (!q) return;
+
+        const currentValue = tempResponses[questionId] || 0;
+        const newValue = Math.max(0, Math.min(4, currentValue + delta));
+
+        const newResponses = { ...tempResponses, [questionId]: newValue };
+        setTempResponses(newResponses);
+        setTempBreakdown(calculateRating(newResponses));
+    };
+
+    const handleResetSimulator = () => {
+        if (selectedResult) {
+            setTempResponses(selectedResult.responses);
+            setTempBreakdown(selectedResult.breakdown);
         }
     };
 
@@ -182,16 +212,32 @@ export default function AssessmentViewerPage() {
             {selectedResult && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
                     <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8">
-                        <div className="p-6 border-b flex justify-between items-center">
+                        <div className="p-6 border-b flex justify-between items-center group">
                             <h3 className="text-xl font-bold flex items-center gap-2">
                                 <Trophy className="w-5 h-5 text-indigo-600" />
                                 Assessment Details
+                                {JSON.stringify(tempResponses) !== JSON.stringify(selectedResult.responses) && (
+                                    <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
+                                        Simulated
+                                    </span>
+                                )}
                             </h3>
-                            <button onClick={() => setSelectedResult(null)} className="text-gray-400 hover:text-gray-600">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-4">
+                                {JSON.stringify(tempResponses) !== JSON.stringify(selectedResult.responses) && (
+                                    <button
+                                        onClick={handleResetSimulator}
+                                        className="text-xs flex items-center gap-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                                    >
+                                        <RotateCcw className="w-3 h-3" />
+                                        Reset
+                                    </button>
+                                )}
+                                <button onClick={() => setSelectedResult(null)} className="text-gray-400 hover:text-gray-600">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto">
@@ -209,26 +255,38 @@ export default function AssessmentViewerPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-indigo-50 rounded-2xl p-6 grid grid-cols-3 gap-6 text-center border border-indigo-100">
+                            <div className={`rounded-2xl p-6 grid grid-cols-3 gap-6 text-center border transition-all duration-300 ${JSON.stringify(tempResponses) !== JSON.stringify(selectedResult.responses)
+                                    ? 'bg-amber-50 border-amber-100 shadow-inner'
+                                    : 'bg-indigo-50 border-indigo-100'
+                                }`}>
                                 <div>
-                                    <div className="text-3xl font-black text-indigo-600">{selectedResult.rating.toFixed(2)}</div>
-                                    <div className="text-xs font-bold text- indigo-400 uppercase tracking-widest mt-1">Rating</div>
+                                    <div className={`text-3xl font-black transition-colors ${tempBreakdown?.rating !== selectedResult.rating ? 'text-amber-600' : 'text-indigo-600'
+                                        }`}>
+                                        {tempBreakdown?.rating.toFixed(2)}
+                                    </div>
+                                    <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mt-1">Rating</div>
                                 </div>
                                 <div>
-                                    <div className="text-3xl font-black text-indigo-600">{selectedResult.breakdown?.percentage}%</div>
+                                    <div className={`text-3xl font-black transition-colors ${tempBreakdown?.percentage !== selectedResult.breakdown?.percentage ? 'text-amber-600' : 'text-indigo-600'
+                                        }`}>
+                                        {tempBreakdown?.percentage}%
+                                    </div>
                                     <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mt-1">Skill Score</div>
                                 </div>
                                 <div>
-                                    <div className="text-3xl font-black text-indigo-600">{selectedResult.breakdown?.ceiling.toFixed(2)}</div>
+                                    <div className={`text-3xl font-black transition-colors ${tempBreakdown?.ceiling !== selectedResult.breakdown?.ceiling ? 'text-amber-600' : 'text-indigo-600'
+                                        }`}>
+                                        {tempBreakdown?.ceiling.toFixed(2)}
+                                    </div>
                                     <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mt-1">Exp. Ceiling</div>
                                 </div>
                             </div>
 
-                            {selectedResult.breakdown?.wasCapped && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-800">
+                            {tempBreakdown?.wasCapped && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-800 animate-in fade-in duration-300">
                                     <Info className="w-5 h-5 flex-shrink-0" />
                                     <div className="text-sm">
-                                        <span className="font-bold">Capped:</span> Raw rating was {selectedResult.breakdown.rawRating.toFixed(2)}, but limited competition experience reduced it to {selectedResult.breakdown.ceiling.toFixed(2)}.
+                                        <span className="font-bold">Capped:</span> Raw rating was {tempBreakdown.rawRating.toFixed(2)}, but limited competition experience reduced it to {tempBreakdown.ceiling.toFixed(2)}.
                                     </div>
                                 </div>
                             )}
@@ -240,17 +298,48 @@ export default function AssessmentViewerPage() {
                                 </h4>
                                 <div className="space-y-4">
                                     {QUESTIONS.map((q, idx) => {
-                                        const answerValue = selectedResult.responses[q.id];
+                                        const answerValue = tempResponses[q.id];
                                         const selectedOption = q.options.find(opt => opt.value === answerValue);
+                                        const originalValue = selectedResult.responses[q.id];
                                         const contribution = (answerValue || 0) * q.weight;
+
                                         return (
-                                            <div key={q.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100 relative group">
-                                                <div className="absolute top-4 right-4 bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                            <div key={q.id} className={`rounded-xl p-4 border transition-colors ${answerValue !== originalValue
+                                                    ? 'bg-amber-50 border-amber-200 shadow-sm'
+                                                    : 'bg-gray-50 border-gray-100'
+                                                } relative group`}>
+                                                <div className={`absolute top-4 right-4 text-[10px] font-black px-2 py-0.5 rounded-full ${answerValue !== originalValue
+                                                        ? 'bg-amber-100 text-amber-700'
+                                                        : 'bg-indigo-100 text-indigo-700'
+                                                    }`}>
                                                     +{contribution.toFixed(1)} pts
                                                 </div>
-                                                <div className="text-xs font-bold text-gray-400 uppercase mb-1">Question {idx + 1}: {q.question}</div>
-                                                <div className="text-sm font-semibold text-gray-900">
-                                                    Answer: {answerValue}: {selectedOption?.text || 'N/A'}
+                                                <div className="text-xs font-bold text-gray-400 uppercase mb-3 flex justify-between items-center">
+                                                    <span>Question {idx + 1}: {q.question}</span>
+                                                </div>
+
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div className="text-sm font-semibold text-gray-900">
+                                                        Answer: {answerValue}: {selectedOption?.text || 'N/A'}
+                                                    </div>
+
+                                                    {/* Rocker Switch */}
+                                                    <div className="flex flex-col border border-gray-200 rounded-lg overflow-hidden shrink-0">
+                                                        <button
+                                                            onClick={() => handleAdjustAnswer(q.id, 1)}
+                                                            disabled={answerValue >= 4}
+                                                            className="p-1 hover:bg-white text-gray-400 hover:text-indigo-600 disabled:opacity-30 transition-colors border-b border-gray-100"
+                                                        >
+                                                            <ChevronUp className="w-3 h-3" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAdjustAnswer(q.id, -1)}
+                                                            disabled={answerValue <= 0}
+                                                            className="p-1 hover:bg-white text-gray-400 hover:text-indigo-600 disabled:opacity-30 transition-colors"
+                                                        >
+                                                            <ChevronDown className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -264,7 +353,7 @@ export default function AssessmentViewerPage() {
                                     Raw Data (JSON)
                                 </h4>
                                 <pre className="bg-gray-900 text-indigo-300 p-4 rounded-xl text-xs overflow-x-auto">
-                                    {JSON.stringify(selectedResult.responses, null, 2)}
+                                    {JSON.stringify(tempResponses, null, 2)}
                                 </pre>
                             </div>
                         </div>

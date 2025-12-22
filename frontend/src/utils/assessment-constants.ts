@@ -156,3 +156,60 @@ export const QUESTIONS = [
         ],
     },
 ];
+export const calculateRating = (answers: Record<string, number>) => {
+    let weightedTotal = 0;
+    let maxWeightedTotal = 0;
+
+    QUESTIONS.forEach((q) => {
+        const answer = answers[q.id];
+        if (answer !== undefined) {
+            weightedTotal += answer * q.weight;
+        }
+        maxWeightedTotal += 4 * q.weight;
+    });
+
+    const percentage = weightedTotal / maxWeightedTotal;
+
+    let rawRating;
+    if (percentage < 0.5) {
+        rawRating = 2.0 + (percentage / 0.5) * 1.5;
+    } else if (percentage < 0.75) {
+        rawRating = 3.5 + ((percentage - 0.5) / 0.25) * 0.75;
+    } else {
+        rawRating = 4.25 + ((percentage - 0.75) / 0.25) * 1.75;
+    }
+
+    const competitionAnswer = answers['competition'];
+    const competitionQuestion = QUESTIONS.find(q => q.id === 'competition');
+    // @ts-ignore
+    const ceiling = competitionQuestion?.options[competitionAnswer]?.ceiling || 6.0;
+
+    const cappedRating = Math.min(rawRating, ceiling);
+    const roundedRating = Math.round(cappedRating * 4) / 4;
+    const finalRating = Math.min(6.0, Math.max(2.0, roundedRating));
+
+    return {
+        rating: finalRating,
+        rawRating: rawRating,
+        ceiling: ceiling,
+        wasCapped: rawRating > ceiling,
+        percentage: Math.round(percentage * 100),
+    };
+};
+
+export const getRatingDescription = (rating: number) => {
+    if (rating < 2.5) return { level: 'Beginner', desc: "You're just getting started with padel. Focus on fundamentals: grip, basic strokes, and understanding the rules." };
+    if (rating < 3.0) return { level: 'Advanced Beginner', desc: 'You understand the basics and can sustain rallies. Work on consistency and start learning the walls.' };
+    if (rating < 3.5) return { level: 'Intermediate', desc: "You're comfortable in social games with developing wall play. Keep working on the bandeja and court positioning." };
+    if (rating < 4.0) return { level: 'Solid Intermediate', desc: 'You have a well-rounded game and compete well in club play. Focus on point construction and overhead shots.' };
+    if (rating < 4.5) return { level: 'Advanced Intermediate', desc: "You're a strong club player who can handle most situations. Refine your tactical game and specialty shots." };
+    if (rating < 5.0) return { level: 'Advanced', desc: "You're among the better players at most clubs. You have weapons and few weaknesses. Tournament-ready." };
+    if (rating < 5.5) return { level: 'Strong Advanced', desc: 'You compete and place in tournaments. Your game is well-rounded with tactical depth.' };
+    return { level: 'Expert', desc: "You're at or near the top level of amateur play. You should be competing in high-level tournaments." };
+};
+
+export const getMatchRange = (rating: number) => {
+    const low = Math.max(2.0, rating - 0.5);
+    const high = Math.min(6.0, rating + 0.5);
+    return `${low.toFixed(2)} - ${high.toFixed(2)}`;
+};
