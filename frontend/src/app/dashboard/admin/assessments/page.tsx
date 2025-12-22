@@ -112,7 +112,6 @@ export default function AssessmentViewerPage() {
                                             </button>
                                         </td>
                                     </tr>
-                                line breaks in markdown
                                 ))}
                             </tbody>
                         </table>
