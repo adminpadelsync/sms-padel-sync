@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User, MessageSquare, Edit2, Check, X } from 'lucide-react';
 import { QUESTIONS } from '@/utils/assessment-constants';
 
 interface AssessmentResult {
@@ -22,6 +22,9 @@ export default function AssessmentViewerPage() {
     const [results, setResults] = useState<AssessmentResult[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedResult, setSelectedResult] = useState<AssessmentResult | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+    const [isUpdating, setIsUpdating] = useState(false);
 
     useEffect(() => {
         fetchResults();
@@ -37,6 +40,25 @@ export default function AssessmentViewerPage() {
             console.error('Failed to fetch assessment results:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleUpdateName = async (id: string) => {
+        setIsUpdating(true);
+        try {
+            const res = await fetch(`/api/assessment/results/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_name: editName }),
+            });
+            if (res.ok) {
+                setResults(results.map(r => r.id === id ? { ...r, player_name: editName } : r));
+                setEditingId(null);
+            }
+        } catch (error) {
+            console.error('Failed to update name:', error);
+        } finally {
+            setIsUpdating(false);
         }
     };
 
@@ -87,7 +109,43 @@ export default function AssessmentViewerPage() {
                                 {results.map((result) => (
                                     <tr key={result.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="font-semibold text-gray-900">{result.player_name || 'Anonymous'}</div>
+                                            {editingId === result.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={editName}
+                                                        onChange={(e) => setEditName(e.target.value)}
+                                                        className="px-2 py-1 text-sm border border-indigo-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none w-40"
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        onClick={() => handleUpdateName(result.id)}
+                                                        disabled={isUpdating}
+                                                        className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                                    >
+                                                        <Check className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingId(null)}
+                                                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 group">
+                                                    <div className="font-semibold text-gray-900">{result.player_name || 'Anonymous'}</div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingId(result.id);
+                                                            setEditName(result.player_name || '');
+                                                        }}
+                                                        className="p-1 text-gray-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                                                    >
+                                                        <Edit2 className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            )}
                                             <div className="text-xs text-gray-500">{result.id.slice(0, 8)}...</div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
@@ -184,8 +242,12 @@ export default function AssessmentViewerPage() {
                                     {QUESTIONS.map((q, idx) => {
                                         const answerValue = selectedResult.responses[q.id];
                                         const selectedOption = q.options.find(opt => opt.value === answerValue);
+                                        const contribution = (answerValue || 0) * q.weight;
                                         return (
-                                            <div key={q.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                            <div key={q.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100 relative group">
+                                                <div className="absolute top-4 right-4 bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                    +{contribution.toFixed(1)} pts
+                                                </div>
                                                 <div className="text-xs font-bold text-gray-400 uppercase mb-1">Question {idx + 1}: {q.question}</div>
                                                 <div className="text-sm font-semibold text-gray-900">
                                                     Answer: {answerValue}: {selectedOption?.text || 'N/A'}

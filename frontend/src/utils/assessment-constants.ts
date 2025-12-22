@@ -60,7 +60,7 @@ export const QUESTIONS = [
             { text: 'I avoid the net or struggle with volleys', value: 0 },
             { text: 'I can volley but often pop it up or lose control', value: 1 },
             { text: "I'm solid on routine volleys, working on placement", value: 2 },
-            { text: 'I control the net well and can place volleys deep', value: 3 },
+            { text: 'I control the net well and consistently place volleys deep within a foot of the wall', value: 3 },
             { text: 'I dominate at the net - volleys, reflexes, and putaways', value: 4 },
         ],
     },
@@ -150,7 +150,7 @@ export const QUESTIONS = [
         options: [
             { text: 'I only play socially with friends', value: 0, ceiling: 4.0 },
             { text: 'I play club open play / round robins', value: 1, ceiling: 4.25 },
-            { text: "I've played in a few local tournaments", value: 2, ceiling: 4.75 },
+            { text: "I've played in a few local organized tournaments", value: 2, ceiling: 4.75 },
             { text: 'I compete regularly in local/regional tournaments', value: 3, ceiling: 5.5 },
             { text: 'I compete at a high level and usually place in tournaments', value: 4, ceiling: 6.0 },
         ],

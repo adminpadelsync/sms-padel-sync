@@ -45,6 +45,9 @@ class AssessmentResultRequest(BaseModel):
     rating: float
     breakdown: Optional[Dict[str, Any]] = None
 
+class AssessmentUpdate(BaseModel):
+    player_name: str
+
 @router.get("/clubs")
 async def get_clubs():
     """Get all active clubs."""
@@ -847,6 +850,22 @@ async def run_scenario(request: ScenarioRequest = None):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+@router.put("/assessment/results/{result_id}")
+async def update_assessment_result(result_id: str, request: AssessmentUpdate):
+    """Update an assessment result (e.g., player name)."""
+    from database import supabase
+    try:
+        result = supabase.table("assessment_results").update({
+            "player_name": request.player_name
+        }).eq("id", result_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Assessment result not found")
+        
+        return {"result": result.data[0], "message": "Assessment result updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/assessment/results")
 async def get_assessment_results():
     """Get all player level assessment results."""
