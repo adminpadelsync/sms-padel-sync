@@ -12,10 +12,19 @@ export default async function MatchesPage() {
         redirect('/not-setup')
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        redirect('/login')
+    }
+
     // Fetch ALL Matches (filtering will happen client-side)
     const { data: matches } = await supabase
         .from('matches')
-        .select('*, clubs(name)')
+        .select(`
+            *,
+            clubs(name),
+            originator:originator_id(name, phone_number, declared_skill_level)
+        `)
         .order('scheduled_time', { ascending: true })
 
     // Fetch clubs for superusers
@@ -36,14 +45,14 @@ export default async function MatchesPage() {
         m.team_2_players?.forEach((id: string) => playerIds.add(id))
     })
 
-    let playerMap = new Map<string, string>()
+    let playerMap = new Map<string, any>()
     if (playerIds.size > 0) {
         const { data: players } = await supabase
             .from('players')
-            .select('player_id, name')
+            .select('player_id, name, phone_number, declared_skill_level')
             .in('player_id', Array.from(playerIds))
 
-        players?.forEach(p => playerMap.set(p.player_id, p.name))
+        players?.forEach(p => playerMap.set(p.player_id, p))
     }
 
     // 3. Check for Feedback Requests (to determine "Sent" status)
@@ -61,13 +70,24 @@ export default async function MatchesPage() {
 
     // 4. Enrich Matches
     const enrichedMatches = matches?.map(m => {
-        // Get player names
+        // Get player details
+        const details1: any[] = []
+        const details2: any[] = []
         const names: string[] = []
+
         m.team_1_players?.forEach((id: string) => {
-            if (playerMap.has(id)) names.push(playerMap.get(id)!)
+            if (playerMap.has(id)) {
+                const p = playerMap.get(id)
+                details1.push(p)
+                names.push(p.name)
+            }
         })
         m.team_2_players?.forEach((id: string) => {
-            if (playerMap.has(id)) names.push(playerMap.get(id)!)
+            if (playerMap.has(id)) {
+                const p = playerMap.get(id)
+                details2.push(p)
+                names.push(p.name)
+            }
         })
 
         // Determine Feedback Status
@@ -85,6 +105,8 @@ export default async function MatchesPage() {
         return {
             ...m,
             player_names: names,
+            team_1_details: details1,
+            team_2_details: details2,
             feedback_status: fStatus
         }
     }) || []
@@ -95,6 +117,7 @@ export default async function MatchesPage() {
             isSuperuser={userClub.is_superuser}
             userClubId={userClub.club_id}
             clubs={clubs}
+            userId={user.id}
         />
     )
 }

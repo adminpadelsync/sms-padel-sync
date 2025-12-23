@@ -108,7 +108,11 @@ CREATE TABLE IF NOT EXISTS matches (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   status TEXT CHECK (status IN ('pending', 'voting', 'confirmed', 'completed', 'cancelled')),
   voting_options JSONB,
-  voting_deadline TIMESTAMP WITH TIME ZONE
+  voting_deadline TIMESTAMP WITH TIME ZONE,
+  court_booked BOOLEAN DEFAULT false,
+  originator_id UUID REFERENCES players(player_id),
+  booked_at TIMESTAMP WITH TIME ZONE,
+  booked_by UUID REFERENCES users(user_id)
 );
 
 -- Match Invites

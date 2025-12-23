@@ -427,7 +427,8 @@ def _create_match(
             "level_range_min": level_min if not skip_filters else None,
             "level_range_max": level_max if not skip_filters else None,
             "gender_preference": gender_preference if not skip_filters else None,
-            "target_group_id": target_group_id
+            "target_group_id": target_group_id,
+            "originator_id": player["player_id"]
         }
         
         supabase.table("matches").insert(match_data).execute()

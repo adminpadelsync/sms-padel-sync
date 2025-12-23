@@ -95,7 +95,8 @@ def initiate_match_outreach(
     club_id: str,
     player_ids: List[str],
     scheduled_time: str,
-    initial_player_ids: List[str] = []
+    initial_player_ids: List[str] = [],
+    originator_id: Optional[str] = None
 ) -> dict:
     """
     Create a match and send invites to selected players.
@@ -117,6 +118,7 @@ def initiate_match_outreach(
         "status": "pending",
         "team_1_players": initial_player_ids,  # Start with committed players
         "team_2_players": [],
+        "originator_id": originator_id or (initial_player_ids[0] if initial_player_ids else None),
         "created_at": datetime.now().isoformat()
     }
     
@@ -246,6 +248,12 @@ def get_match_details(match_id: str) -> dict:
     # Add player details to match
     match['team_1_player_details'] = team_1_players
     match['team_2_player_details'] = team_2_players
+    
+    # Get originator details if exists
+    if match.get('originator_id'):
+        orig_res = supabase.table("players").select("*").eq("player_id", match['originator_id']).execute()
+        if orig_res.data:
+            match['originator_details'] = orig_res.data[0]
     
     return match
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
+from datetime import datetime
 from database import supabase
 from match_organizer import (
     get_player_recommendations, 
@@ -44,6 +45,9 @@ class AssessmentResultRequest(BaseModel):
     responses: Dict[str, Any]
     rating: float
     breakdown: Optional[Dict[str, Any]] = None
+
+class BookingMarkRequest(BaseModel):
+    user_id: str
 
 class AssessmentUpdate(BaseModel):
     player_name: str
@@ -252,6 +256,90 @@ async def create_outreach(request: OutreachRequest):
                 "traceback": traceback.format_exc()
             }
         )
+
+@router.get("/clubs/{club_id}/matches/booking-status")
+async def get_club_booking_status(club_id: str):
+    """
+    Get future matches for a club, highlighting those that need booking.
+    Sorted by court_booked (unbooked first) and scheduled_time.
+    """
+    from database import supabase
+    try:
+        # 1. Fetch future confirmed or pending matches
+        # Note: we want confirmed matches primarily, but maybe also pending if the club wants to see them.
+        # User said: "matches (that are in the future) listing the matches without courts booked at the top"
+        # We'll filter for status in ('confirmed', 'pending')
+        
+        now = datetime.now().isoformat()
+        
+        query = supabase.table("matches").select(
+            "*, originator:originator_id(name, phone_number, declared_skill_level)"
+        ).eq("club_id", club_id)\
+         .gte("scheduled_time", now)\
+         .in_("status", ["confirmed", "pending"])\
+         .order("court_booked", desc=False)\
+         .order("scheduled_time", desc=False)
+        
+        result = query.execute()
+        matches = result.data or []
+        
+        # 2. Enrich with player details (name, level, phone)
+        # We need to fetch all players involved in these matches
+        player_ids = set()
+        for m in matches:
+            if m.get("team_1_players"):
+                player_ids.update(m["team_1_players"])
+            if m.get("team_2_players"):
+                player_ids.update(m["team_2_players"])
+        
+        player_map = {}
+        if player_ids:
+            players_res = supabase.table("players").select(
+                "player_id, name, phone_number, declared_skill_level"
+            ).in_("player_id", list(player_ids)).execute()
+            player_map = {p["player_id"]: p for p in players_res.data}
+        
+        # Add enriched player details to each match
+        for m in matches:
+            m["team_1_details"] = [player_map.get(pid) for pid in (m.get("team_1_players") or []) if pid in player_map]
+            m["team_2_details"] = [player_map.get(pid) for pid in (m.get("team_2_players") or []) if pid in player_map]
+            
+        return {"matches": matches}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/matches/{match_id}/mark-booked")
+async def mark_match_booked(match_id: str, request: BookingMarkRequest):
+    """Mark a match as court-booked."""
+    from database import supabase
+    import uuid
+    try:
+        now = datetime.now().isoformat()
+        update_data = {
+            "court_booked": True,
+            "booked_at": now
+        }
+        
+        # Only set booked_by if it's a valid UUID
+        try:
+            uuid.UUID(request.user_id)
+            update_data["booked_by"] = request.user_id
+        except (ValueError, TypeError):
+            pass
+        
+        result = supabase.table("matches").update(update_data).eq("match_id", match_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Match not found")
+            
+        return {"match": result.data[0], "message": "Match marked as booked"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = str(e)
+        if "column" in error_msg.lower() and "not find" in error_msg.lower():
+            error_msg = "Database column missing. Please run the SQL migration 016_add_match_booking_fields.sql in Supabase."
+        raise HTTPException(status_code=500, detail=error_msg)
 
 # IMPORTANT: This route MUST come before /matches/{match_id} or "confirmed" gets treated as a match_id
 @router.get("/matches/confirmed")
