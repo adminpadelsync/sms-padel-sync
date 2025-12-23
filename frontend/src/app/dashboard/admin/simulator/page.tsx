@@ -224,6 +224,30 @@ export default function SMSSimulatorPage() {
         setConversations(newConversations)
     }
 
+    const handleSimulateNewUser = () => {
+        if (selectedPlayers.length >= 6) {
+            alert('Maximum 6 players allowed in simulator')
+            return
+        }
+
+        // Generate a random 10-digit number
+        const randomDigits = Math.floor(Math.random() * 9000000000) + 1000000000
+        const randomPhone = `+1${randomDigits}`
+
+        const newPlayer: Player = {
+            player_id: `new_${Date.now()}`,
+            name: 'New Player (Testing)',
+            phone_number: randomPhone,
+            declared_skill_level: 0
+        }
+
+        setSelectedPlayers([...selectedPlayers, newPlayer])
+        setConversations({
+            ...conversations,
+            [newPlayer.player_id]: []
+        })
+    }
+
     const handleSendMatchInvite = async () => {
         if (selectedPlayers.length < 4) {
             alert('Please select at least 4 players')
@@ -772,6 +796,14 @@ Example: MAYBE 1`
                                 ({selectedPlayers.length}/6 selected)
                             </span>
                         </div>
+
+                        <button
+                            onClick={handleSimulateNewUser}
+                            disabled={selectedPlayers.length >= 6}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
+                        >
+                            ➕ Simulate New User
+                        </button>
 
                         <button
                             onClick={handleSendMatchInvite}
