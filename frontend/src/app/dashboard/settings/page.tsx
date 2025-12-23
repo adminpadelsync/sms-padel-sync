@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { QrCode } from 'lucide-react'
+import { QrCode, ExternalLink } from 'lucide-react'
 
 interface Club {
     club_id: string
@@ -217,6 +217,25 @@ export default function SettingsPage() {
         setAddressFields(prev => ({ ...prev, [name]: value }))
     }
 
+    const getBookingUrl = () => {
+        const system = formData.booking_system.toLowerCase()
+        const slug = formData.booking_slug
+
+        if (system === 'playbypoint' && slug) {
+            return `https://${slug}.playbypoint.com/book/${slug}`
+        } else if (system === 'playtomic') {
+            return 'https://playtomic.io'
+        } else if (system === 'matchi') {
+            return 'https://www.matchi.se'
+        }
+
+        if (system === 'playbypoint') {
+            return 'https://playbypoint.com'
+        }
+
+        return null
+    }
+
     if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading settings...</div>
     if (!club) return <div className="min-h-screen flex items-center justify-center text-gray-500">No club found</div>
 
@@ -316,7 +335,20 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="sm:col-span-1">
-                                <label className="block text-base font-bold text-gray-800 mb-2">Club ID (for booking URL)</label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-base font-bold text-gray-800">Club ID (for booking URL)</label>
+                                    {getBookingUrl() && (
+                                        <a
+                                            href={getBookingUrl()!}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-sm font-medium text-indigo-600 hover:text-indigo-500 flex items-center"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                                            Test Link
+                                        </a>
+                                    )}
+                                </div>
                                 <input
                                     type="text"
                                     name="booking_slug"
