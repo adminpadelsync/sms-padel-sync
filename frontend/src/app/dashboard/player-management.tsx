@@ -50,11 +50,13 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
         setIsSubmitting(true)
 
         try {
+            const skillLevel = parseFloat(formData.declared_skill_level.toString()) || 0
+
             if (mode === 'edit' && player) {
                 await updatePlayer(player.player_id, {
                     name: formData.name,
                     phone_number: formData.phone_number,
-                    declared_skill_level: formData.declared_skill_level,
+                    declared_skill_level: skillLevel,
                     gender: formData.gender,
                     avail_weekday_morning: formData.avail_weekday_morning,
                     avail_weekday_afternoon: formData.avail_weekday_afternoon,
@@ -68,7 +70,7 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                 await createPlayer({
                     name: formData.name,
                     phone_number: formData.phone_number,
-                    declared_skill_level: formData.declared_skill_level,
+                    declared_skill_level: skillLevel,
                     gender: formData.gender,
                     club_id: clubId,
                     avail_weekday_morning: formData.avail_weekday_morning,
@@ -138,7 +140,13 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                             id="level"
                             required
                             value={formData.declared_skill_level}
-                            onChange={(e) => setFormData({ ...formData, declared_skill_level: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                // Allow empty, numbers, and a single decimal point
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                    setFormData({ ...formData, declared_skill_level: val as any });
+                                }
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             placeholder="e.g. 3.5"
                         />
