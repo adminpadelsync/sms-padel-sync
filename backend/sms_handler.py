@@ -455,36 +455,34 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 memberships = supabase.table("group_memberships").select("group_id").eq("player_id", player["player_id"]).execute().data or []
                 member_group_ids = {m["group_id"] for m in memberships}
                 
-                # 3. Categorize groups
-                member_groups = []
-                available_groups = []
+                # 3. Categorize and sort groups
+                member_groups = [g for g in public_groups if g["group_id"] in member_group_ids]
+                available_groups = [g for g in public_groups if g["group_id"] not in member_group_ids]
                 
-                # Keep a combined list for indexing
-                all_groups = public_groups
-                
-                for i, group in enumerate(all_groups):
-                    display_name = f"{i+1}. {group['name']}"
-                    if group["group_id"] in member_group_ids:
-                        member_groups.append(display_name)
-                    else:
-                        available_groups.append(display_name)
+                # Reorder groups so members are first, and this list becomes the state for indexing
+                all_groups_ordered = member_groups + available_groups
                 
                 # 4. Construct message
                 response = f"🎾 {club_name} Public Groups:\n"
                 
+                count = 1
                 if member_groups:
                     response += "\nGroups you are a member of:\n"
-                    response += "\n".join(member_groups) + "\n"
+                    for g in member_groups:
+                        response += f"{count}. {g['name']}\n"
+                        count += 1
                 
                 if available_groups:
                     response += "\nGroups available to join:\n"
-                    response += "\n".join(available_groups) + "\n"
+                    for g in available_groups:
+                        response += f"{count}. {g['name']}\n"
+                        count += 1
                 
                 response += "\nReply with a number to join/leave a group."
                 
                 send_sms(from_number, response)
                 set_user_state(from_number, msg.STATE_BROWSING_GROUPS, {
-                    "available_groups": all_groups, 
+                    "available_groups": all_groups_ordered, 
                     "member_group_ids": list(member_group_ids),
                     "club_id": str(club_id)
                 })
