@@ -460,10 +460,6 @@ export function PlayersClient({
                                             <td className="px-6 py-4 whitespace-nowrap text-right">
                                                 <PlayerActions
                                                     player={player}
-                                                    onVerify={() => {
-                                                        setPlayerToVerify(player)
-                                                        setVerificationModalOpen(true)
-                                                    }}
                                                 />
                                             </td>
                                         </tr>

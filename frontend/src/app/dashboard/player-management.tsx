@@ -131,22 +131,17 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
 
                     <div>
                         <label htmlFor="level" className="block text-sm font-medium text-gray-700 mb-1">
-                            Skill Level
+                            Skill Level (2.0 - 7.0)
                         </label>
-                        <select
+                        <input
+                            type="text"
                             id="level"
                             required
                             value={formData.declared_skill_level}
-                            onChange={(e) => setFormData({ ...formData, declared_skill_level: parseFloat(e.target.value) })}
+                            onChange={(e) => setFormData({ ...formData, declared_skill_level: parseFloat(e.target.value) || 0 })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value={2.5}>2.5</option>
-                            <option value={3.0}>3.0</option>
-                            <option value={3.5}>3.5</option>
-                            <option value={4.0}>4.0</option>
-                            <option value={4.5}>4.5</option>
-                            <option value={5.0}>5.0</option>
-                        </select>
+                            placeholder="e.g. 3.5"
+                        />
                     </div>
 
                     <div>
@@ -274,10 +269,9 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
 
 interface PlayerActionsProps {
     player: Player
-    onVerify?: () => void
 }
 
-export function PlayerActions({ player, onVerify }: PlayerActionsProps) {
+export function PlayerActions({ player }: PlayerActionsProps) {
     const [showModal, setShowModal] = useState(false)
     const [showDropdown, setShowDropdown] = useState(false)
 
@@ -326,17 +320,6 @@ export function PlayerActions({ player, onVerify }: PlayerActionsProps) {
                             Edit
                         </button>
 
-                        {onVerify && (
-                            <button
-                                onClick={() => { onVerify(); setShowDropdown(false); }}
-                                className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Verify
-                            </button>
-                        )}
 
                         <button
                             onClick={() => { handleToggleStatus(); setShowDropdown(false); }}
