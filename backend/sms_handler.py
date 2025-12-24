@@ -11,6 +11,7 @@ from handlers.match_handler import (
 )
 from handlers.onboarding_handler import handle_onboarding
 from handlers.feedback_handler import handle_feedback_response
+from handlers.result_handler import handle_result_report
 from error_logger import log_sms_error
 from datetime import datetime
 import re
@@ -90,7 +91,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
 
     # 4. Check for Global Interrupts (High confidence intents that override everything)
     # Allows "PLAY", "MATCHES", "RESET" to break out of any state
-    GLOBAL_INTERRUPTS = ["START_MATCH", "CHECK_STATUS", "RESET", "JOIN_GROUP", "MUTE", "UNMUTE"]
+    GLOBAL_INTERRUPTS = ["START_MATCH", "CHECK_STATUS", "RESET", "JOIN_GROUP", "MUTE", "UNMUTE", "REPORT_RESULT"]
     
     # Map intents to legacy command strings for compatibility
     if intent in GLOBAL_INTERRUPTS and confidence > 0.8:
@@ -184,6 +185,14 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 import traceback
                 traceback.print_exc()
                 send_sms(from_number, f"debug_error: {str(e)}")
+            return
+        elif intent == "REPORT_RESULT" and confidence > 0.8:
+            print(f"[SMS DEBUG] Routing to handle_result_report. intent='{intent}'")
+            try:
+                handle_result_report(from_number, player, reasoner_result.entities)
+            except Exception as e:
+                print(f"[ERROR] Failed to process RESULT report: {e}")
+                send_sms(from_number, "Sorry, I had trouble recording that result.")
             return
         elif cmd == "mute":
             # Mute player for rest of day

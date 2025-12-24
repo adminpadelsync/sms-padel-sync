@@ -36,6 +36,7 @@ Current User Profile: {user_profile}
 - MUTE: Wanting to pause invites (Look for "mute", "pause", "stop").
 - UNMUTE: Resuming invites (Look for "unmute", "resume", "start").
 - SUBMIT_FEEDBACK: Providing numeric ratings for players (Look for sequence of numbers e.g. "1 9 8" or "10 10 10").
+- REPORT_RESULT: Reporting the outcome of a match including teams and score (Look for "won", "lost", "score was", "beat").
 - RESET: Wanting to start over or clear state.
 - GREETING: Just saying hello.
 - CHITCHAT: General banter or feedback.
@@ -48,6 +49,10 @@ Current User Profile: {user_profile}
 - ratings: e.g., [1, 9, 8] (list of integers).
 - skill_level: e.g., "3.5", "intermediate", "C".
 - gender: e.g., "male", "female".
+- score: e.g., "6-4 6-2", "tiebreak 10-8".
+- winner: e.g., "Team 1", "Me", "Opponents", or participant names.
+- team_a: e.g., ["Me", "Dave"] (names of players on first team).
+- team_b: e.g., ["Sarah", "Mike"] (names of players on second team).
 
 ### Examples:
 User: "1 9 8"
@@ -64,6 +69,12 @@ Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "t
 
 User: "play at 6:30 tomorrow"
 Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "tomorrow", "time": "6:30" }} }}
+
+User: "Me and Dave beat Sarah and Mike 6-4 6-4"
+Result: {{ "intent": "REPORT_RESULT", "confidence": 1.0, "entities": {{ "score": "6-4 6-4", "team_a": ["Me", "Dave"], "team_b": ["Sarah", "Mike"], "winner": "team_a" }} }}
+
+User: "We lost 7-5 6-2"
+Result: {{ "intent": "REPORT_RESULT", "confidence": 0.9, "entities": {{ "score": "7-5 6-2", "winner": "team_b" }} }}
 
 ### Explicit Instructions:
 - If use says "play", "match", "game", "reset", "matches", "groups", "mute", or "unmute", this is a HIGH CONFIDENCE intent that should interrupt any current flow.

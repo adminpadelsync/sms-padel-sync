@@ -43,6 +43,17 @@ export async function updatePlayer(playerId: string, data: {
         })
         .eq('player_id', playerId)
 
+    // Record Rating History if successful
+    if (!error) {
+        await supabase.from('player_rating_history').insert({
+            player_id: playerId,
+            new_elo_rating: (data.declared_skill_level * 400) + 500,
+            new_sync_rating: data.declared_skill_level,
+            change_type: 'manual_adjustment',
+            notes: 'Manual profile update'
+        })
+    }
+
     if (error) {
         console.error('Error updating player:', error)
         throw error
@@ -96,7 +107,7 @@ export async function createPlayer(data: {
         throw new Error('No club associated with user')
     }
 
-    const { error } = await supabase
+    const { data: newPlayerData, error: createError } = await supabase
         .from('players')
         .insert({
             name: data.name,
@@ -105,7 +116,7 @@ export async function createPlayer(data: {
             adjusted_skill_level: data.declared_skill_level,
             gender: data.gender,
             club_id: club_id,
-            active_status: data.active_status ?? true, // Default to true if not provided
+            active_status: data.active_status ?? true,
             avail_weekday_morning: data.avail_weekday_morning ?? false,
             avail_weekday_afternoon: data.avail_weekday_afternoon ?? false,
             avail_weekday_evening: data.avail_weekday_evening ?? false,
@@ -113,11 +124,22 @@ export async function createPlayer(data: {
             avail_weekend_afternoon: data.avail_weekend_afternoon ?? false,
             avail_weekend_evening: data.avail_weekend_evening ?? false,
         })
+        .select()
+        .single()
 
-    if (error) {
-        console.error('Error creating player:', error)
-        throw error
+    if (createError) {
+        console.error('Error creating player:', createError)
+        throw createError
     }
+
+    // Record Initial History
+    await supabase.from('player_rating_history').insert({
+        player_id: newPlayerData.player_id,
+        new_elo_rating: (data.declared_skill_level * 400) + 500,
+        new_sync_rating: data.declared_skill_level,
+        change_type: 'onboarding',
+        notes: 'Manually created via dashboard'
+    })
 
     revalidatePath('/dashboard')
 }
@@ -208,10 +230,13 @@ export async function verifyPlayer(playerId: string, data: {
         throw new Error('Not authenticated')
     }
 
+    const newElo = (data.level * 400) + 500
     const updates: any = {
         pro_verified: data.verified,
         declared_skill_level: data.level,
         adjusted_skill_level: data.level,
+        elo_rating: newElo,
+        elo_confidence: 5, // Set to established player confidence
     }
 
     if (data.verified) {
@@ -220,6 +245,14 @@ export async function verifyPlayer(playerId: string, data: {
         updates.pro_verification_notes = data.notes
     }
 
+    // 1. Get current rating for history
+    const { data: currentPlayer } = await supabase
+        .from('players')
+        .select('elo_rating, adjusted_skill_level')
+        .eq('player_id', playerId)
+        .single()
+
+    // 2. Perform the update
     const { error } = await supabase
         .from('players')
         .update(updates)
@@ -229,6 +262,17 @@ export async function verifyPlayer(playerId: string, data: {
         console.error('Error verifying player:', error)
         throw error
     }
+
+    // 3. Record Rating History
+    await supabase.from('player_rating_history').insert({
+        player_id: playerId,
+        old_elo_rating: currentPlayer?.elo_rating,
+        new_elo_rating: newElo,
+        old_sync_rating: currentPlayer?.adjusted_skill_level,
+        new_sync_rating: data.level,
+        change_type: 'pro_verification',
+        notes: data.notes || 'Pro verification'
+    })
 
     revalidatePath('/dashboard')
 }

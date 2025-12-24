@@ -69,7 +69,7 @@ export function VerificationModal({ player, isOpen, onClose }: VerificationModal
                 <form onSubmit={handleVerify} className="px-6 py-4 space-y-4">
                     <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
                         <p className="text-sm text-blue-800">
-                            Verifying a player locks their skill level and adds a verification badge to their profile.
+                            Verifying a player establishes a <strong>trusted baseline</strong> for their rating. While it resets their Elo to this level, their rating will continue to adjust as they play more matches.
                         </p>
                     </div>
 

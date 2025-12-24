@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS players (
   last_active TIMESTAMP WITH TIME ZONE,
   total_matches_played INTEGER DEFAULT 0,
   
+  -- Elo / Sync Ranking
+  elo_rating INTEGER DEFAULT 1500,
+  elo_confidence INTEGER DEFAULT 0,
+  
   -- Availability (Simplified flags or JSON)
   avail_weekday_morning BOOLEAN DEFAULT false,
   avail_weekday_afternoon BOOLEAN DEFAULT false,
@@ -112,7 +116,12 @@ CREATE TABLE IF NOT EXISTS matches (
   court_booked BOOLEAN DEFAULT false,
   originator_id UUID REFERENCES players(player_id),
   booked_at TIMESTAMP WITH TIME ZONE,
-  booked_by UUID REFERENCES users(user_id)
+  booked_by UUID REFERENCES users(user_id),
+  
+  -- Result Information
+  score_text TEXT,
+  winner_team INTEGER CHECK (winner_team IN (1, 2)),
+  teams_verified BOOLEAN DEFAULT false
 );
 
 -- Match Invites

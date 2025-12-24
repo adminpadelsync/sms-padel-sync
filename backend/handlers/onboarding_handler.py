@@ -163,12 +163,15 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                 return
             club_id = club_res.data[0]["club_id"]
 
+        from logic.elo_service import get_initial_elo
+        initial_elo = get_initial_elo(level)
         new_player = {
             "phone_number": from_number,
             "name": name,
             "gender": gender,
             "declared_skill_level": level,
             "adjusted_skill_level": level,
+            "elo_rating": initial_elo,
             "club_id": club_id,
             "active_status": True,
             **avail_updates
@@ -177,7 +180,21 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         try:
             player_res = supabase.table("players").insert(new_player).execute()
             if player_res.data:
-                new_player_id = player_res.data[0]["player_id"]
+                new_player = player_res.data[0]
+                new_player_id = new_player["player_id"]
+                
+                # Record Initial History
+                from logic.elo_service import get_initial_elo
+                initial_elo = get_initial_elo(level)
+                supabase.table("player_rating_history").insert({
+                    "player_id": new_player_id,
+                    "old_elo_rating": None,
+                    "new_elo_rating": initial_elo,
+                    "old_sync_rating": None,
+                    "new_sync_rating": level,
+                    "change_type": "onboarding"
+                }).execute()
+
                 # Add to selected groups if any
                 selected_group_ids = state_data.get("selected_group_ids", [])
                 if selected_group_ids:

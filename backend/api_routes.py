@@ -17,6 +17,9 @@ from match_organizer import (
 
 router = APIRouter()
 
+from logic.elo_service import update_match_elo
+from result_nudge_scheduler import run_result_nudge_scheduler
+
 class RecommendationRequest(BaseModel):
     club_id: str
     target_level: float
@@ -185,18 +188,46 @@ async def update_club(club_id: str, updates: ClubUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/players")
 async def get_players(club_id: str = None):
     """Get all players, optionally filtered by club."""
     from database import supabase
     try:
         query = supabase.table("players").select(
-            "player_id, name, phone_number, declared_skill_level, gender, active_status"
+            "player_id, name, phone_number, declared_skill_level, gender, active_status, pro_verified, responsiveness_score, reputation_score, total_matches_played, club_id"
         )
         if club_id:
             query = query.eq("club_id", club_id)
         result = query.eq("active_status", True).order("name").execute()
         return {"players": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/players/{player_id}/rating-history")
+async def get_player_rating_history(player_id: str):
+    """Get the rating history for a specific player."""
+    from database import supabase
+    try:
+        result = supabase.table("player_rating_history").select("*").eq("player_id", player_id).order("created_at", desc=True).execute()
+        return {"history": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/clubs/{club_id}/rankings")
+async def get_club_rankings(club_id: str):
+    """Get players for a club sorted by Elo rating."""
+    from database import supabase
+    try:
+        result = supabase.table("players").select(
+            "player_id, name, elo_rating, elo_confidence, adjusted_skill_level, gender"
+        ).eq("club_id", club_id).eq("active_status", True).order("elo_rating", desc=True).execute()
+        return {"rankings": result.data or []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -465,6 +496,16 @@ async def trigger_feedback_collection():
     from feedback_scheduler import run_feedback_scheduler
     try:
         result = run_feedback_scheduler()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.api_route("/cron/result-nudges", methods=["GET", "POST"])
+async def trigger_result_nudges():
+    """Cron endpoint to send result nudges to match originators."""
+    try:
+        result = run_result_nudge_scheduler()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
