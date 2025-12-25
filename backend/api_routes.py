@@ -528,6 +528,10 @@ async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):
             updates['scheduled_time'] = request.scheduled_time
         if request.status is not None:
             updates['status'] = request.status
+        if request.score_text is not None:
+            updates['score_text'] = request.score_text
+        if request.winner_team is not None:
+            updates['winner_team'] = request.winner_team
         
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")

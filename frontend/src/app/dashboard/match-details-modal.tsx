@@ -51,15 +51,26 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const [loading, setLoading] = useState(false)
     const [invites, setInvites] = useState<Invite[]>([])
     const [isCorrecting, setIsCorrecting] = useState(false)
-    const [correctedScore, setCorrectedScore] = useState('')
+    const [setScores, setSetScores] = useState<string[][]>([['', ''], ['', ''], ['', '']])
     const [correctedWinner, setCorrectedWinner] = useState<number | undefined>(undefined)
 
     useEffect(() => {
         if (match) {
             setScheduledTime(match.scheduled_time)
             setStatus(match.status)
-            setCorrectedScore(match.score_text || '')
             setCorrectedWinner(match.winner_team)
+
+            if (match.score_text) {
+                const sets = match.score_text.split(',').map(s => {
+                    const parts = s.trim().split('-')
+                    return [parts[0] || '', parts[1] || '']
+                })
+                const finalSets = [...sets]
+                while (finalSets.length < 3) finalSets.push(['', ''])
+                setSetScores(finalSets.slice(0, 3))
+            } else {
+                setSetScores([['', ''], ['', ''], ['', '']])
+            }
         }
     }, [match])
 
@@ -101,7 +112,11 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
             }
 
             if (isCorrecting) {
-                updates.score_text = correctedScore
+                const score_text = setScores
+                    .filter(s => s[0] !== '' || s[1] !== '')
+                    .map(s => `${s[0]}-${s[1]}`)
+                    .join(', ')
+                updates.score_text = score_text
                 updates.winner_team = correctedWinner
             }
 
@@ -231,7 +246,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Scheduled Time</label>
-                            {isEditing ? (
+                            {isEditing && !isCorrecting ? (
                                 <input
                                     type="datetime-local"
                                     value={scheduledTime.slice(0, 16)}
@@ -239,13 +254,13 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                             ) : (
-                                <p className="text-gray-900 text-lg">{new Date(scheduledTime).toLocaleString()}</p>
+                                <p className="text-gray-900 text-lg font-medium">{new Date(scheduledTime).toLocaleString()}</p>
                             )}
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                            {isEditing ? (
+                            {isEditing && !isCorrecting ? (
                                 <select
                                     value={status}
                                     onChange={(e) => setStatus(e.target.value)}
@@ -334,34 +349,64 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                         )}
 
                         {isCorrecting && (
-                            <div className="bg-amber-50 p-4 rounded-lg border border-amber-100 space-y-4">
-                                <h4 className="text-sm font-bold text-amber-900 uppercase tracking-wider">Correct Match Result</h4>
-                                <div>
-                                    <label className="block text-xs font-medium text-amber-700 mb-1">Score (e.g., 6-4, 6-2)</label>
-                                    <input
-                                        type="text"
-                                        value={correctedScore}
-                                        onChange={(e) => setCorrectedScore(e.target.value)}
-                                        placeholder="Enter score"
-                                        className="w-full px-3 py-2 border border-amber-200 rounded-md focus:ring-amber-500 focus:border-amber-500 bg-white"
-                                    />
+                            <div className="bg-amber-50 p-6 rounded-lg border border-amber-200 space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-sm font-bold text-amber-900 uppercase tracking-wider">Correct Match Result</h4>
+                                    <div className="text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded">Update sets & select winner</div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-amber-700 mb-2">Who Won?</label>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            onClick={() => setCorrectedWinner(1)}
-                                            className={`px-3 py-2 text-xs font-semibold rounded-md border transition-all ${correctedWinner === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100'}`}
-                                        >
-                                            Team 1
-                                        </button>
-                                        <button
-                                            onClick={() => setCorrectedWinner(2)}
-                                            className={`px-3 py-2 text-xs font-semibold rounded-md border transition-all ${correctedWinner === 2 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100'}`}
-                                        >
-                                            Team 2
-                                        </button>
-                                    </div>
+
+                                <div className="overflow-hidden border border-amber-200 rounded-lg bg-white">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-amber-100 text-amber-900 uppercase text-[10px] font-bold tracking-wider">
+                                            <tr>
+                                                <th className="px-4 py-2">Team</th>
+                                                <th className="px-2 py-2 text-center w-16">S1</th>
+                                                <th className="px-2 py-2 text-center w-16">S2</th>
+                                                <th className="px-2 py-2 text-center w-16">S3</th>
+                                                <th className="px-2 py-2 text-center w-20">Win?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-amber-100">
+                                            {[1, 2].map((teamNum) => {
+                                                const players = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
+                                                const teamName = players && players.length > 0
+                                                    ? players.map(p => p.name).join(' / ')
+                                                    : `Team ${teamNum}`
+
+                                                return (
+                                                    <tr key={teamNum} className={correctedWinner === teamNum ? 'bg-green-50' : ''}>
+                                                        <td className="px-4 py-3 font-medium text-gray-900">{teamName}</td>
+                                                        {[0, 1, 2].map((setIndex) => (
+                                                            <td key={setIndex} className="px-2 py-2 text-center">
+                                                                <input
+                                                                    type="text"
+                                                                    maxLength={1}
+                                                                    value={setScores[setIndex][teamNum - 1]}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value.replace(/\D/g, '')
+                                                                        const newScores = [...setScores]
+                                                                        newScores[setIndex][teamNum - 1] = val
+                                                                        setSetScores(newScores)
+                                                                    }}
+                                                                    className="w-10 h-10 text-center text-lg font-bold border border-gray-200 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                                />
+                                                            </td>
+                                                        ))}
+                                                        <td className="px-2 py-2 text-center">
+                                                            <button
+                                                                onClick={() => setCorrectedWinner(teamNum)}
+                                                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${correctedWinner === teamNum ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                                                            >
+                                                                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         )}
@@ -371,7 +416,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                     <div>
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="text-lg font-medium text-gray-900">Players ({allPlayers.length}/4)</h3>
-                            {isEditing && allPlayers.length < 4 && (
+                            {isEditing && !isCorrecting && allPlayers.length < 4 && (
                                 <button
                                     onClick={() => setShowPlayerSearch(true)}
                                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
@@ -389,7 +434,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                             <p className="font-medium text-gray-900">{player.name}</p>
                                             <p className="text-sm text-gray-500">Level {player.declared_skill_level}</p>
                                         </div>
-                                        {isEditing && (
+                                        {isEditing && !isCorrecting && (
                                             <button
                                                 onClick={() => handleRemovePlayer(player.player_id)}
                                                 className="text-red-600 hover:text-red-800 font-medium"
