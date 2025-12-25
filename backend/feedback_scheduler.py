@@ -198,7 +198,8 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
                 club_name = club_res.data[0]["name"]
         
         match_time = parse_iso_datetime(match["scheduled_time"])
-        time_str = match_time.strftime("%a %-I%p").replace(":00", "").lower()
+        # Format: "Tuesday, Dec 23 @ 7pm"
+        time_str = match_time.strftime("%A, %b %-d @ %-I:%M %p").replace(":00", "")
         
         message = msg.MSG_FEEDBACK_REQUEST.format(
             club_name=club_name,
@@ -277,7 +278,8 @@ def send_reminder_for_request(request: dict):
             club_name = club_res.data[0]["name"]
     
     match_time = parse_iso_datetime(match["scheduled_time"])
-    time_str = match_time.strftime("%a %-I%p").replace(":00", "").lower()
+    # Format: "Tuesday, Dec 23 @ 7pm"
+    time_str = match_time.strftime("%A, %b %-d @ %-I:%M %p").replace(":00", "")
 
     message = f"""🎾 {club_name}: Reminder - We'd love your feedback on your match on {time_str}!
 
