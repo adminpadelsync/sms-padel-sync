@@ -43,7 +43,31 @@ def update_match_elo(match_id: str, winner_team: int):
     """
     Calculates and applies Elo updates for all 4 players in a match.
     Also records the change in player_rating_history.
+    Handles corrections by reversing previous updates for the same match.
     """
+    # 0. Check for existing rating history for this match (Correction Case)
+    history_res = supabase.table("player_rating_history").select("*").eq("match_id", match_id).execute()
+    existing_history = history_res.data or []
+    
+    if existing_history:
+        print(f"DEBUG: Found {len(existing_history)} existing rating records for match {match_id}. Reversing...")
+        for entry in existing_history:
+            pid = entry["player_id"]
+            # To reverse, we set the player's rating back to old values
+            # and decrement confidence and match count
+            p_res = supabase.table("players").select("elo_confidence, total_matches_played").eq("player_id", pid).execute()
+            if p_res.data:
+                current_p = p_res.data[0]
+                supabase.table("players").update({
+                    "elo_rating": entry["old_elo_rating"],
+                    "adjusted_skill_level": entry["old_sync_rating"],
+                    "elo_confidence": max(0, current_p["elo_confidence"] - 1),
+                    "total_matches_played": max(0, current_p["total_matches_played"] - 1)
+                }).eq("player_id", pid).execute()
+        
+        # Delete old history for this match before recording new ones
+        supabase.table("player_rating_history").delete().eq("match_id", match_id).execute()
+
     # 1. Fetch match and players
     match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
     if not match_res.data:

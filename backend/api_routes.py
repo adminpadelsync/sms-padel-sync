@@ -537,6 +537,15 @@ async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):
             raise HTTPException(status_code=400, detail="No fields to update")
         
         match = update_match(match_id, updates)
+        
+        # Trigger Elo update if result is set or changed
+        if (updates.get('status') == 'completed' or 'winner_team' in updates) and match.get('winner_team'):
+            try:
+                update_match_elo(match_id, int(match['winner_team']))
+            except Exception as elo_err:
+                print(f"Error updating Elo after match update: {elo_err}")
+                # We don't fail the whole request if Elo fails, but we log it
+        
         return {"match": match, "message": "Match updated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
