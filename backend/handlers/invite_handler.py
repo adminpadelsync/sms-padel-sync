@@ -161,12 +161,20 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             }).eq("invite_id", invite["invite_id"]).execute()
             
             # 2. Add to Match (Fill Team 1, then Team 2)
+            updates = {}
             if len(match["team_1_players"]) < 2:
                 new_team_1 = match["team_1_players"] + [player["player_id"]]
-                supabase.table("matches").update({"team_1_players": new_team_1}).eq("match_id", match_id).execute()
+                updates["team_1_players"] = new_team_1
             else:
                 new_team_2 = match["team_2_players"] + [player["player_id"]]
-                supabase.table("matches").update({"team_2_players": new_team_2}).eq("match_id", match_id).execute()
+                updates["team_2_players"] = new_team_2
+            
+            # If no originator is set (e.g. admin-initiated match), the first person to join becomes the initiator
+            if not match.get("originator_id"):
+                updates["originator_id"] = player["player_id"]
+                
+            if updates:
+                supabase.table("matches").update(updates).eq("match_id", match_id).execute()
             
             # 3. Build progressive confirmation message
             new_player_count = current_players + 1

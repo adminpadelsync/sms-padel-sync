@@ -38,19 +38,44 @@ def get_matches_needing_result_nudge():
         lookback_limit = now_local - timedelta(hours=24)
         
         # Query matches for this club that are confirmed but NOT completed
+        # AND have received fewer than 2 nudges
         result = supabase.table("matches").select("*").eq(
             "club_id", club_id
         ).eq(
             "status", "confirmed"
         ).is_(
             "score_text", "null"
+        ).lt(
+            "result_nudge_count", 2
         ).gte(
             "scheduled_time", lookback_limit.isoformat()
         ).lte(
             "scheduled_time", cutoff_time.isoformat()
         ).execute()
         
-        matches_to_process.extend(result.data)
+        matches = result.data if result.data else []
+        
+        # Filter in Python for the 4-hour spacing logic if it's the second nudge
+        for match in matches:
+            nudge_count = match.get("result_nudge_count", 0)
+            
+            if nudge_count == 0:
+                # First nudge - already filtered by scheduled_time <= cutoff_time
+                matches_to_process.append(match)
+            elif nudge_count == 1:
+                # Second nudge - check if 4 hours have passed since last nudge
+                last_nudge_at_str = match.get("last_result_nudge_at")
+                if last_nudge_at_str:
+                    try:
+                        last_nudge_at = datetime.fromisoformat(last_nudge_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                        if now_local >= last_nudge_at + timedelta(hours=4):
+                            matches_to_process.append(match)
+                    except Exception:
+                        # Fallback if parsing fails
+                        matches_to_process.append(match)
+                else:
+                    # If count is 1 but timestamp is missing, nudge again
+                    matches_to_process.append(match)
     
     return matches_to_process
 
@@ -80,14 +105,23 @@ def send_result_nudge_for_match(match: dict):
         if club_res.data:
             club_name = club_res.data[0]["name"]
 
-    # Check if we already nudged for this match (simplified: usage of meta or check logs)
-    # For now, we'll just send it. The query filters for confirmed matches without score_text.
-    
-    nudge_msg = f"🎾 {club_name}: How did your match go? 🏸\n\nReply with the teams and score to update your Sync Rating! (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
+    # Determine nudge message
+    nudge_count = match.get("result_nudge_count", 0)
+    if nudge_count == 0:
+        nudge_msg = f"🎾 {club_name}: How did your match go? 🏸\n\nReply with the teams and score to update your Sync Rating! (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
+    else:
+        nudge_msg = f"🎾 {club_name}: Just a follow-up—did you get a result for your match? 🏸\n\nReply back with the score so everyone's ratings stay accurate! 🎾"
     
     from twilio_client import send_sms
     if send_sms(player["phone_number"], nudge_msg):
-        print(f"Sent result nudge to {player['name']} for match {match_id}")
+        # Update match with nudge tracking
+        new_count = nudge_count + 1
+        supabase.table("matches").update({
+            "result_nudge_count": new_count,
+            "last_result_nudge_at": datetime.now().isoformat()
+        }).eq("match_id", match_id).execute()
+        
+        print(f"Sent result nudge #{new_count} to {player['name']} for match {match_id}")
         return 1
     return 0
 

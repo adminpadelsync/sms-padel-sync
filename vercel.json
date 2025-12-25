@@ -13,6 +13,14 @@
         {
             "path": "/api/cron/invite-timeout",
             "schedule": "*/5 * * * *"
+        },
+        {
+            "path": "/api/cron/recalculate-scores",
+            "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/cron/result-nudges",
+            "schedule": "*/30 * * * *"
         }
     ]
 }
