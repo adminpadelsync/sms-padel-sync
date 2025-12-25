@@ -341,7 +341,7 @@ Reply YES to join, NO to decline`
                             const confirmedNames = m.confirmedPlayerIds
                                 .map(id => {
                                     const p = selectedPlayers.find(sp => sp.player_id === id)
-                                    return p ? `${p.name} (${p.declared_skill_level})` : 'Unknown'
+                                    return p ? `${p.name} (${p.declared_skill_level.toFixed(2)})` : 'Unknown'
                                 })
                                 .join(', ')
 
@@ -520,7 +520,7 @@ Reply YES to join, NO to decline`
                             const playerNames = m.confirmedPlayerIds
                                 .map(id => {
                                     const p = selectedPlayers.find(sp => sp.player_id === id)
-                                    return p ? `${p.name} (${p.declared_skill_level})` : 'Unknown'
+                                    return p ? `${p.name} (${p.declared_skill_level.toFixed(2)})` : 'Unknown'
                                 })
                                 .join(', ')
                             matchText += `#${m.number} - ${m.date} ${m.time} ✅ (4/4)\n     ${playerNames}\n\n`
@@ -534,7 +534,7 @@ Reply YES to join, NO to decline`
                             const playerNames = m.confirmedPlayerIds
                                 .map(id => {
                                     const p = selectedPlayers.find(sp => sp.player_id === id)
-                                    return p ? `${p.name} (${p.declared_skill_level})` : 'Unknown'
+                                    return p ? `${p.name} (${p.declared_skill_level.toFixed(2)})` : 'Unknown'
                                 })
                                 .join(', ')
                             const joined = m.confirmedPlayerIds.includes(playerId)
@@ -644,7 +644,7 @@ Example: RATE Sarah 4`
                     const playerNames = nextMatch.confirmedPlayerIds
                         .map(id => {
                             const p = selectedPlayers.find(sp => sp.player_id === id)
-                            return p ? `${p.name} (${p.declared_skill_level})` : 'Unknown'
+                            return p ? `${p.name} (${p.declared_skill_level.toFixed(2)})` : 'Unknown'
                         })
                         .join(', ')
 
@@ -788,7 +788,7 @@ Example: MAYBE 1`
                                     .filter(p => !selectedPlayers.find(sp => sp.player_id === p.player_id))
                                     .map(player => (
                                         <option key={player.player_id} value={player.player_id}>
-                                            {player.name} - Level {player.declared_skill_level}
+                                            {player.name} - Level {player.declared_skill_level.toFixed(2)}
                                         </option>
                                     ))}
                             </select>

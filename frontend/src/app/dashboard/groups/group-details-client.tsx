@@ -13,6 +13,7 @@ interface Member {
     name: string
     phone_number: string
     declared_skill_level: number
+    adjusted_skill_level?: number
     added_at: string
     active_status: boolean
     gender?: string
@@ -155,7 +156,7 @@ export function GroupDetailsClient({ group, members }: GroupDetailsClientProps) 
                                             {member.phone_number}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {member.declared_skill_level}
+                                            {(member.adjusted_skill_level || member.declared_skill_level).toFixed(2)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {new Date(member.added_at).toLocaleDateString()}

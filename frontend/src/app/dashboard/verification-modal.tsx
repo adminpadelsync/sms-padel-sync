@@ -7,6 +7,7 @@ interface Player {
     player_id: string
     name: string
     declared_skill_level: number
+    adjusted_skill_level?: number
     pro_verified?: boolean
     pro_verification_notes?: string
 }

@@ -10,6 +10,7 @@ interface Player {
     name: string
     phone_number: string
     declared_skill_level: number
+    adjusted_skill_level?: number
     gender?: string
     match_score?: number
 }
@@ -276,7 +277,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
                                                             >
                                                                 <div className="font-medium text-sm">{player.name}</div>
                                                                 <div className="text-xs text-gray-500">
-                                                                    Level {player.declared_skill_level} • {player.phone_number}
+                                                                    Level {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)} • {player.phone_number}
                                                                 </div>
                                                             </button>
                                                         ))}
@@ -295,7 +296,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
                                         {initialSelectedPlayers.map(player => (
                                             <div key={player.player_id} className="flex justify-between items-center text-sm">
                                                 <span className="font-medium text-gray-900">{player.name}</span>
-                                                <span className="text-gray-500">Level {player.declared_skill_level}</span>
+                                                <span className="text-gray-500">Level {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -361,7 +362,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
                                         />
                                         <div className="ml-3">
                                             <p className="text-sm font-medium text-gray-900">{player.name}</p>
-                                            <p className="text-xs text-gray-500">Level: {player.declared_skill_level} • {player.gender || 'Unknown'}</p>
+                                            <p className="text-xs text-gray-500">Level: {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)} • {player.gender || 'Unknown'}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -386,7 +387,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
                                     {(initialSelectedPlayers.length > 0 ? initialSelectedPlayers : recommendations.filter(p => selectedPlayers.includes(p.player_id))).map(p => (
                                         <li key={p.player_id} className="text-sm font-medium text-gray-900 flex justify-between">
                                             <span>{p.name}</span>
-                                            <span className="text-gray-500 text-xs">Level {p.declared_skill_level}</span>
+                                            <span className="text-gray-500 text-xs">Level {(p.adjusted_skill_level || p.declared_skill_level).toFixed(2)}</span>
                                         </li>
                                     ))}
                                 </ul>

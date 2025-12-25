@@ -15,6 +15,7 @@ interface Player {
     player_id: string
     name: string
     declared_skill_level: number
+    adjusted_skill_level?: number
 }
 
 export function AddMembersModal({ isOpen, onClose, groupId, clubId, existingMemberIds }: AddMembersModalProps) {
@@ -121,7 +122,7 @@ export function AddMembersModal({ isOpen, onClose, groupId, clubId, existingMemb
                                         />
                                         <div>
                                             <div className="text-sm font-medium text-gray-900">{player.name}</div>
-                                            <div className="text-xs text-gray-500">Level: {player.declared_skill_level}</div>
+                                            <div className="text-xs text-gray-500">Level: {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)}</div>
                                         </div>
                                     </label>
                                 ))}

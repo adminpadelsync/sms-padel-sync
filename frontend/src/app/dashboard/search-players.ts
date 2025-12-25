@@ -7,7 +7,7 @@ export async function searchPlayers(clubId: string, searchTerm: string = '') {
 
     let query = supabase
         .from('players')
-        .select('player_id, name, phone_number, declared_skill_level, gender')
+        .select('player_id, name, phone_number, declared_skill_level, adjusted_skill_level, gender')
         .eq('club_id', clubId)
         .eq('active_status', true)
 

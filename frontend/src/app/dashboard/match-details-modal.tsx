@@ -8,6 +8,7 @@ interface Player {
     name: string
     phone_number: string
     declared_skill_level: number
+    adjusted_skill_level?: number
     gender?: string
 }
 
@@ -330,7 +331,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                                                 {players && players.length > 0 ? (
                                                                     players.map(p => (
                                                                         <span key={p.player_id} className="block whitespace-nowrap">
-                                                                            {p.name} <span className="text-[10px] opacity-70">({p.declared_skill_level})</span>
+                                                                            {p.name} <span className="text-[10px] opacity-70">({(p.adjusted_skill_level || p.declared_skill_level).toFixed(2)})</span>
                                                                         </span>
                                                                     ))
                                                                 ) : (
@@ -394,7 +395,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                                                 {players && players.length > 0 ? (
                                                                     players.map(p => (
                                                                         <span key={p.player_id} className="block whitespace-nowrap">
-                                                                            {p.name} <span className="text-[10px] opacity-60">({p.declared_skill_level})</span>
+                                                                            {p.name} <span className="text-[10px] opacity-60">({(p.adjusted_skill_level || p.declared_skill_level).toFixed(2)})</span>
                                                                         </span>
                                                                     ))
                                                                 ) : (
@@ -459,7 +460,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                         <div key={player.player_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                             <div>
                                                 <p className="font-medium text-gray-900">{player.name}</p>
-                                                <p className="text-sm text-gray-500">Level {player.declared_skill_level}</p>
+                                                <p className="text-sm text-gray-500">Level {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)}</p>
                                             </div>
                                             {isEditing && !isCorrecting && (
                                                 <button
@@ -500,7 +501,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                                     {invite.player?.name || 'Unknown Player'}
                                                 </p>
                                                 <p className="text-sm text-gray-500">
-                                                    Level {invite.player?.declared_skill_level || '?'}
+                                                    Level {invite.player ? (invite.player.adjusted_skill_level || invite.player.declared_skill_level).toFixed(2) : '?'}
                                                     {invite.responded_at && (
                                                         <span className="ml-2">
                                                             • {new Date(invite.responded_at).toLocaleDateString()}
@@ -550,7 +551,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                         className="w-full text-left p-2 hover:bg-white rounded transition-colors"
                                     >
                                         <p className="font-medium text-gray-900">{player.name}</p>
-                                        <p className="text-sm text-gray-500">Level {player.declared_skill_level}</p>
+                                        <p className="text-sm text-gray-500">Level {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)}</p>
                                     </button>
                                 ))}
                                 {playerSearchTerm.length >= 2 && searchResults.length === 0 && (

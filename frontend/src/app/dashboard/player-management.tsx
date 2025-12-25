@@ -9,6 +9,7 @@ interface Player {
     name: string
     phone_number: string
     declared_skill_level: number
+    adjusted_skill_level?: number
     active_status: boolean
     gender?: string
     avail_weekday_morning?: boolean
@@ -150,6 +151,11 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             placeholder="e.g. 3.5"
                         />
+                        {player?.adjusted_skill_level && (
+                            <p className="mt-1 text-xs text-indigo-600 font-semibold">
+                                Current Sync Rating: {player.adjusted_skill_level.toFixed(2)}
+                            </p>
+                        )}
                     </div>
 
                     <div>

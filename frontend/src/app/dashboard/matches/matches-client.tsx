@@ -21,6 +21,7 @@ interface Match {
         name: string
         phone_number: string
         declared_skill_level: number
+        adjusted_skill_level?: number
     }
     team_1_details?: PlayerDetail[]
     team_2_details?: PlayerDetail[]
@@ -31,6 +32,7 @@ interface PlayerDetail {
     name: string
     phone_number: string
     declared_skill_level: number
+    adjusted_skill_level?: number
 }
 
 interface MatchesClientProps {
@@ -256,7 +258,7 @@ export function MatchesClient({
                                                 <div key={i} className="text-[11px] p-2 bg-gray-50 rounded border border-gray-100">
                                                     <p className="font-bold text-gray-900 truncate">{p?.name || 'Empty'}</p>
                                                     <div className="flex flex-col mt-0.5 text-gray-500">
-                                                        <span>Lvl: {p?.declared_skill_level || '-'}</span>
+                                                        <span>Lvl: {(p?.adjusted_skill_level || p?.declared_skill_level || 0).toFixed(2)}</span>
                                                         <span className="font-mono">{formatPhoneNumber(p?.phone_number || '')}</span>
                                                     </div>
                                                 </div>

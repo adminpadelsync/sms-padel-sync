@@ -130,6 +130,7 @@ export async function getGroupDetails(groupId: string) {
                 name,
                 phone_number,
                 declared_skill_level,
+                adjusted_skill_level,
                 gender,
                 active_status
             )
@@ -196,7 +197,7 @@ export async function getClubPlayers(clubId: string) {
 
     const { data, error } = await supabase
         .from('players')
-        .select('player_id, name, phone_number, declared_skill_level, active_status')
+        .select('player_id, name, phone_number, declared_skill_level, adjusted_skill_level, active_status')
         .eq('club_id', clubId)
         .eq('active_status', true)
         .order('name')

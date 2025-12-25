@@ -328,7 +328,7 @@ export default function MatchJigPage() {
                                     <option value="">Choose player...</option>
                                     {filteredPlayers.map(p => (
                                         <option key={p.player_id} value={p.player_id}>
-                                            {p.name} ({p.declared_skill_level})
+                                            {p.name} ({p.declared_skill_level.toFixed(2)})
                                         </option>
                                     ))}
                                 </select>
