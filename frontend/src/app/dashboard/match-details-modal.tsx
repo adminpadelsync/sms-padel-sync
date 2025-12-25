@@ -322,9 +322,19 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                                 <tr key={teamNum} className={`${isWinner ? 'bg-green-50' : 'bg-white'}`}>
                                                     <td className={`px-4 py-3 font-medium ${isWinner ? 'text-green-900' : 'text-gray-900'}`}>
                                                         <div className="flex items-center gap-2">
-                                                            <span>{teamName}</span>
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {players && players.length > 0 ? (
+                                                                    players.map(p => (
+                                                                        <span key={p.player_id} className="block whitespace-nowrap">
+                                                                            {p.name} <span className="text-[10px] opacity-70">({p.declared_skill_level})</span>
+                                                                        </span>
+                                                                    ))
+                                                                ) : (
+                                                                    <span>Team {teamNum}</span>
+                                                                )}
+                                                            </div>
                                                             {isWinner && (
-                                                                <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                <svg className="h-4 w-4 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                                                 </svg>
                                                             )}
@@ -375,7 +385,19 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
 
                                                 return (
                                                     <tr key={teamNum} className={correctedWinner === teamNum ? 'bg-green-50' : ''}>
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{teamName}</td>
+                                                        <td className="px-4 py-3 font-medium text-gray-900">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {players && players.length > 0 ? (
+                                                                    players.map(p => (
+                                                                        <span key={p.player_id} className="block whitespace-nowrap">
+                                                                            {p.name} <span className="text-[10px] opacity-60">({p.declared_skill_level})</span>
+                                                                        </span>
+                                                                    ))
+                                                                ) : (
+                                                                    <span>Team {teamNum}</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
                                                         {[0, 1, 2].map((setIndex) => (
                                                             <td key={setIndex} className="px-2 py-2 text-center">
                                                                 <input
@@ -395,7 +417,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                                         <td className="px-2 py-2 text-center">
                                                             <button
                                                                 onClick={() => setCorrectedWinner(teamNum)}
-                                                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${correctedWinner === teamNum ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                                                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${correctedWinner === teamNum ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
                                                             >
                                                                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                                                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -413,42 +435,44 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                     </div>
 
                     {/* Players List */}
-                    <div>
-                        <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-lg font-medium text-gray-900">Players ({allPlayers.length}/4)</h3>
-                            {isEditing && !isCorrecting && allPlayers.length < 4 && (
-                                <button
-                                    onClick={() => setShowPlayerSearch(true)}
-                                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                                >
-                                    + Add Player
-                                </button>
-                            )}
-                        </div>
+                    {status !== 'completed' && (
+                        <div>
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="text-lg font-medium text-gray-900">Players ({allPlayers.length}/4)</h3>
+                                {isEditing && !isCorrecting && allPlayers.length < 4 && (
+                                    <button
+                                        onClick={() => setShowPlayerSearch(true)}
+                                        className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                                    >
+                                        + Add Player
+                                    </button>
+                                )}
+                            </div>
 
-                        <div className="space-y-2">
-                            {allPlayers.length > 0 ? (
-                                allPlayers.map((player) => (
-                                    <div key={player.player_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                        <div>
-                                            <p className="font-medium text-gray-900">{player.name}</p>
-                                            <p className="text-sm text-gray-500">Level {player.declared_skill_level}</p>
+                            <div className="space-y-2">
+                                {allPlayers.length > 0 ? (
+                                    allPlayers.map((player) => (
+                                        <div key={player.player_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <p className="font-medium text-gray-900">{player.name}</p>
+                                                <p className="text-sm text-gray-500">Level {player.declared_skill_level}</p>
+                                            </div>
+                                            {isEditing && !isCorrecting && (
+                                                <button
+                                                    onClick={() => handleRemovePlayer(player.player_id)}
+                                                    className="text-red-600 hover:text-red-800 font-medium"
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
                                         </div>
-                                        {isEditing && !isCorrecting && (
-                                            <button
-                                                onClick={() => handleRemovePlayer(player.player_id)}
-                                                className="text-red-600 hover:text-red-800 font-medium"
-                                            >
-                                                Remove
-                                            </button>
-                                        )}
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-gray-500 text-center py-4">No players added yet</p>
-                            )}
+                                    ))
+                                ) : (
+                                    <p className="text-gray-500 text-center py-4">No players added yet</p>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Invites Sent */}
                     {invites.length > 0 && status !== 'completed' && (
