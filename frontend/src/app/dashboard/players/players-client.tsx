@@ -707,9 +707,12 @@ export function PlayersClient({
                 isOpen={isMatchDetailsOpen}
                 onClose={() => setIsMatchDetailsOpen(false)}
                 match={selectedMatch}
-                onUpdate={() => {
-                    // We don't really need to do anything here since it's read-only for now
-                    setIsMatchDetailsOpen(false)
+                onUpdate={(updatedMatch) => {
+                    if (updatedMatch) {
+                        setSelectedMatch(updatedMatch)
+                    } else {
+                        setIsMatchDetailsOpen(false)
+                    }
                 }}
             />
         </div>

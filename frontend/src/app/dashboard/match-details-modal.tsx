@@ -38,7 +38,7 @@ interface MatchDetailsModalProps {
     match: Match | null
     isOpen: boolean
     onClose: () => void
-    onUpdate: () => void
+    onUpdate: (updatedMatch?: any) => void
 }
 
 export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDetailsModalProps) {
@@ -130,7 +130,11 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
 
             setIsEditing(false)
             setIsCorrecting(false)
-            onUpdate()
+
+            // Re-fetch match details to get the enriched object (player details, etc.)
+            const freshRes = await fetch(`/api/matches/${match.match_id}`)
+            const freshData = await freshRes.json()
+            onUpdate(freshData.match)
         } catch (error) {
             console.error('Error updating match:', error)
             alert('Failed to update match')
