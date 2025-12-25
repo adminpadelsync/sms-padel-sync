@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { StatCard, ProgressBarChart, LeaderboardTable } from './widgets';
+import { StatCard, SkillLevelRanges, LeaderboardTable } from './widgets';
 
 interface AnalyticsDashboardProps {
     clubId: string;
@@ -76,11 +76,10 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
         return <div className="p-4 text-center text-gray-500">No analytics data available.</div>;
     }
 
-    // Prepare Skill Distribution Data
-    const skillData = Object.entries(health.skill_distribution || {}).map(([level, count]) => ({
-        label: `${level} Level`,
-        value: Number(count),
-        color: 'bg-blue-500' // Simple solid color or dynamic based on level
+    // Prepare Skill Distribution Data - backend returns range labels
+    const skillData = Object.entries(health.skill_distribution || {}).map(([range, count]) => ({
+        label: range,
+        value: Number(count)
     }));
 
     // Prepare Top Players Data
@@ -150,10 +149,9 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
 
             {/* Row 2: Charts (Activity & Distribution) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ProgressBarChart
+                <SkillLevelRanges
                     title="Skill Level Distribution"
                     data={skillData}
-                    total={health.total_players}
                 />
 
                 <LeaderboardTable

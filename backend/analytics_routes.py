@@ -36,14 +36,20 @@ async def get_club_health(club_id: str):
 
         verified_count = 0
         avail_set_count = 0
-        skill_dist = {}
+        
+        # Ranges: 2.0-2.5, 2.5-3.0, 3.0-3.5, 3.5-4.0, 4.0-4.5, 4.5-5.0, 5.0-5.5, > 5.5
+        range_keys = [
+            "2.0-2.5", "2.5-3.0", "3.0-3.5", "3.5-4.0", 
+            "4.0-4.5", "4.5-5.0", "5.0-5.5", "> 5.5"
+        ]
+        skill_dist = {rk: 0 for rk in range_keys}
 
         for p in players:
             # Verified count
             if p.get("pro_verified"):
                 verified_count += 1
             
-            # Availability count (is ANY bucket true?)
+            # Availability count
             has_avail = (
                 p.get("avail_weekday_morning") or 
                 p.get("avail_weekday_afternoon") or 
@@ -55,22 +61,31 @@ async def get_club_health(club_id: str):
             if has_avail:
                 avail_set_count += 1
                 
-            # Skill bucket
-            level = p.get("declared_skill_level") or 0
-            # Bucket into 0.5 increments for chart
-            # e.g. 3.2 -> 3.0, 3.7 -> 3.5
-            bucket = float(int(level * 2)) / 2.0
-            bucket_str = f"{bucket:.1f}"
-            skill_dist[bucket_str] = skill_dist.get(bucket_str, 0) + 1
-
-        # Sort skill distribution
-        sorted_dist = dict(sorted(skill_dist.items()))
+            # Range grouping
+            level = p.get("declared_skill_level") or 0.0
+            
+            if level < 2.5:
+                skill_dist["2.0-2.5"] += 1
+            elif level < 3.0:
+                skill_dist["2.5-3.0"] += 1
+            elif level < 3.5:
+                skill_dist["3.0-3.5"] += 1
+            elif level < 4.0:
+                skill_dist["3.5-4.0"] += 1
+            elif level < 4.5:
+                skill_dist["4.0-4.5"] += 1
+            elif level < 5.0:
+                skill_dist["4.5-5.0"] += 1
+            elif level < 5.5:
+                skill_dist["5.0-5.5"] += 1
+            else:
+                skill_dist["> 5.5"] += 1
 
         return {
             "total_players": total_players,
             "verified_pct": round((verified_count / total_players) * 100, 1),
             "availability_pct": round((avail_set_count / total_players) * 100, 1),
-            "skill_distribution": sorted_dist
+            "skill_distribution": skill_dist
         }
 
     except Exception as e:

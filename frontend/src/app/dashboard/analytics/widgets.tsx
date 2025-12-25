@@ -22,6 +22,11 @@ export interface LeaderboardProps {
     metricLabel?: string;
 }
 
+export interface SkillLevelRangesProps {
+    title: string;
+    data: { label: string; value: number }[];
+}
+
 
 // --- Components ---
 
@@ -86,6 +91,67 @@ export function ProgressBarChart({ title, data, total }: ProgressBarChartProps) 
                         </div>
                     );
                 })}
+            </div>
+        </div>
+    );
+}
+
+export function SkillLevelRanges({ title, data }: SkillLevelRangesProps) {
+    const categories = [
+        { name: 'Beginner', ranges: ['2.0-2.5', '2.5-3.0'], color: 'bg-blue-400' },
+        { name: 'Intermediate', ranges: ['3.0-3.5', '3.5-4.0'], color: 'bg-emerald-400' },
+        { name: 'Advanced', ranges: ['4.0-4.5', '4.5-5.0'], color: 'bg-amber-400' },
+        { name: 'Pro', ranges: ['5.0-5.5', '> 5.5'], color: 'bg-indigo-400' },
+    ];
+
+    const maxVal = Math.max(...data.map((d: any) => d.value), 1);
+
+    // Map data for easy access by range label
+    const dataMap = Object.fromEntries(data.map(d => [d.label, d.value]));
+
+    return (
+        <div className="bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-6">{title}</h3>
+            <div className="space-y-6">
+                {categories.map((cat, catIdx) => (
+                    <div key={catIdx} className="flex gap-4 group">
+                        {/* Category Label & Bracket */}
+                        <div className="w-28 shrink-0 flex items-stretch">
+                            <div className="flex flex-col justify-center text-right pr-3 flex-1 overflow-hidden">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 truncate">
+                                    {cat.name}
+                                </span>
+                            </div>
+                            {/* The Bracket Line */}
+                            <div className={`w-1 shrink-0 rounded-full ${cat.color} opacity-40 group-hover:opacity-100 transition-opacity`}></div>
+                        </div>
+
+                        {/* Ranges in this category */}
+                        <div className="flex-1 space-y-3">
+                            {cat.ranges.map((rangeLabel, rangeIdx) => {
+                                const value = dataMap[rangeLabel] || 0;
+                                const widthPct = (value / maxVal) * 100;
+
+                                return (
+                                    <div key={rangeIdx} className="flex items-center">
+                                        <div className="w-16 text-xs font-semibold text-gray-500 shrink-0">
+                                            {rangeLabel}
+                                        </div>
+                                        <div className="flex-1 h-7 bg-gray-50 rounded-sm relative overflow-hidden flex items-center pr-12 transition-all group-hover:bg-gray-100">
+                                            <div
+                                                className={`h-full transition-all duration-700 rounded-r-sm ${cat.color}`}
+                                                style={{ width: `${widthPct}%` }}
+                                            ></div>
+                                            <div className="ml-3 text-sm font-bold text-gray-700 z-10">
+                                                {value}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
