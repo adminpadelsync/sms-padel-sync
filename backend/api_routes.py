@@ -36,6 +36,8 @@ class OutreachRequest(BaseModel):
 class MatchUpdateRequest(BaseModel):
     scheduled_time: Optional[str] = None
     status: Optional[str] = None
+    score_text: Optional[str] = None
+    winner_team: Optional[int] = None
 
 class AddPlayerRequest(BaseModel):
     player_id: str
@@ -230,6 +232,55 @@ async def get_player_rating_history(player_id: str):
     try:
         result = supabase.table("player_rating_history").select("*").eq("player_id", player_id).order("created_at", desc=True).execute()
         return {"history": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/players/{player_id}/feedback-summary")
+async def get_player_feedback_summary(player_id: str):
+    """
+    Get aggregate feedback metrics for a specific player.
+    Lifetime average rating and "Play Again" percentage.
+    """
+    from database import supabase
+    try:
+        # Get matches where the player was a participant
+        matches_res = supabase.table("matches").select("match_id").or_(
+            f"team_1_players.cs.{{{player_id}}},team_2_players.cs.{{{player_id}}}"
+        ).execute()
+        
+        match_ids = [m["match_id"] for m in (matches_res.data or [])]
+        if not match_ids:
+            return {
+                "avg_rating": 0,
+                "play_again_pct": 0,
+                "total_reviews": 0
+            }
+            
+        # Fetch feedback for these matches
+        # Feedback where this player was NOT the rater (someone else rated them)
+        feedback_res = supabase.table("match_feedback").select("individual_ratings").in_("match_id", match_ids).neq("player_id", player_id).execute()
+        
+        ratings = []
+        play_again_count = 0
+        
+        for fb in (feedback_res.data or []):
+            i_ratings = fb.get("individual_ratings") or {}
+            if player_id in i_ratings:
+                score = i_ratings[player_id]
+                ratings.append(score)
+                if score >= 7:
+                    play_again_count += 1
+        
+        total_reviews = len(ratings)
+        avg_rating = round(sum(ratings) / total_reviews, 1) if total_reviews > 0 else 0
+        play_again_pct = round((play_again_count / total_reviews) * 100) if total_reviews > 0 else 0
+        
+        return {
+            "avg_rating": avg_rating,
+            "play_again_pct": play_again_pct,
+            "total_reviews": total_reviews
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

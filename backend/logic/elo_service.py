@@ -59,7 +59,7 @@ def update_match_elo(match_id: str, winner_team: int):
 
     # 2. Fetch player ratings (seeding if missing)
     def get_player_data(pid):
-        p_res = supabase.table("players").select("player_id, elo_rating, elo_confidence, declared_skill_level").eq("player_id", pid).execute()
+        p_res = supabase.table("players").select("player_id, elo_rating, elo_confidence, declared_skill_level, total_matches_played").eq("player_id", pid).execute()
         if not p_res.data: return None
         p = p_res.data[0]
         if p.get("elo_rating") is None or (p.get("elo_rating") == 1500 and p.get("elo_confidence", 0) == 0):
@@ -96,7 +96,8 @@ def update_match_elo(match_id: str, winner_team: int):
             "new_elo": new_elo,
             "old_sync": old_sync,
             "new_sync": new_sync,
-            "new_confidence": p.get("elo_confidence", 0) + 1
+            "new_confidence": p.get("elo_confidence", 0) + 1,
+            "new_matches_played": (p.get("total_matches_played", 0) or 0) + 1
         })
 
     # Team 2 results
@@ -116,7 +117,8 @@ def update_match_elo(match_id: str, winner_team: int):
             "new_elo": new_elo,
             "old_sync": old_sync,
             "new_sync": new_sync,
-            "new_confidence": p.get("elo_confidence", 0) + 1
+            "new_confidence": p.get("elo_confidence", 0) + 1,
+            "new_matches_played": (p.get("total_matches_played", 0) or 0) + 1
         })
 
     # 5. Apply Updates to DB and Record History
@@ -125,7 +127,8 @@ def update_match_elo(match_id: str, winner_team: int):
         supabase.table("players").update({
             "elo_rating": up["new_elo"],
             "elo_confidence": up["new_confidence"],
-            "adjusted_skill_level": up["new_sync"]
+            "adjusted_skill_level": up["new_sync"],
+            "total_matches_played": up["new_matches_played"]
         }).eq("player_id", up["player_id"]).execute()
 
         # Record History Entry

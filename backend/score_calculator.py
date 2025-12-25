@@ -42,6 +42,12 @@ def recalculate_player_scores(player_id=None):
         inv_res = inv_query.limit(500).execute()
         invites = inv_res.data or []
         
+        # 2b. Fetch Matches to calculate total_matches_played
+        match_query = supabase.table("matches").select("team_1_players, team_2_players").in_("status", ["confirmed", "completed"])
+        # Fetch up to 500 matches for safety
+        match_res = match_query.limit(500).execute()
+        matches = match_res.data or []
+        
         # 3. Aggregate Stats
         # Structure: player_id -> {'total': 0, 'responded': 0, 'accepted': 0}
         stats_map = defaultdict(lambda: {'total': 0, 'responded': 0, 'accepted': 0})
@@ -55,6 +61,14 @@ def recalculate_player_scores(player_id=None):
                 stats_map[pid]['responded'] += 1
             if status == 'accepted':
                 stats_map[pid]['accepted'] += 1
+                
+        # 3b. Aggregate Match Counts
+        match_counts = defaultdict(int)
+        for m in matches:
+            players_in_match = (m.get('team_1_players') or []) + (m.get('team_2_players') or [])
+            for pid in players_in_match:
+                if pid:
+                    match_counts[pid] += 1
                 
         # 4. Calculate and Update
         updated_count = 0
@@ -77,7 +91,8 @@ def recalculate_player_scores(player_id=None):
                 "responsiveness_score": resp_score,
                 "reputation_score": rep_score,
                 "total_invites_received": stats['total'],
-                "total_invites_accepted": stats['accepted']
+                "total_invites_accepted": stats['accepted'],
+                "total_matches_played": match_counts[p_id]
             }
             
             supabase.table("players").update(update_data).eq("player_id", p_id).execute()

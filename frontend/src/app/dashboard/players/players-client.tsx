@@ -9,6 +9,7 @@ import { SwitchClubModal } from '../switch-club-modal'
 import { AddToGroupModal } from '../groups/add-to-group-modal'
 import { GroupModal } from '../groups/group-modal'
 import { VerificationModal } from '../verification-modal'
+import { MatchDetailsModal } from '../match-details-modal'
 
 interface Player {
     player_id: string
@@ -104,6 +105,9 @@ export function PlayersClient({
     const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null)
     const [ratingHistory, setRatingHistory] = useState<Record<string, any[]>>({})
     const [loadingHistory, setLoadingHistory] = useState<string | null>(null)
+    const [feedbackSummaries, setFeedbackSummaries] = useState<Record<string, any>>({})
+    const [selectedMatch, setSelectedMatch] = useState<any | null>(null)
+    const [isMatchDetailsOpen, setIsMatchDetailsOpen] = useState(false)
 
     const fetchRatingHistory = async (playerId: string) => {
         if (ratingHistory[playerId]) return
@@ -119,12 +123,35 @@ export function PlayersClient({
         }
     }
 
+    const fetchFeedbackSummary = async (playerId: string) => {
+        if (feedbackSummaries[playerId]) return
+        try {
+            const res = await fetch(`/api/players/${playerId}/feedback-summary`)
+            const data = await res.json()
+            setFeedbackSummaries(prev => ({ ...prev, [playerId]: data }))
+        } catch (error) {
+            console.error('Error fetching feedback summary:', error)
+        }
+    }
+
+    const openMatchDetails = async (matchId: string) => {
+        try {
+            const res = await fetch(`/api/matches/${matchId}`)
+            const data = await res.json()
+            setSelectedMatch(data.match)
+            setIsMatchDetailsOpen(true)
+        } catch (error) {
+            console.error('Error fetching match details:', error)
+        }
+    }
+
     const toggleExpand = (playerId: string) => {
         if (expandedPlayerId === playerId) {
             setExpandedPlayerId(null)
         } else {
             setExpandedPlayerId(playerId)
             fetchRatingHistory(playerId)
+            fetchFeedbackSummary(playerId)
         }
     }
 
@@ -476,7 +503,7 @@ export function PlayersClient({
                                                 <td colSpan={9} className="px-6 py-4 border-t border-gray-100 shadow-inner">
                                                     <div className="max-w-4xl">
                                                         <div className="flex items-center justify-between mb-4">
-                                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">Rating History & Progression</h4>
+                                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">Feedback Insights</h4>
                                                             <button
                                                                 onClick={() => setExpandedPlayerId(null)}
                                                                 className="text-gray-400 hover:text-gray-600"
@@ -485,6 +512,46 @@ export function PlayersClient({
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                                 </svg>
                                                             </button>
+                                                        </div>
+
+                                                        {/* Feedback Summary Cards */}
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                                                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Avg Rating</p>
+                                                                <div className="flex items-baseline gap-2">
+                                                                    <span className="text-2xl font-bold text-gray-900">{feedbackSummaries[player.player_id]?.avg_rating || '—'}</span>
+                                                                    <span className="text-sm text-gray-400">/ 10</span>
+                                                                </div>
+                                                                <div className="mt-2 flex text-yellow-400">
+                                                                    {Array.from({ length: 5 }).map((_, i) => (
+                                                                        <svg key={i} className={`w-4 h-4 ${i < Math.round((feedbackSummaries[player.player_id]?.avg_rating || 0) / 2) ? 'fill-current' : 'text-gray-200'}`} viewBox="0 0 20 20">
+                                                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                                                        </svg>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Play Again Rate</p>
+                                                                <div className="flex items-baseline gap-2">
+                                                                    <span className="text-2xl font-bold text-green-600">{feedbackSummaries[player.player_id]?.play_again_pct || 0}%</span>
+                                                                    <span className="text-xs text-gray-400">would re-match</span>
+                                                                </div>
+                                                                <div className="mt-2 w-full bg-gray-100 rounded-full h-1.5">
+                                                                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${feedbackSummaries[player.player_id]?.play_again_pct || 0}%` }} />
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Reviews</p>
+                                                                <div className="flex items-baseline gap-2">
+                                                                    <span className="text-2xl font-bold text-gray-900">{feedbackSummaries[player.player_id]?.total_reviews || 0}</span>
+                                                                    <span className="text-xs text-gray-400">submissions</span>
+                                                                </div>
+                                                                <p className="mt-2 text-[10px] text-gray-500 italic">Based on lifetime match feedback</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">Rating History & Progression</h4>
                                                         </div>
 
                                                         {loadingHistory === player.player_id ? (
@@ -510,12 +577,15 @@ export function PlayersClient({
                                                                                     {new Date(entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                                                                 </td>
                                                                                 <td className="px-4 py-2 text-xs">
-                                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-tighter ${entry.change_type === 'match_result' ? 'bg-blue-50 text-blue-700' :
-                                                                                        entry.change_type === 'pro_verification' ? 'bg-green-50 text-green-700' :
-                                                                                            entry.change_type === 'assessment' ? 'bg-purple-50 text-purple-700' :
-                                                                                                'bg-gray-50 text-gray-700'
-                                                                                        }`}>
+                                                                                    <span
+                                                                                        onClick={() => entry.match_id && openMatchDetails(entry.match_id)}
+                                                                                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-tighter ${entry.match_id ? 'cursor-pointer hover:ring-1 hover:ring-offset-1 ring-blue-200' : ''} ${entry.change_type === 'match_result' ? 'bg-blue-50 text-blue-700' :
+                                                                                            entry.change_type === 'pro_verification' ? 'bg-green-50 text-green-700' :
+                                                                                                entry.change_type === 'assessment' ? 'bg-purple-50 text-purple-700' :
+                                                                                                    'bg-gray-50 text-gray-700'
+                                                                                            }`}>
                                                                                         {entry.change_type.replace('_', ' ')}
+                                                                                        {entry.match_id && <span className="ml-1 opacity-50">🔍</span>}
                                                                                     </span>
                                                                                 </td>
                                                                                 <td className="px-4 py-2 text-xs font-mono font-bold text-indigo-600">
@@ -631,6 +701,16 @@ export function PlayersClient({
                     setPlayerToVerify(null)
                 }}
                 player={playerToVerify}
+            />
+
+            <MatchDetailsModal
+                isOpen={isMatchDetailsOpen}
+                onClose={() => setIsMatchDetailsOpen(false)}
+                match={selectedMatch}
+                onUpdate={() => {
+                    // We don't really need to do anything here since it's read-only for now
+                    setIsMatchDetailsOpen(false)
+                }}
             />
         </div>
     )

@@ -30,6 +30,8 @@ interface Match {
     team_2_players: string[]
     team_1_player_details?: Player[]
     team_2_player_details?: Player[]
+    score_text?: string
+    winner_team?: number
 }
 
 interface MatchDetailsModalProps {
@@ -48,11 +50,16 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const [searchResults, setSearchResults] = useState<Player[]>([])
     const [loading, setLoading] = useState(false)
     const [invites, setInvites] = useState<Invite[]>([])
+    const [isCorrecting, setIsCorrecting] = useState(false)
+    const [correctedScore, setCorrectedScore] = useState('')
+    const [correctedWinner, setCorrectedWinner] = useState<number | undefined>(undefined)
 
     useEffect(() => {
         if (match) {
             setScheduledTime(match.scheduled_time)
             setStatus(match.status)
+            setCorrectedScore(match.score_text || '')
+            setCorrectedWinner(match.winner_team)
         }
     }, [match])
 
@@ -88,18 +95,26 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const handleSave = async () => {
         setLoading(true)
         try {
+            const updates: any = {
+                scheduled_time: scheduledTime,
+                status: status
+            }
+
+            if (isCorrecting) {
+                updates.score_text = correctedScore
+                updates.winner_team = correctedWinner
+            }
+
             const response = await fetch(`/api/matches/${match.match_id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    scheduled_time: scheduledTime,
-                    status: status
-                })
+                body: JSON.stringify(updates)
             })
 
             if (!response.ok) throw new Error('Failed to update match')
 
             setIsEditing(false)
+            setIsCorrecting(false)
             onUpdate()
         } catch (error) {
             console.error('Error updating match:', error)
@@ -239,18 +254,117 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                     <option value="pending">Pending</option>
                                     <option value="confirmed">Confirmed</option>
                                     <option value="voting">Voting</option>
+                                    <option value="completed">Completed</option>
                                     <option value="cancelled">Cancelled</option>
                                 </select>
                             ) : (
-                                <span className={`px-3 py-1 inline-flex text-sm font-semibold rounded-full ${status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                    status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                        status === 'voting' ? 'bg-blue-100 text-blue-800' :
-                                            'bg-gray-100 text-gray-800'
-                                    }`}>
-                                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                                </span>
+                                <div className="flex items-center justify-between">
+                                    <span className={`px-3 py-1 inline-flex text-sm font-semibold rounded-full ${status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                        status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                            status === 'voting' ? 'bg-blue-100 text-blue-800' :
+                                                status === 'completed' ? 'bg-indigo-100 text-indigo-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                        }`}>
+                                        {status ? (status.charAt(0).toUpperCase() + status.slice(1)) : 'Unknown'}
+                                    </span>
+                                    {status === 'completed' && !isCorrecting && (
+                                        <button
+                                            onClick={() => {
+                                                setIsCorrecting(true)
+                                                setIsEditing(true)
+                                            }}
+                                            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded transition-colors"
+                                        >
+                                            Correct Result
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
+
+                        {match.score_text && !isCorrecting && (
+                            <div className="overflow-hidden border border-gray-200 rounded-lg shadow-sm">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-bold tracking-wider">
+                                        <tr>
+                                            <th className="px-4 py-2 font-bold">Team</th>
+                                            {match.score_text.split(',').map((_, i) => (
+                                                <th key={i} className="px-3 py-2 text-center w-12 border-l border-gray-100">S{i + 1}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {[1, 2].map((teamNum) => {
+                                            const isWinner = match.winner_team === teamNum
+                                            const players = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
+                                            const teamName = players && players.length > 0
+                                                ? players.map(p => p.name).join(' / ')
+                                                : `Team ${teamNum}`
+
+                                            const sets = match.score_text?.split(',').map(s => s.trim().split('-')) || []
+
+                                            return (
+                                                <tr key={teamNum} className={`${isWinner ? 'bg-green-50' : 'bg-white'}`}>
+                                                    <td className={`px-4 py-3 font-medium ${isWinner ? 'text-green-900' : 'text-gray-900'}`}>
+                                                        <div className="flex items-center gap-2">
+                                                            <span>{teamName}</span>
+                                                            {isWinner && (
+                                                                <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {sets.map((set, i) => {
+                                                        const score = set[teamNum - 1]
+                                                        const otherScore = set[teamNum === 1 ? 1 : 0]
+                                                        const setWon = parseInt(score) > parseInt(otherScore)
+                                                        return (
+                                                            <td key={i} className={`px-3 py-3 text-center border-l border-gray-100 ${setWon ? 'font-bold text-gray-900 underline decoration-green-500 decoration-2 underline-offset-4' : 'text-gray-500'}`}>
+                                                                {score}
+                                                            </td>
+                                                        )
+                                                    })}
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {isCorrecting && (
+                            <div className="bg-amber-50 p-4 rounded-lg border border-amber-100 space-y-4">
+                                <h4 className="text-sm font-bold text-amber-900 uppercase tracking-wider">Correct Match Result</h4>
+                                <div>
+                                    <label className="block text-xs font-medium text-amber-700 mb-1">Score (e.g., 6-4, 6-2)</label>
+                                    <input
+                                        type="text"
+                                        value={correctedScore}
+                                        onChange={(e) => setCorrectedScore(e.target.value)}
+                                        placeholder="Enter score"
+                                        className="w-full px-3 py-2 border border-amber-200 rounded-md focus:ring-amber-500 focus:border-amber-500 bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-amber-700 mb-2">Who Won?</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => setCorrectedWinner(1)}
+                                            className={`px-3 py-2 text-xs font-semibold rounded-md border transition-all ${correctedWinner === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+                                        >
+                                            Team 1
+                                        </button>
+                                        <button
+                                            onClick={() => setCorrectedWinner(2)}
+                                            className={`px-3 py-2 text-xs font-semibold rounded-md border transition-all ${correctedWinner === 2 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+                                        >
+                                            Team 2
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Players List */}
@@ -292,7 +406,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                     </div>
 
                     {/* Invites Sent */}
-                    {invites.length > 0 && (
+                    {invites.length > 0 && status !== 'completed' && (
                         <div className="border-t border-gray-200 pt-4">
                             <h3 className="text-lg font-medium text-gray-900 mb-3">Invites Sent ({invites.length})</h3>
                             <div className="space-y-2">
@@ -375,55 +489,66 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                 </div>
 
                 {/* Footer Actions */}
-                <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50">
-                    <div className="flex gap-3">
-                        {!isEditing && status !== 'confirmed' && (
-                            <button
-                                onClick={handleConfirm}
-                                disabled={loading}
-                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
-                            >
-                                Confirm Match
-                            </button>
-                        )}
-                        {!isEditing && status !== 'cancelled' && (
-                            <button
-                                onClick={handleCancelMatch}
-                                disabled={loading}
-                                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
-                            >
-                                Cancel Match
-                            </button>
-                        )}
-                    </div>
+                <div className={`p-6 border-t border-gray-200 bg-gray-50 flex ${status === 'completed' && !isEditing ? 'justify-end' : 'justify-between'} items-center`}>
+                    {status !== 'completed' && !isEditing && (
+                        <div className="flex gap-3">
+                            {status !== 'confirmed' && (
+                                <button
+                                    onClick={handleConfirm}
+                                    disabled={loading}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm font-medium"
+                                >
+                                    Confirm Match
+                                </button>
+                            )}
+                            {status !== 'cancelled' && (
+                                <button
+                                    onClick={handleCancelMatch}
+                                    disabled={loading}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors shadow-sm font-medium"
+                                >
+                                    Cancel Match
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div className="flex gap-2">
                         {isEditing ? (
                             <>
                                 <button
                                     onClick={() => {
                                         setIsEditing(false)
+                                        setIsCorrecting(false)
                                         setShowPlayerSearch(false)
                                         setPlayerSearchTerm('')
                                     }}
                                     disabled={loading}
-                                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors font-medium"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleSave}
                                     disabled={loading}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm font-medium"
                                 >
-                                    Save Changes
+                                    {isCorrecting ? 'Update Result' : 'Save Changes'}
                                 </button>
                             </>
-                        ) : (
+                        ) : status !== 'completed' && (
                             <button
                                 onClick={() => setIsEditing(true)}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors shadow-sm font-medium"
                             >
                                 Edit Match
+                            </button>
+                        )}
+                        {status === 'completed' && !isEditing && (
+                            <button
+                                onClick={onClose}
+                                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
+                            >
+                                Close
                             </button>
                         )}
                     </div>
