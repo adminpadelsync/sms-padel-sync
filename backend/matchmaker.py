@@ -1,7 +1,7 @@
 from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta
-from logic_utils import is_quiet_hours
+from logic_utils import is_quiet_hours, parse_iso_datetime
 from redis_client import clear_user_state
 
 
@@ -65,7 +65,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     # If no level range set and not skipping filters, use requester's level ± 0.25
     if not skip_filters and (level_min is None or level_max is None):
-        target_level = requester["adjusted_skill_level"]
+        target_level = requester.get("adjusted_skill_level") or requester.get("declared_skill_level") or 3.5
         level_min = target_level - 0.25
         level_max = target_level + 0.25
     
@@ -116,7 +116,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         muted_until = p.get("muted_until")
         if muted_until:
             try:
-                muted_dt = datetime.fromisoformat(muted_until.replace('Z', '+00:00')).replace(tzinfo=None)
+                muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
                 if muted_dt > now:
                     print(f"Skipping {p['name']} - muted until {muted_until}")
                     continue
@@ -193,19 +193,19 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             options = match.get("voting_options", [])
             opt_str = ""
             for i, opt in enumerate(options):
-                dt = datetime.fromisoformat(opt)
+                dt = parse_iso_datetime(opt)
                 time_str = dt.strftime("%H:%M")
                 opt_str += f"{chr(65+i)}) {time_str}\n"
             
             sms_msg = (
-                f"🎾 {club_name}: {requester['name']} wants to play on {datetime.fromisoformat(options[0]).strftime('%A')}.\n"
+                f"🎾 {club_name}: {requester['name']} wants to play on {parse_iso_datetime(options[0]).strftime('%A')}.\n"
                 f"Options:\n{opt_str}"
                 f"Reply with letter(s) (e.g. 'A' or 'AB') to vote."
             )
         else:
             # Format time nicely
             try:
-                scheduled_dt = datetime.fromisoformat(match['scheduled_time'])
+                scheduled_dt = parse_iso_datetime(match['scheduled_time'])
                 time_str = scheduled_dt.strftime("%a, %b %d at %I:%M %p")
             except:
                 time_str = match['scheduled_time']

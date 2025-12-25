@@ -12,11 +12,12 @@ Configurable per club:
 
 from datetime import datetime, timedelta
 from database import supabase
-from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone
+from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime
 import sms_constants as msg
 from redis_client import get_redis_client
 import json
 import pytz
+from twilio_client import send_sms
 
 
 DEFAULT_FEEDBACK_DELAY_HOURS = 3.0
@@ -196,7 +197,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
             if club_res.data:
                 club_name = club_res.data[0]["name"]
         
-        match_time = datetime.fromisoformat(match["scheduled_time"])
+        match_time = parse_iso_datetime(match["scheduled_time"])
         time_str = match_time.strftime("%a %-I%p").replace(":00", "").lower()
         
         message = msg.MSG_FEEDBACK_REQUEST.format(
@@ -275,7 +276,7 @@ def send_reminder_for_request(request: dict):
         if club_res.data:
             club_name = club_res.data[0]["name"]
     
-    match_time = datetime.fromisoformat(match["scheduled_time"])
+    match_time = parse_iso_datetime(match["scheduled_time"])
     time_str = match_time.strftime("%a %-I%p").replace(":00", "").lower()
 
     message = f"""🎾 {club_name}: Reminder - We'd love your feedback on your match on {time_str}!

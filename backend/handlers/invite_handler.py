@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from database import supabase
 from twilio_client import send_sms, get_club_name
 import sms_constants as msg
+from logic_utils import parse_iso_datetime
 
 def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
     """Notify players who replied MAYBE that someone joined."""
@@ -192,7 +193,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 # Format time logic
                 try:
-                    dt = datetime.fromisoformat(updated_match['scheduled_time'].replace('Z', '+00:00'))
+                    dt = parse_iso_datetime(updated_match['scheduled_time'])
                     formatted_time = dt.strftime("%a %I:%M%p").replace(":00", "").lower()
                 except:
                     formatted_time = updated_match['scheduled_time']
@@ -239,7 +240,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 # Format the date/time nicely
                 try:
-                    dt = datetime.fromisoformat(updated_match['scheduled_time'].replace('Z', '+00:00'))
+                    dt = parse_iso_datetime(updated_match['scheduled_time'])
                     formatted_time = dt.strftime("%A, %b %d at %I:%M %p")
                 except:
                     formatted_time = updated_match['scheduled_time']

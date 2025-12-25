@@ -15,6 +15,7 @@ interface Player {
     name: string
     phone_number: string
     declared_skill_level: number
+    adjusted_skill_level?: number
     active_status: boolean
     club_id: string
     avail_weekday_morning?: boolean
@@ -387,7 +388,7 @@ export function PlayersClient({
                                                         className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 transition-colors w-fit group"
                                                     >
                                                         <span className={`font-mono font-medium ${player.pro_verified ? 'text-indigo-600' : 'text-gray-700'}`}>
-                                                            {player.declared_skill_level.toFixed(2)}
+                                                            {(player.adjusted_skill_level || player.declared_skill_level).toFixed(2)}
                                                         </span>
                                                         <svg
                                                             className={`w-4 h-4 text-gray-400 transition-transform ${expandedPlayerId === player.player_id ? 'rotate-180' : ''}`}
@@ -398,25 +399,30 @@ export function PlayersClient({
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                         </svg>
                                                     </button>
-                                                    {!player.pro_verified ? (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                setPlayerToVerify(player)
-                                                                setVerificationModalOpen(true)
-                                                            }}
-                                                            className="text-[10px] uppercase font-bold text-indigo-500 hover:text-indigo-700 pl-2"
-                                                        >
-                                                            Verify Level
-                                                        </button>
-                                                    ) : (
-                                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-green-600 pl-2">
-                                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                            </svg>
-                                                            Pro Verified
+                                                    <div className="flex flex-col pl-2">
+                                                        <span className="text-[9px] uppercase font-bold text-gray-400">
+                                                            STATED: {player.declared_skill_level.toFixed(2)}
                                                         </span>
-                                                    )}
+                                                        {!player.pro_verified ? (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setPlayerToVerify(player)
+                                                                    setVerificationModalOpen(true)
+                                                                }}
+                                                                className="text-[10px] uppercase font-bold text-indigo-500 hover:text-indigo-700 mt-1 text-left"
+                                                            >
+                                                                Verify Level
+                                                            </button>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-green-600 mt-1">
+                                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                </svg>
+                                                                Pro Verified
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

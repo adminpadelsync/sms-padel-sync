@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from database import supabase
+from logic_utils import parse_iso_datetime
 
 def _get_club_name(club_id: str) -> str:
     """Helper to get club name from ID."""
@@ -156,7 +157,7 @@ def initiate_match_outreach(
         
         # Format date for SMS
         try:
-            dt = datetime.fromisoformat(scheduled_time)
+            dt = parse_iso_datetime(scheduled_time)
             formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
         except:
             formatted_time = scheduled_time
@@ -192,7 +193,7 @@ def initiate_match_outreach(
                         m = other_matches.get(inv["match_id"])
                         if m:
                             try:
-                                other_dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                                other_dt = parse_iso_datetime(m['scheduled_time'])
                                 other_time = other_dt.strftime("%a, %b %d at %I:%M %p")
                             except:
                                 other_time = m['scheduled_time']
@@ -313,7 +314,7 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
     
     # Format date for SMS
     try:
-        dt = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
+        dt = parse_iso_datetime(match['scheduled_time'])
         formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
     except:
         formatted_time = match['scheduled_time']
@@ -481,7 +482,7 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
             
             # Format match time for message
             try:
-                dt = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
+                dt = parse_iso_datetime(match['scheduled_time'])
                 formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
             except:
                 formatted_time = match['scheduled_time']

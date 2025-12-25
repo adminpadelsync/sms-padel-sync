@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 from database import supabase
 
@@ -78,3 +78,45 @@ def get_booking_url(club: dict) -> str:
         return "https://playbypoint.com"
     
     return "the booking portal"
+
+def parse_iso_datetime(dt_str: str) -> datetime:
+    """
+    Robustly parse ISO datetime strings from Javascript or Postgres.
+    Handles 'Z' suffix and varying microsecond precision.
+    """
+    if not dt_str:
+        return None
+        
+    # Replace 'Z' with UTC offset for across-version compatibility
+    clean_dt = dt_str.replace('Z', '+00:00')
+    
+    try:
+        return datetime.fromisoformat(clean_dt)
+    except ValueError:
+        # Fallback for weird precisions or formats
+        # datetime.fromisoformat can be picky about the number of sub-second digits in older Python
+        try:
+            # Try removing sub-seconds if they are the problem
+            if '.' in clean_dt:
+                base, fraction = clean_dt.split('.')
+                # Keep up to 6 digits for microseconds, but handle variable lengths
+                if '+' in fraction:
+                    frac_part, tz_part = fraction.split('+')
+                    clean_dt = f"{base}.{frac_part[:6].ljust(6, '0')}+{tz_part}"
+                elif '-' in fraction:
+                    frac_part, tz_part = fraction.split('-')
+                    clean_dt = f"{base}.{frac_part[:6].ljust(6, '0')}-{tz_part}"
+                else:
+                    clean_dt = f"{base}.{fraction[:6].ljust(6, '0')}"
+                return datetime.fromisoformat(clean_dt)
+        except Exception:
+            pass
+            
+        # Last resort: common formats
+        for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+            try:
+                return datetime.strptime(dt_str.split('+')[0].split('Z')[0], fmt)
+            except ValueError:
+                continue
+                
+    raise ValueError(f"Invalid isoformat string: '{dt_str}'")

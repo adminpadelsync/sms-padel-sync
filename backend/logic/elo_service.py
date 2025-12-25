@@ -62,7 +62,7 @@ def update_match_elo(match_id: str, winner_team: int):
         p_res = supabase.table("players").select("player_id, elo_rating, elo_confidence, declared_skill_level").eq("player_id", pid).execute()
         if not p_res.data: return None
         p = p_res.data[0]
-        if p.get("elo_rating") is None:
+        if p.get("elo_rating") is None or (p.get("elo_rating") == 1500 and p.get("elo_confidence", 0) == 0):
             p["elo_rating"] = get_initial_elo(float(p.get("declared_skill_level") or 3.5))
         return p
 

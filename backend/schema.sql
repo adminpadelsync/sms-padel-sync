@@ -212,4 +212,21 @@ CREATE TABLE IF NOT EXISTS assessment_results (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-COMMENT ON TABLE assessment_results IS 'Stores results of Padel level assessments for evaluation.';
+-- Player Rating History
+CREATE TABLE IF NOT EXISTS player_rating_history (
+  history_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  player_id UUID NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+  old_elo_rating INTEGER,
+  new_elo_rating INTEGER NOT NULL,
+  old_sync_rating DECIMAL(3,2),
+  new_sync_rating DECIMAL(3,2) NOT NULL,
+  change_type TEXT NOT NULL, -- 'match_result', 'pro_verification', 'assessment', 'manual_adjustment'
+  match_id UUID REFERENCES matches(match_id) ON DELETE SET NULL,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rating_history_player ON player_rating_history(player_id);
+CREATE INDEX IF NOT EXISTS idx_rating_history_created_at ON player_rating_history(created_at DESC);
+
+COMMENT ON TABLE player_rating_history IS 'Stores the timeline of Elo and Sync rating changes for each player.';

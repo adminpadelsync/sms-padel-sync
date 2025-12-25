@@ -14,6 +14,7 @@ from handlers.feedback_handler import handle_feedback_response
 from handlers.result_handler import handle_result_report
 from error_logger import log_sms_error
 from datetime import datetime
+from logic_utils import parse_iso_datetime
 import re
 from logic.reasoner import reason_message, ReasonerResult
 
@@ -202,7 +203,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             
             if muted_until:
                 try:
-                    muted_dt = datetime.fromisoformat(muted_until.replace('Z', '+00:00')).replace(tzinfo=None)
+                    muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
                     if muted_dt > datetime.now():
                         send_sms(from_number, msg.MSG_ALREADY_MUTED)
                         return
@@ -222,7 +223,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 return
             
             try:
-                muted_dt = datetime.fromisoformat(muted_until.replace('Z', '+00:00')).replace(tzinfo=None)
+                muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
                 if muted_dt <= datetime.now():
                     send_sms(from_number, msg.MSG_NOT_MUTED)
                     return
@@ -272,7 +273,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                 def is_future_match(match):
                     """Check if match scheduled_time is in the future."""
                     try:
-                        scheduled = datetime.fromisoformat(match['scheduled_time'].replace('Z', '+00:00'))
+                        scheduled = parse_iso_datetime(match['scheduled_time'])
                         scheduled = scheduled.replace(tzinfo=None)
                         return scheduled > now
                     except:
@@ -333,7 +334,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                     response += "✅ CONFIRMED:\n"
                     for m in confirmed:
                         try:
-                            dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                            dt = parse_iso_datetime(m['scheduled_time'])
                             time_str = dt.strftime("%a, %b %d at %I:%M %p")
                         except:
                             time_str = m['scheduled_time']
@@ -353,7 +354,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                     response += "⏳ YOUR PENDING REQUESTS:\n"
                     for m in pending_as_requester:
                         try:
-                            dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                            dt = parse_iso_datetime(m['scheduled_time'])
                             time_str = dt.strftime("%a, %b %d at %I:%M %p")
                         except:
                             time_str = m['scheduled_time']
@@ -374,7 +375,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
                     response += "📩 PENDING INVITES (reply with #):\n"
                     for i, m in enumerate(pending_invites, 1):
                         try:
-                            dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                            dt = parse_iso_datetime(m['scheduled_time'])
                             time_str = dt.strftime("%a, %b %d at %I:%M %p")
                         except:
                             time_str = m['scheduled_time']
@@ -415,7 +416,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
             
             m = matches[0]
             try:
-                dt = datetime.fromisoformat(m['scheduled_time'].replace('Z', '+00:00'))
+                dt = parse_iso_datetime(m['scheduled_time'])
                 time_str = dt.strftime("%A, %b %d at %I:%M %p")
             except:
                 time_str = m['scheduled_time']

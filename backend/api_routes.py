@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
+from logic_utils import parse_iso_datetime
 from database import supabase
 from match_organizer import (
     get_player_recommendations, 
@@ -54,6 +55,11 @@ class BookingMarkRequest(BaseModel):
 
 class AssessmentUpdate(BaseModel):
     player_name: str
+
+class CreateConfirmedMatchRequest(BaseModel):
+    player_ids: List[str]
+    club_id: str
+    scheduled_time: Optional[str] = None
 
 @router.get("/clubs")
 async def get_clubs():
@@ -193,17 +199,26 @@ async def update_club(club_id: str, updates: ClubUpdate):
 
 
 @router.get("/players")
-async def get_players(club_id: str = None):
+async def get_players(request: Request):
     """Get all players, optionally filtered by club."""
     from database import supabase
     try:
+        # Get club_id from query params directly for robustness
+        club_id = request.query_params.get("club_id") or request.query_params.get("cid")
+        print(f"DEBUG: get_players explicitly called with club_id={club_id}")
+        
         query = supabase.table("players").select(
             "player_id, name, phone_number, declared_skill_level, gender, active_status, pro_verified, responsiveness_score, reputation_score, total_matches_played, club_id"
         )
-        if club_id:
+        
+        if club_id and club_id.strip() and club_id != "undefined" and club_id != "null":
+            print(f"DEBUG: Applying club_id filter: {club_id}")
             query = query.eq("club_id", club_id)
+        
         result = query.eq("active_status", True).order("name").execute()
-        return {"players": result.data or []}
+        players = result.data or []
+        print(f"DEBUG: Found {len(players)} players")
+        return {"players": players}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -565,6 +580,66 @@ async def trigger_match_feedback(match_id: str, force: bool = False):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/admin/create-confirmed-match")
+async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
+    """Admin-only endpoint to instantly create a confirmed match with 4 players."""
+    from database import supabase
+    try:
+        if len(request.player_ids) != 4:
+            raise HTTPException(status_code=400, detail="Exactly 4 players are required.")
+            
+        if request.scheduled_time:
+            # Parse and re-serialize to ensure it's a valid standard ISO format
+            scheduled_time = parse_iso_datetime(request.scheduled_time).isoformat()
+        else:
+            scheduled_time = datetime.now().isoformat()
+        
+        # Split players into 2 teams
+        team_1 = request.player_ids[:2]
+        team_2 = request.player_ids[2:]
+        
+        match_data = {
+            "club_id": request.club_id,
+            "team_1_players": team_1,
+            "team_2_players": team_2,
+            "scheduled_time": scheduled_time,
+            "status": "confirmed",
+            "originator_id": team_1[0],
+            "teams_verified": True
+        }
+        
+        print(f"DEBUG: Creating match with data: {match_data}")
+        try:
+            result = supabase.table("matches").insert(match_data).execute()
+        except Exception as e:
+            print(f"DEBUG: Supabase insert error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Supabase error: {str(e)}")
+
+        if not result.data:
+            print(f"DEBUG: Supabase returned no data. Result: {result}")
+            raise HTTPException(status_code=500, detail="Failed to create match record (no data returned).")
+            
+        match = result.data[0]
+        
+        # Also create accepted invites for all 4 players so they are linked
+        invite_data = []
+        for pid in request.player_ids:
+            invite_data.append({
+                "match_id": match["match_id"],
+                "player_id": pid,
+                "status": "accepted",
+                "sent_at": datetime.now().isoformat(),
+                "responded_at": datetime.now().isoformat()
+            })
+        
+        supabase.table("match_invites").insert(invite_data).execute()
+        
+        return {"match": match, "message": "Confirmed match created successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/matches/{match_id}/feedback")
 async def get_match_feedback(match_id: str):
