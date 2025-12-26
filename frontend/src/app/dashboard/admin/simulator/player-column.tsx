@@ -15,6 +15,12 @@ interface Club {
     phone_number: string
 }
 
+interface Group {
+    group_id: string
+    name: string
+    phone_number: string | null
+}
+
 interface PlayerColumnProps {
     player: {
         player_id: string
@@ -24,11 +30,20 @@ interface PlayerColumnProps {
     messages: Message[]
     onSendMessage: (message: string) => void
     clubs?: Club[]
-    selectedClubId?: string
-    onClubChange?: (clubId: string) => void
+    groups?: Group[]
+    selectedToNumber?: string
+    onToNumberChange?: (phoneNumber: string) => void
 }
 
-export function PlayerColumn({ player, messages, onSendMessage, clubs = [], selectedClubId, onClubChange }: PlayerColumnProps) {
+export function PlayerColumn({
+    player,
+    messages,
+    onSendMessage,
+    clubs = [],
+    groups = [],
+    selectedToNumber,
+    onToNumberChange
+}: PlayerColumnProps) {
     const [inputText, setInputText] = useState('')
 
     const handleSend = () => {
@@ -42,8 +57,8 @@ export function PlayerColumn({ player, messages, onSendMessage, clubs = [], sele
         onSendMessage(action)
     }
 
-    // Get selected club name for display
-    const selectedClub = clubs.find(c => c.club_id === selectedClubId)
+    // Default to first club phone if nothing selected
+    const activeToNumber = selectedToNumber || clubs[0]?.phone_number || ''
 
     return (
         <div className="flex flex-col h-full border border-gray-300 rounded-lg bg-white">
@@ -51,29 +66,27 @@ export function PlayerColumn({ player, messages, onSendMessage, clubs = [], sele
             <div className="p-3 border-b border-gray-200 bg-gray-50">
                 <div className="font-medium text-gray-900">{player.name}</div>
                 <div className="text-xs text-gray-500">{player.phone_number}</div>
-                {/* Club Selector - only show if multiple clubs */}
-                {clubs.length > 1 && (
-                    <div className="mt-2">
-                        <label className="text-xs text-gray-600 block mb-1">Texting to:</label>
-                        <select
-                            value={selectedClubId || clubs[0]?.club_id || ''}
-                            onChange={(e) => onClubChange?.(e.target.value)}
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                        >
-                            {clubs.map(club => (
-                                <option key={club.club_id} value={club.club_id}>
-                                    {club.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                )}
-                {/* Show single club name if only one */}
-                {clubs.length === 1 && (
-                    <div className="mt-1 text-xs text-indigo-600">
-                        → {clubs[0].name}
-                    </div>
-                )}
+
+                {/* Combined Club/Group Selector */}
+                <div className="mt-2">
+                    <label className="text-xs text-gray-600 block mb-1">Texting to:</label>
+                    <select
+                        value={activeToNumber}
+                        onChange={(e) => onToNumberChange?.(e.target.value)}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                    >
+                        {clubs.map(club => (
+                            <option key={club.club_id} value={club.phone_number}>
+                                🏢 {club.name} (Club)
+                            </option>
+                        ))}
+                        {groups.map(group => (
+                            <option key={group.group_id} value={group.phone_number || ''}>
+                                👥 {group.name} (Group)
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
 

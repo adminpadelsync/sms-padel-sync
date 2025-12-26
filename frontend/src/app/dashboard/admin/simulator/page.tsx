@@ -49,6 +49,12 @@ interface Club {
     phone_number: string
 }
 
+interface Group {
+    group_id: string
+    name: string
+    phone_number: string | null
+}
+
 export default function SMSSimulatorPage() {
     const [players, setPlayers] = useState<Player[]>([])
     const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([])
@@ -62,8 +68,9 @@ export default function SMSSimulatorPage() {
     const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null)
     const [currentClubId, setCurrentClubId] = useState<string | null>(null)
     const [clubs, setClubs] = useState<Club[]>([])
-    // Track selected club per player (player_id -> club_id)
-    const [playerClubSelection, setPlayerClubSelection] = useState<Record<string, string>>({})
+    const [groups, setGroups] = useState<Group[]>([])
+    // Track selected "to number" per player (player_id -> phone_number)
+    const [playerToNumberSelection, setPlayerToNumberSelection] = useState<Record<string, string>>({})
 
     // Fetch players, clubs, and confirmed matches on mount
     useEffect(() => {
@@ -71,6 +78,12 @@ export default function SMSSimulatorPage() {
         fetchClubs()
         fetchConfirmedMatches()
     }, [])
+
+    useEffect(() => {
+        if (currentClubId) {
+            fetchGroups(currentClubId)
+        }
+    }, [currentClubId])
 
     // Poll for outbox messages when in test mode
     useEffect(() => {
@@ -147,6 +160,18 @@ export default function SMSSimulatorPage() {
             }
         } catch (error) {
             console.error('Error fetching clubs:', error)
+        }
+    }
+
+    const fetchGroups = async (clubId: string) => {
+        try {
+            const response = await fetch(`/api/clubs/${clubId}/groups`)
+            if (response.ok) {
+                const data = await response.json()
+                setGroups(data.groups || [])
+            }
+        } catch (error) {
+            console.error('Error fetching groups:', error)
         }
     }
 
@@ -399,10 +424,13 @@ Reply YES to join, NO to decline`
         // Test mode: POST to backend, response will come via outbox polling
         if (testMode) {
             try {
-                // Get the selected club for this player, or default to first club
-                const selectedClubId = playerClubSelection[playerId] || clubs[0]?.club_id
-                const selectedClub = clubs.find(c => c.club_id === selectedClubId)
-                const toNumber = selectedClub?.phone_number
+                // Get the selected "to number" for this player, or default to club phone
+                let toNumber = playerToNumberSelection[playerId]
+
+                if (!toNumber) {
+                    const selectedClub = clubs.find(c => c.club_id === currentClubId) || clubs[0]
+                    toNumber = selectedClub?.phone_number
+                }
 
                 await fetch('/api/sms-inbox', {
                     method: 'POST',
@@ -891,15 +919,14 @@ Example: MAYBE 1`
                                     ✕
                                 </button>
                                 <PlayerColumn
+                                    key={player.player_id}
                                     player={player}
                                     messages={conversations[player.player_id] || []}
-                                    onSendMessage={(msg) => handlePlayerMessage(player.player_id, msg)}
+                                    onSendMessage={(text) => handlePlayerMessage(player.player_id, text)}
                                     clubs={clubs}
-                                    selectedClubId={playerClubSelection[player.player_id] || clubs[0]?.club_id}
-                                    onClubChange={(clubId) => setPlayerClubSelection(prev => ({
-                                        ...prev,
-                                        [player.player_id]: clubId
-                                    }))}
+                                    groups={groups.filter(g => !!g.phone_number)}
+                                    selectedToNumber={playerToNumberSelection[player.player_id]}
+                                    onToNumberChange={(num: string) => setPlayerToNumberSelection(prev => ({ ...prev, [player.player_id]: num }))}
                                 />
                             </div>
                         ))}
