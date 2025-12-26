@@ -50,7 +50,7 @@ from database import supabase
 from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
-from logic_utils import get_club_timezone
+from logic_utils import get_club_timezone, format_sms_datetime
 from handlers.date_parser import parse_natural_date
 
 from error_logger import log_match_error
@@ -104,9 +104,9 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
         # Fallback: Try strict YYYY-MM-DD HH:MM format
         try:
             scheduled_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-            human_readable = scheduled_time.strftime("%a, %b %d at %I:%M %p")
-            iso_format = scheduled_time.isoformat()
             parsed_dt = scheduled_time
+            human_readable = format_sms_datetime(parsed_dt)
+            iso_format = scheduled_time.isoformat()
         except ValueError:
             pass
     
@@ -141,7 +141,8 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             gender_preference=None,
             target_group_id=auto_group_id,
             skip_filters=True,
-            group_name=group_name
+            group_name=group_name,
+            friendly_time=format_sms_datetime(parsed_dt)
         )
         return
 
@@ -199,9 +200,10 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
     gender_preference = player_gender if player_gender in ["male", "female"] else "mixed"
     
     # Format for display
+    friendly_time = format_sms_datetime(parse_iso_datetime(iso_format))
     confirm_msg = msg.MSG_CONFIRM_DATE_WITH_PREFS.format(
         club_name=get_club_name(),
-        time=human_readable,
+        time=friendly_time,
         level=player_level,
         range=DEFAULT_LEVEL_RANGE,
         gender=gender_display
@@ -430,7 +432,8 @@ def _create_match(
     gender_preference: str = "mixed",
     target_group_id: Optional[str] = None,
     skip_filters: bool = False,
-    group_name: str = None
+    group_name: str = None,
+    friendly_time: str = None
 ):
     """
     Create match in database with preferences and trigger invites.
@@ -469,16 +472,20 @@ def _create_match(
             count = find_and_invite_players(match_id, skip_filters=skip_filters)
             
             # Use appropriate confirmation message
+            # If friendly_time wasn't passed, calculate it
+            if not friendly_time:
+                friendly_time = format_sms_datetime(parse_iso_datetime(scheduled_time_iso))
+                
             if skip_filters and group_name:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_GROUP.format(
                     club_name=get_club_name(), 
-                    time=scheduled_time_human, 
+                    time=friendly_time, 
                     count=count,
                     group_name=group_name
                 ))
             else:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
-                    club_name=get_club_name(), time=scheduled_time_human, count=count
+                    club_name=get_club_name(), time=friendly_time, count=count
                 ))
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)

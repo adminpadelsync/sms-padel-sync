@@ -6,6 +6,7 @@ Includes SMS shorthand normalization for common texting abbreviations.
 from datetime import datetime
 from typing import Tuple, Optional
 import re
+from logic_utils import format_sms_datetime
 
 DATEPARSER_AVAILABLE = None
 DATEUTIL_AVAILABLE = None
@@ -187,7 +188,7 @@ def _manual_regex_fallback(text: str, timezone: str) -> Tuple[Optional[datetime]
              # just missed the window.
              return None, None, None
              
-        human_readable = parsed_dt.strftime("%a, %b %d at %I:%M %p")
+        human_readable = format_sms_datetime(parsed_dt)
         print(f"[date_parser] Regex Fallback Success! '{text}' -> {human_readable}")
         return parsed_dt, human_readable, parsed_dt.isoformat()
         
@@ -230,4 +231,4 @@ def format_datetime_for_sms(dt: datetime) -> str:
     Returns:
         Human-readable string like "Wed, Dec 11 at 6:00 PM"
     """
-    return dt.strftime("%a, %b %d at %I:%M %p")
+    return format_sms_datetime(dt)

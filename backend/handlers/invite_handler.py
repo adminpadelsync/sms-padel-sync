@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 from database import supabase
-from twilio_client import send_sms, get_club_name
+from twilio_client import send_sms, get_club_name, set_reply_from, set_club_name
 import sms_constants as msg
-from logic_utils import parse_iso_datetime
+from logic_utils import parse_iso_datetime, format_sms_datetime
 
 def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
     """Notify players who replied MAYBE that someone joined."""
@@ -200,15 +200,11 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 player_list = "\n".join(player_list_items) if player_list_items else "  - You!"
                 
                 # Format time logic
-                try:
-                    dt = parse_iso_datetime(updated_match['scheduled_time'])
-                    formatted_time = dt.strftime("%a %I:%M%p").replace(":00", "").lower()
-                except:
-                    formatted_time = updated_match['scheduled_time']
+                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']))
 
                 response_msg = (
                     f"✅ {get_club_name()}: You're in! ({new_player_count}/4 confirmed)\n"
-                    f"📅 {formatted_time}\n\n"
+                    f"📅 {friendly_time}\n\n"
                     f"So far:\n{player_list}\n\n"
                     f"We need {spots_left} more player{'s' if spots_left > 1 else ''} to confirm the match."
                 )
@@ -247,11 +243,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 club_name = club.get("name", "the club")
                 
                 # Format the date/time nicely
-                try:
-                    dt = parse_iso_datetime(updated_match['scheduled_time'])
-                    formatted_time = dt.strftime("%A, %b %d at %I:%M %p")
-                except:
-                    formatted_time = updated_match['scheduled_time']
+                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']))
                 
                 # Get all player names for the confirmation message
                 player_names = []
@@ -263,6 +255,24 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 players_text = "\n".join(player_names)
                 
+                # Check for Group Context for sender/naming
+                group_id = updated_match.get("target_group_id")
+                if group_id:
+                    # Get group details
+                    group_res = supabase.table("player_groups").select("name, phone_number").eq("group_id", group_id).execute()
+                    if group_res.data:
+                        group = group_res.data[0]
+                        group_name = group["name"]
+                        group_phone = group.get("phone_number")
+                        
+                        # Set combined name for this confirmation sequence
+                        club_name = f"{club_name} - {group_name}"
+                        set_club_name(club_name)
+                        
+                        # Set the outgoing sender number to the group's number
+                        if group_phone:
+                            set_reply_from(group_phone)
+                
                 # Notify all players
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
@@ -273,7 +283,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                             # Special message for the initiator
                             msg_text = msg.MSG_MATCH_CONFIRMED_INITIATOR.format(
                                 club_name=club_name,
-                                time=formatted_time,
+                                time=friendly_time,
                                 booking_url=booking_url,
                                 club_phone=club_phone
                             )
@@ -281,12 +291,12 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                             # Standard message for others
                             msg_text = msg.MSG_MATCH_CONFIRMED.format(
                                 club_name=club_name,
-                                time=formatted_time
+                                time=friendly_time
                             )
                         
                         confirmation_msg = (
                             f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
-                            f"📅 {formatted_time}\n\n"
+                            f"📅 {friendly_time}\n\n"
                             f"👥 Players:\n{players_text}\n\n"
                             f"{msg_text if pid == initiator_id else 'See you on the court! 🏸'}"
                         )

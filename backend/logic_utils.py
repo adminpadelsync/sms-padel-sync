@@ -120,3 +120,30 @@ def parse_iso_datetime(dt_str: str) -> datetime:
                 continue
                 
     raise ValueError(f"Invalid isoformat string: '{dt_str}'")
+
+def format_sms_datetime(dt: datetime) -> str:
+    """
+    Format a datetime for user-friendly SMS output.
+    Example: 'Fri, Dec 26th @ 4pm'
+    """
+    if not dt:
+        return "the scheduled time"
+        
+    day = dt.day
+    if 11 <= day <= 13:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+        
+    # Format: Fri, Dec 26th @ 4pm
+    # %a (Fri), %b (Dec), %d (26)
+    # %I (04), %p (PM) -> manual strip of leading zero
+    day_str = dt.strftime(f"%a, %b {day}{suffix}")
+    time_str = dt.strftime("%I:%M%p").lower()
+    
+    # Clean up time: 04:00pm -> 4pm, 04:30pm -> 4:30pm
+    if time_str.startswith('0'):
+        time_str = time_str[1:]
+    time_str = time_str.replace(':00', '')
+    
+    return f"{day_str} @ {time_str}"
