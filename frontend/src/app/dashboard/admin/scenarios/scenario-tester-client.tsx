@@ -48,11 +48,20 @@ export default function ScenarioTesterClient() {
 
     const AVAILABLE_STATES = [
         'IDLE',
+        'NEW',
         'WAITING_NAME',
-        'STATE_MATCH_REQUEST_DATE',
+        'WAITING_LEVEL',
+        'WAITING_GENDER',
+        'WAITING_AVAILABILITY',
+        'WAITING_GROUPS_ONBOARDING',
+        'MATCH_REQUEST_DATE',
+        'MATCH_REQUEST_CONFIRM',
+        'MATCH_GROUP_SELECTION',
+        'MATCH_REQUEST_DURATION',
         'WAITING_FEEDBACK',
         'BROWSING_GROUPS',
-        'UPDATING_AVAILABILITY'
+        'UPDATING_AVAILABILITY',
+        'COMPLETED'
     ]
 
     useEffect(() => {

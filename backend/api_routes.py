@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
 from logic_utils import parse_iso_datetime
+import sms_constants as msg
 from database import supabase
 from match_organizer import (
     get_player_recommendations, 
@@ -1076,12 +1077,12 @@ async def run_scenario(request: ScenarioRequest = None):
                     next_state = "IDLE"
                     reply_action = "INITIATE_MATCH"
                 else:
-                    next_state = "STATE_MATCH_REQUEST_DATE"
+                    next_state = msg.STATE_MATCH_REQUEST_DATE
                     reply_action = "ASK_DATE"
             elif reasoner_result.intent == "JOIN_GROUP":
-                next_state = "BROWSING_GROUPS"
+                next_state = msg.STATE_BROWSING_GROUPS
                 reply_action = "LIST_GROUPS"
-            elif reasoner_result.intent == "SUBMIT_FEEDBACK" and current_state == "WAITING_FEEDBACK":
+            elif reasoner_result.intent == "SUBMIT_FEEDBACK" and current_state == msg.STATE_WAITING_FEEDBACK:
                 next_state = "IDLE"
                 reply_action = "THANKS_FEEDBACK"
             elif reasoner_result.intent == "CHECK_STATUS":
