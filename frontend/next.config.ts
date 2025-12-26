@@ -28,11 +28,11 @@ const nextConfig: NextConfig = {
             : `${apiUrl || ''}/api/outreach`,
       },
       {
-        source: '/webhook/sms',
+        source: '/api/webhook/sms',
         destination:
           process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/webhook/sms'
-            : `${apiUrl || ''}/webhook/sms`,
+            ? 'http://localhost:8001/api/webhook/sms'
+            : `${apiUrl || ''}/api/webhook/sms`,
       },
       {
         source: '/api/sms-outbox/:path*',
