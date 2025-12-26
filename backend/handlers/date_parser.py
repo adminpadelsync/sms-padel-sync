@@ -149,25 +149,43 @@ def _manual_regex_fallback(text: str, timezone: str) -> Tuple[Optional[datetime]
         # 1. Determine base date
         base_date = now_in_tz
         has_relative = False
-        if "tomorrow" in clean:
-            base_date = now_in_tz + timedelta(days=1)
-            clean = clean.replace("tomorrow", "")
-            has_relative = True
-        elif "today" in clean:
-            clean = clean.replace("today", "")
-            has_relative = True
+        
+        # Weekdays
+        weekdays = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        
+        found_weekday = False
+        for day_name, day_idx in weekdays.items():
+            if day_name in clean:
+                days_ahead = day_idx - now_in_tz.weekday()
+                if days_ahead <= 0: # Target day is today or had happened
+                    days_ahead += 7
+                base_date = now_in_tz + timedelta(days=days_ahead)
+                clean = clean.replace(day_name, "")
+                has_relative = True
+                found_weekday = True
+                break
+        
+        if not found_weekday:
+            if "tomorrow" in clean:
+                base_date = now_in_tz + timedelta(days=1)
+                clean = clean.replace("tomorrow", "")
+                has_relative = True
+            elif "today" in clean:
+                clean = clean.replace("today", "")
+                has_relative = True
         
         # 2. Extract time using regex
         # Look for patterns like "4pm", "4:30pm", "16:00", "at 4"
         time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', clean)
         if not time_match:
-            # If we only have "today" or "tomorrow", maybe default to a sensible time?
-            # But better to return None and let it ask.
             return None, None, None
             
         hour = int(time_match.group(1))
         minute = int(time_match.group(2)) if time_match.group(2) else 0
-        meridiem = time_match.group(3)
+        meridiem = (time_match.group(3) or "").lower()
         
         # Adjust for AM/PM
         if meridiem == "pm" and hour < 12:
@@ -181,12 +199,9 @@ def _manual_regex_fallback(text: str, timezone: str) -> Tuple[Optional[datetime]
         
         parsed_dt = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
         
-        # If it's today and in the past (more than 1 hour ago), we reject or nudge
-        buffer_time = now_in_tz - timedelta(hours=1)
-        if parsed_dt < buffer_time:
-             # Basic heuristic: if it's earlier today, they likely meant tomorrow or 
-             # just missed the window.
-             return None, None, None
+        # If it's today and in the past, nudge to tomorrow if they didn't specify day
+        if not has_relative and parsed_dt < now_in_tz:
+             parsed_dt += timedelta(days=1)
              
         human_readable = format_sms_datetime(parsed_dt)
         print(f"[date_parser] Regex Fallback Success! '{text}' -> {human_readable}")
@@ -216,9 +231,34 @@ def parse_natural_date(
     """
     if not text or not text.strip():
         return None, None, None
+
+    _check_dependencies()
     
-    # Use zero-dependency regex fallback directly
-    return _manual_regex_fallback(text, timezone)
+    clean_text = normalize_sms_text(text)
+    
+    # 1. Try dateparser (best results, handles weekdays/relatives)
+    if DATEPARSER_AVAILABLE:
+        try:
+            import dateparser
+            import pytz
+            tz = pytz.timezone(timezone)
+            now_in_tz = datetime.now(tz).replace(tzinfo=None)
+            
+            # Use relative base to ensure "Monday" means next Monday correctly
+            parsed = dateparser.parse(clean_text, settings={
+                'RELATIVE_BASE': now_in_tz,
+                'PREFER_DATES_FROM': 'future'
+            })
+            
+            if parsed:
+                from logic_utils import format_sms_datetime
+                human_readable = format_sms_datetime(parsed)
+                return parsed, human_readable, parsed.isoformat()
+        except Exception as e:
+            print(f"[date_parser] dateparser failed: {e}")
+
+    # 2. Fallback to manual regex parsing
+    return _manual_regex_fallback(clean_text, timezone)
 
 
 def format_datetime_for_sms(dt: datetime) -> str:
