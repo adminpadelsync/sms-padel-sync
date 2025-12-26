@@ -20,6 +20,7 @@ router = APIRouter()
 
 from logic.elo_service import update_match_elo
 from result_nudge_scheduler import run_result_nudge_scheduler
+import twilio_manager
 
 class RecommendationRequest(BaseModel):
     club_id: str
@@ -1167,3 +1168,41 @@ async def save_assessment_result(request: AssessmentResultRequest):
         print(f"DEBUG: Error saving assessment result: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/groups/{group_id}/suggested-numbers")
+async def get_suggested_numbers(group_id: str):
+    """Get suggested phone numbers for a group based on club's area code."""
+    try:
+        # Get group's club_id
+        group_res = supabase.table("player_groups").select("club_id").eq("group_id", group_id).maybe_single().execute()
+        if not group_res.data:
+             raise HTTPException(status_code=404, detail="Group not found")
+        
+        club_id = group_res.data["club_id"]
+        area_code = twilio_manager.get_club_area_code(club_id)
+        numbers = twilio_manager.search_available_numbers(area_code)
+        
+        return {"numbers": numbers}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/groups/{group_id}/provision-number")
+async def provision_number(group_id: str, request: Dict[str, str]):
+    """Provision a specific phone number for a group."""
+    phone_number = request.get("phone_number")
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="phone_number is required")
+    
+    success, result = twilio_manager.provision_group_number(group_id, phone_number)
+    if not success:
+        raise HTTPException(status_code=500, detail=result)
+    
+    return {"status": "success", "phone_number": result}
+
+@router.delete("/groups/{group_id}/release-number")
+async def release_number(group_id: str):
+    """Release the dedicated phone number for a group."""
+    success, result = twilio_manager.release_group_number(group_id)
+    if not success:
+        raise HTTPException(status_code=500, detail=result)
+    
+    return {"status": "success", "message": result}

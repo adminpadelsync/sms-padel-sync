@@ -7,6 +7,7 @@ import { removeGroupMember, deleteGroup } from './actions'
 import { PlayerActions } from '../player-management'
 import { AddMembersModal } from './add-members-modal'
 import { MatchWizard } from '../create-match-wizard'
+import { GroupNumberSettings } from './group-number-settings'
 
 interface Member {
     player_id: string
@@ -19,12 +20,13 @@ interface Member {
     gender?: string
 }
 
-interface Group {
+export interface Group {
     group_id: string
     name: string
     description?: string
     club_id: string
     visibility?: 'private' | 'open' | 'public'
+    phone_number?: string
 }
 
 interface GroupDetailsClientProps {
@@ -111,6 +113,8 @@ export function GroupDetailsClient({ group, members }: GroupDetailsClientProps) 
                     </div>
                 </div>
             </div>
+
+            <GroupNumberSettings group={group} />
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">

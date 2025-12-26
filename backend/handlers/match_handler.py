@@ -121,7 +121,31 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
         return
     
-    # Date parsed successfully - check if player is in any groups
+    # Date parsed successfully - check if we should auto-scope to a group
+    auto_group_id = entities.get("group_id") if entities else None
+    
+    if auto_group_id:
+        # BYPASS group selection - auto-scope to this group
+        # We still want to get the group name for confirmation
+        group_res = supabase.table("player_groups").select("name").eq("group_id", auto_group_id).maybe_single()
+        group_name = group_res["name"] if group_res else "your group"
+        
+        # Create match immediately with group context
+        _create_match(
+            from_number,
+            iso_format,
+            human_readable,
+            player,
+            level_min=None,
+            level_max=None,
+            gender_preference=None,
+            target_group_id=auto_group_id,
+            skip_filters=True,
+            group_name=group_name
+        )
+        return
+
+    # No auto-scope - check if player is manually in groups
     groups_res = supabase.table("group_memberships").select(
         "group_id, player_groups(name)"
     ).eq("player_id", player["player_id"]).execute()

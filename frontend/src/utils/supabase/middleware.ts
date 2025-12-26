@@ -46,7 +46,9 @@ export async function updateSession(request: NextRequest) {
         request.nextUrl.pathname !== '/terms' &&
         !request.nextUrl.pathname.startsWith('/messaging-terms') &&
         !request.nextUrl.pathname.startsWith('/assessment') &&
-        !request.nextUrl.pathname.startsWith('/api/assessment')
+        !request.nextUrl.pathname.startsWith('/api/assessment') &&
+        !request.nextUrl.pathname.startsWith('/api/webhook/sms') &&
+        !request.nextUrl.pathname.startsWith('/api/cron/')
     ) {
         // no user, potentially respond by redirecting the user to the login page
         const url = request.nextUrl.clone()

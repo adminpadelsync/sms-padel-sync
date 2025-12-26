@@ -1,7 +1,24 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
+
+async function getBaseUrl() {
+    // In development, Next.js rewrites handle /api via http://localhost:8001
+    // But server-side fetch needs the absolute URL.
+    if (process.env.NODE_ENV === 'development') {
+        return 'http://localhost:8001'
+    }
+
+    // In production (Vercel), we can use the API_URL env if provided, 
+    // or fallback to the current host.
+    const apiUrl = process.env.API_URL
+    if (apiUrl) return apiUrl
+
+    const host = (await headers()).get('host')
+    return `https://${host}`
+}
 
 export async function getClubGroups(clubId: string) {
     console.log('getClubGroups called with clubId:', clubId, typeof clubId)
@@ -208,4 +225,38 @@ export async function getClubPlayers(clubId: string) {
     }
 
     return data || []
+}
+
+export async function getSuggestedNumbers(groupId: string) {
+    const baseUrl = await getBaseUrl()
+    const res = await fetch(`${baseUrl}/api/groups/${groupId}/suggested-numbers`)
+    if (!res.ok) throw new Error('Failed to fetch suggested numbers')
+    return res.json()
+}
+
+export async function provisionGroupNumber(groupId: string, phoneNumber: string) {
+    const baseUrl = await getBaseUrl()
+    const res = await fetch(`${baseUrl}/api/groups/${groupId}/provision-number`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phoneNumber })
+    })
+    if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to provision number')
+    }
+    revalidatePath(`/dashboard/groups/${groupId}`)
+    revalidatePath('/dashboard/groups')
+    return res.json()
+}
+
+export async function releaseGroupNumber(groupId: string) {
+    const baseUrl = await getBaseUrl()
+    const res = await fetch(`${baseUrl}/api/groups/${groupId}/release-number`, {
+        method: 'DELETE'
+    })
+    if (!res.ok) throw new Error('Failed to release number')
+    revalidatePath(`/dashboard/groups/${groupId}`)
+    revalidatePath('/dashboard/groups')
+    return res.json()
 }

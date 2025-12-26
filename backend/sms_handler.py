@@ -31,28 +31,49 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
     if to_number:
         set_reply_from(to_number)
     
-    # 0. Look up which club this Twilio number belongs to
+    # 0. Look up context (Group first, then Club)
     club_id = None
-    club_name = "the club"  # Default fallback
+    club_name = "the club"
+    group_id = None
+    group_name = None
+    booking_system = "Playtomic"
+
     if to_number:
-        club_res = supabase.table("clubs").select("club_id, name, booking_system").eq("phone_number", to_number).execute()
-        if club_res.data:
-            club_id = club_res.data[0]["club_id"]
-            club_name = club_res.data[0]["name"]
-            booking_system = club_res.data[0].get("booking_system") or "Playtomic"
+        # Check if it's a dedicated group number
+        group_res = supabase.table("player_groups").select("group_id, club_id, name").eq("phone_number", to_number).execute()
+        if group_res.data:
+            group = group_res.data[0]
+            group_id = group["group_id"]
+            group_name = group["name"]
+            club_id = group["club_id"]
+            
+            # Get club details
+            club_res = supabase.table("clubs").select("name, booking_system").eq("club_id", club_id).execute()
+            if club_res.data:
+                club_name = club_res.data[0]["name"]
+                booking_system = club_res.data[0].get("booking_system") or "Playtomic"
+            
+            print(f"[SMS] Dedicated Group Number detected: {group_name} ({club_name})")
         else:
-            # Unknown Twilio number - try first club as fallback
-            fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
-            if fallback.data:
-                club_id = fallback.data[0]["club_id"]
-                club_name = fallback.data[0].get("name", "the club")
-                booking_system = fallback.data[0].get("booking_system") or "Playtomic"
-                print(f"[WARNING] Unknown Twilio number {to_number}, using fallback club")
+            # Fallback to standard club number lookup
+            club_res = supabase.table("clubs").select("club_id, name, booking_system").eq("phone_number", to_number).execute()
+            if club_res.data:
+                club_id = club_res.data[0]["club_id"]
+                club_name = club_res.data[0]["name"]
+                booking_system = club_res.data[0].get("booking_system") or "Playtomic"
             else:
-                send_sms(from_number, "Sorry, this number is not configured for any club.")
-                return
+                # Unknown Twilio number - try first club as fallback
+                fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
+                if fallback.data:
+                    club_id = fallback.data[0]["club_id"]
+                    club_name = fallback.data[0].get("name", "the club")
+                    booking_system = fallback.data[0].get("booking_system") or "Playtomic"
+                    print(f"[WARNING] Unknown Twilio number {to_number}, using fallback club")
+                else:
+                    send_sms(from_number, "Sorry, this number is not configured for any club.")
+                    return
     else:
-        # No to_number provided (e.g., old test code) - use first club
+        # No to_number provided - use first club
         fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
         if fallback.data:
             club_id = fallback.data[0]["club_id"]
@@ -67,7 +88,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         "setteo": "Setteo"
     }.get(booking_system.lower(), booking_system)
 
-    # Set club name in context so all handlers can access it
+    # Update club_name to include group if applicable (Combined Naming)
+    if group_name:
+        club_name = f"{club_name} - {group_name}"
+    
     set_club_name(club_name)
 
     # 1. Check if user exists in DB for THIS CLUB
@@ -180,7 +204,11 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None):
         elif cmd == "play" or (intent == "START_MATCH" and confidence > 0.8):
             print(f"[SMS DEBUG] Routing to handle_match_request. cmd='{cmd}', intent='{intent}'")
             try:
-                handle_match_request(from_number, body, player, reasoner_result.entities)
+                # If we have a group_id from the dedicated number, pass it to auto-scope the request
+                entities = reasoner_result.entities or {}
+                if group_id:
+                    entities["group_id"] = str(group_id)
+                handle_match_request(from_number, body, player, entities)
             except Exception as e:
                 print(f"[ERROR] Failed to process PLAY command: {e}")
                 import traceback
