@@ -127,8 +127,8 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
     if auto_group_id:
         # BYPASS group selection - auto-scope to this group
         # We still want to get the group name for confirmation
-        group_res = supabase.table("player_groups").select("name").eq("group_id", auto_group_id).maybe_single()
-        group_name = group_res["name"] if group_res else "your group"
+        group_res = supabase.table("player_groups").select("name").eq("group_id", auto_group_id).maybe_single().execute()
+        group_name = group_res.data["name"] if group_res.data else "your group"
         
         # Create match immediately with group context
         _create_match(
