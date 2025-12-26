@@ -146,6 +146,8 @@ def update_match_elo(match_id: str, winner_team: int):
         })
 
     # 5. Apply Updates to DB and Record History
+    history_records = []
+    
     for up in updates:
         # Update Player
         supabase.table("players").update({
@@ -155,8 +157,8 @@ def update_match_elo(match_id: str, winner_team: int):
             "total_matches_played": up["new_matches_played"]
         }).eq("player_id", up["player_id"]).execute()
 
-        # Record History Entry
-        supabase.table("player_rating_history").insert({
+        # Prepare History Entry
+        history_records.append({
             "player_id": up["player_id"],
             "old_elo_rating": up["old_elo"],
             "new_elo_rating": up["new_elo"],
@@ -164,6 +166,9 @@ def update_match_elo(match_id: str, winner_team: int):
             "new_sync_rating": up["new_sync"],
             "change_type": "match_result",
             "match_id": match_id
-        }).execute()
+        })
+        
+    if history_records:
+        supabase.table("player_rating_history").insert(history_records).execute()
         
     return True

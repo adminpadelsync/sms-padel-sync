@@ -66,7 +66,7 @@ class CreateConfirmedMatchRequest(BaseModel):
 @router.get("/clubs")
 async def get_clubs():
     """Get all active clubs."""
-    from database import supabase
+
     try:
         result = supabase.table("clubs").select("*").eq("active", True).execute()
         return {"clubs": result.data or []}
@@ -156,7 +156,7 @@ async def get_club(club_id: str):
 @router.put("/clubs/{club_id}")
 async def update_club(club_id: str, updates: ClubUpdate):
     """Update club fields (name, phone_number)."""
-    from database import supabase
+
     try:
         # Build updates dict from non-None fields
         update_data = {}
@@ -203,7 +203,7 @@ async def update_club(club_id: str, updates: ClubUpdate):
 @router.get("/players")
 async def get_players(request: Request):
     """Get all players, optionally filtered by club."""
-    from database import supabase
+
     try:
         # Get club_id from query params directly for robustness
         club_id = request.query_params.get("club_id") or request.query_params.get("cid")
@@ -228,7 +228,7 @@ async def get_players(request: Request):
 @router.get("/players/{player_id}/rating-history")
 async def get_player_rating_history(player_id: str):
     """Get the rating history for a specific player."""
-    from database import supabase
+
     try:
         result = supabase.table("player_rating_history").select("*").eq("player_id", player_id).order("created_at", desc=True).execute()
         return {"history": result.data or []}
@@ -242,7 +242,7 @@ async def get_player_feedback_summary(player_id: str):
     Get aggregate feedback metrics for a specific player.
     Lifetime average rating and "Play Again" percentage.
     """
-    from database import supabase
+
     try:
         # Get matches where the player was a participant
         matches_res = supabase.table("matches").select("match_id").or_(
@@ -287,8 +287,8 @@ async def get_player_feedback_summary(player_id: str):
 
 @router.get("/clubs/{club_id}/rankings")
 async def get_club_rankings(club_id: str):
-    """Get players for a club sorted by Elo rating."""
-    from database import supabase
+
+
     try:
         result = supabase.table("players").select(
             "player_id, name, elo_rating, elo_confidence, adjusted_skill_level, gender"
@@ -314,8 +314,8 @@ async def get_recommendations(request: RecommendationRequest):
 
 @router.get("/players/search")
 async def search_players(club_id: str, q: str = ""):
-    """Search for players by name in a club."""
-    from database import supabase
+
+
     try:
         query = supabase.table("players").select(
             "player_id, name, phone_number, declared_skill_level, gender"
@@ -356,11 +356,8 @@ async def create_outreach(request: OutreachRequest):
 
 @router.get("/clubs/{club_id}/matches/booking-status")
 async def get_club_booking_status(club_id: str):
-    """
-    Get future matches for a club, highlighting those that need booking.
-    Sorted by court_booked (unbooked first) and scheduled_time.
-    """
-    from database import supabase
+
+
     try:
         # 1. Fetch future confirmed or pending matches
         # Note: we want confirmed matches primarily, but maybe also pending if the club wants to see them.
@@ -407,8 +404,8 @@ async def get_club_booking_status(club_id: str):
 
 @router.post("/matches/{match_id}/mark-booked")
 async def mark_match_booked(match_id: str, request: BookingMarkRequest):
-    """Mark a match as court-booked."""
-    from database import supabase
+
+
     import uuid
     try:
         now = datetime.now().isoformat()
@@ -441,8 +438,8 @@ async def mark_match_booked(match_id: str, request: BookingMarkRequest):
 # IMPORTANT: This route MUST come before /matches/{match_id} or "confirmed" gets treated as a match_id
 @router.get("/matches/confirmed")
 async def get_confirmed_matches(club_id: str = None):
-    """Get all confirmed/completable matches for feedback testing UI."""
-    from database import supabase
+
+
     try:
         # Query matches that are confirmed OR have 4 players
         query = supabase.table("matches").select(
@@ -647,8 +644,8 @@ async def trigger_match_feedback(match_id: str, force: bool = False):
 
 @router.post("/admin/create-confirmed-match")
 async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
-    """Admin-only endpoint to instantly create a confirmed match with 4 players."""
-    from database import supabase
+
+
     try:
         if len(request.player_ids) != 4:
             raise HTTPException(status_code=400, detail="Exactly 4 players are required.")
@@ -707,8 +704,8 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
 
 @router.get("/matches/{match_id}/feedback")
 async def get_match_feedback(match_id: str):
-    """Get feedback received for a specific match, flattened."""
-    from database import supabase
+
+
     try:
         # 1. Get raw feedback rows
         # Join rater details
@@ -775,8 +772,8 @@ class ClubSettingsUpdate(BaseModel):
 
 @router.get("/clubs/{club_id}/settings")
 async def get_club_settings(club_id: str):
-    """Get club settings."""
-    from database import supabase
+
+
     try:
         result = supabase.table("clubs").select("settings").eq("club_id", club_id).execute()
         if not result.data:

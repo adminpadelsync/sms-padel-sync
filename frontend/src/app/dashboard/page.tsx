@@ -38,8 +38,8 @@ export default async function Dashboard() {
         redirect('/not-setup')
     }
 
-    // Fetch ALL Players with their group memberships (filtering will happen client-side)
-    const { data: rawPlayers } = await supabase
+    // Fetch Players with server-side filtering
+    let playerQuery = supabase
         .from('players')
         .select(`
             *,
@@ -50,6 +50,20 @@ export default async function Dashboard() {
         `)
         .order('created_at', { ascending: false })
 
+    // Fetch Matches with server-side filtering
+    let matchQuery = supabase
+        .from('matches')
+        .select('*, clubs(name)')
+        .order('created_at', { ascending: false })
+
+    // Optimization: Filter by club for non-superusers to reduce data load
+    if (!userClub.is_superuser) {
+        playerQuery = playerQuery.eq('club_id', userClub.club_id)
+        matchQuery = matchQuery.eq('club_id', userClub.club_id)
+    }
+
+    const { data: rawPlayers } = await playerQuery
+
     // Transform players to flatten the groups structure
     const players = rawPlayers?.map(player => ({
         ...player,
@@ -59,11 +73,7 @@ export default async function Dashboard() {
             .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
     })) || []
 
-    // Fetch ALL Matches (filtering will happen client-side)
-    const { data: matches } = await supabase
-        .from('matches')
-        .select('*, clubs(name)')
-        .order('created_at', { ascending: false })
+    const { data: matches } = await matchQuery
 
     // Fetch clubs for superusers
     let clubs: { club_id: string; name: string }[] = []

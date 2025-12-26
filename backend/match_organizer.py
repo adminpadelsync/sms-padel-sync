@@ -162,35 +162,63 @@ def initiate_match_outreach(
         except:
             formatted_time = scheduled_time
             
+        # Optimization: Batch fetch all pending invites for these players
+        all_pending_invites = {}
+        try:
+            pending_res = supabase.table("match_invites").select(
+                "match_id, player_id, sent_at"
+            ).in_("player_id", [p['player_id'] for p in players_to_notify])\
+             .eq("status", "sent")\
+             .neq("match_id", match_id)\
+             .order("sent_at", desc=True).execute()
+             
+            if pending_res.data:
+                # Group by player_id
+                for invite in pending_res.data:
+                    pid = invite['player_id']
+                    if pid not in all_pending_invites:
+                        all_pending_invites[pid] = []
+                    all_pending_invites[pid].append(invite)
+
+            # Prefetch match details for these pending invites if any exist
+            pending_match_ids = set()
+            for key in all_pending_invites:
+                for inv in all_pending_invites[key]:
+                    pending_match_ids.add(inv["match_id"])
+            
+            pending_matches_map = {}
+            if pending_match_ids:
+                 m_res = supabase.table("matches").select("match_id, scheduled_time, team_1_players, team_2_players").in_("match_id", list(pending_match_ids)).execute()
+                 if m_res.data:
+                     pending_matches_map = {m["match_id"]: m for m in m_res.data}
+
+        except Exception as e:
+            print(f"Error pre-fetching pending invites: {e}")
+            # Continue without pending details if optimization fails
+
         success_count = 0
         for p in players_to_notify:
             phone = p.get('phone_number')
             player_id = p.get('player_id')
             name = p.get('name')
             if phone:
-                # Check for other pending invites for this player (excluding the one we just created)
-                other_invites_res = supabase.table("match_invites").select("match_id").eq("player_id", player_id).eq("status", "sent").neq("match_id", match_id).order("sent_at", desc=True).execute()
-                other_invites = other_invites_res.data if other_invites_res.data else []
+                # Use pre-fetched invites
+                other_invites = all_pending_invites.get(player_id, [])
                 
                 club_name = _get_club_name(club_id)
                 
                 # Construct message with new invite as primary
                 body = (
                     f"🎾 {club_name}: NEW MATCH INVITE!\n"
-                    f"{formatted_time}\n\n"
+                    f"{formatted_time}\n"
                     f"Reply YES to join, NO to decline."
                 )
                 
                 # Add other pending invites if any
                 if other_invites:
-                    # Get match details for other invites
-                    other_match_ids = [inv["match_id"] for inv in other_invites]
-                    other_matches_res = supabase.table("matches").select("match_id, scheduled_time, team_1_players, team_2_players").in_("match_id", other_match_ids).execute()
-                    other_matches = {m["match_id"]: m for m in other_matches_res.data} if other_matches_res.data else {}
-                    
                     body += f"\n\nYou also have {len(other_invites)} other pending invite(s):\n"
                     for idx, inv in enumerate(other_invites, 2):  # Start at 2 since new invite is implicitly #1
-                        m = other_matches.get(inv["match_id"])
+                        m = pending_matches_map.get(inv["match_id"])
                         if m:
                             try:
                                 other_dt = parse_iso_datetime(m['scheduled_time'])
