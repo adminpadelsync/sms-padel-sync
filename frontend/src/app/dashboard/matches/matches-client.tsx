@@ -25,6 +25,8 @@ interface Match {
     }
     team_1_details?: PlayerDetail[]
     team_2_details?: PlayerDetail[]
+    score_text?: string
+    winner_team?: number
 }
 
 interface PlayerDetail {
@@ -81,7 +83,7 @@ export function MatchesClient({
         }
         return userClubId || ''
     })
-    const [showCompletedMatches, setShowCompletedMatches] = useState(false)
+    const [showOlderMatches, setShowOlderMatches] = useState(false)
     const [localMatches, setLocalMatches] = useState<Match[]>(initialMatches)
     const [markingBookedId, setMarkingBookedId] = useState<string | null>(null)
 
@@ -111,17 +113,18 @@ export function MatchesClient({
             ? localMatches.filter(m => m.club_id === (userClubId || clubs[0]?.club_id))
             : localMatches
 
-    if (!showCompletedMatches) {
-        const now = new Date()
+    if (!showOlderMatches) {
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        yesterday.setHours(0, 0, 0, 0)
+
         filteredMatches = filteredMatches.filter(m =>
-            m.status !== 'completed' &&
-            m.status !== 'cancelled' &&
-            new Date(m.scheduled_time) > now
+            new Date(m.scheduled_time) >= yesterday
         )
     }
 
     filteredMatches = filteredMatches.sort((a, b) =>
-        new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+        new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime()
     )
 
     const handleMatchClick = (matchId: string) => {
@@ -277,11 +280,11 @@ export function MatchesClient({
                         <label className="flex items-center gap-2 text-sm text-gray-600">
                             <input
                                 type="checkbox"
-                                checked={showCompletedMatches}
-                                onChange={(e) => setShowCompletedMatches(e.target.checked)}
+                                checked={showOlderMatches}
+                                onChange={(e) => setShowOlderMatches(e.target.checked)}
                                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                             />
-                            Show past/cancelled matches
+                            Show matches prior to yesterday
                         </label>
                     </div>
                     <div className="overflow-x-auto">
@@ -292,72 +295,165 @@ export function MatchesClient({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Court</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Players</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Result</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feedback</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredMatches && filteredMatches.length > 0 ? (
-                                    filteredMatches.map((match) => (
-                                        <tr
-                                            key={match.match_id}
-                                            onClick={() => handleMatchClick(match.match_id)}
-                                            className="cursor-pointer hover:bg-gray-50 transition-colors"
-                                        >
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {formatMatchTime(match.scheduled_time)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                                    match.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                        match.status === 'voting' ? 'bg-blue-100 text-blue-800' :
-                                                            'bg-gray-100 text-gray-800'
-                                                    }`}>
-                                                    {match.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.court_booked ? 'bg-indigo-100 text-indigo-800' : 'bg-red-50 text-red-700'
-                                                    }`}>
-                                                    {match.court_booked ? 'Booked' : 'Not Booked'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 align-top">
-                                                {match.player_names && match.player_names.length > 0 ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        {match.player_names.map((name, idx) => (
-                                                            <span key={idx} className="whitespace-nowrap">{name}</span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span>{match.team_1_players.length + match.team_2_players.length} / 4</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap align-top">
-                                                {match.feedback_status && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
-                                                            match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
-                                                                'bg-gray-100 text-gray-600'
-                                                            }`}>
-                                                            {match.feedback_status}
-                                                        </span>
-                                                        {match.feedback_status === 'Sent' && (
-                                                            <button
-                                                                onClick={(e) => handleResendFeedback(e, match.match_id)}
-                                                                disabled={resendingId === match.match_id}
-                                                                className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded hover:bg-blue-50 disabled:opacity-50"
-                                                            >
-                                                                {resendingId === match.match_id ? 'Sending...' : 'Resend'}
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
+                                    filteredMatches.map((match) => {
+                                        // Parse scores
+                                        const sets = match.score_text
+                                            ? match.score_text.split(',').map(s => {
+                                                const parts = s.trim().split('-')
+                                                return [parts[0] || '', parts[1] || '']
+                                            })
+                                            : []
+
+                                        // Pad to 3 sets for alignment if needed, or just use what we have
+                                        // The design shows S1, S2, S3 columns always? 
+                                        // Let's stick to dynamic sets for now, but usually it's 2 or 3.
+
+                                        const winner = match.winner_team
+
+                                        // Helper to render the scorecard
+                                        const renderScorecard = () => (
+                                            <div className="border border-gray-200 rounded-lg overflow-hidden text-sm bg-white w-full max-w-md">
+                                                {/* Header */}
+                                                <div className="flex border-b border-gray-100 bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                    <div className="flex-1 px-3 py-1">Team</div>
+                                                    {sets.length > 0 ? sets.map((_, i) => (
+                                                        <div key={i} className="w-8 text-center py-1 border-l border-gray-100">S{i + 1}</div>
+                                                    )) : (
+                                                        <div className="w-8 text-center py-1 border-l border-gray-100">-</div>
+                                                    )}
+                                                </div>
+
+                                                {/* Team Rows */}
+                                                {[1, 2].map((teamNum) => {
+                                                    const isWinner = winner === teamNum
+                                                    const players = teamNum === 1 ? match.team_1_details : match.team_2_details
+                                                    const regularPlayers = teamNum === 1 ? match.team_1_players : match.team_2_players
+
+                                                    return (
+                                                        <div
+                                                            key={teamNum}
+                                                            className={`flex items-center border-b last:border-0 border-gray-50 ${isWinner ? 'bg-[#F0FDF4]' : 'bg-white'}`}
+                                                        >
+                                                            {/* Players */}
+                                                            <div className="flex-1 px-3 py-2 min-w-0">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    {players && players.length > 0 ? players.map(p => (
+                                                                        <div key={p.player_id} className={`truncate text-xs ${isWinner ? 'text-green-900 font-medium' : 'text-gray-900'}`}>
+                                                                            {p.name} <span className="text-[10px] opacity-60">({(p.adjusted_skill_level || p.declared_skill_level).toFixed(2)})</span>
+                                                                        </div>
+                                                                    )) : (
+                                                                        <span className="text-xs text-gray-500">
+                                                                            {regularPlayers && regularPlayers.length > 0 ? `${regularPlayers.length} players` : `Team ${teamNum}`}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Winner Checkmark */}
+                                                            {isWinner && (
+                                                                <div className="pr-2">
+                                                                    <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Scores */}
+                                                            {sets.length > 0 ? sets.map((set, i) => {
+                                                                const score = set[teamNum - 1] // 0 or 1 index
+                                                                const otherScore = set[teamNum === 1 ? 1 : 0]
+                                                                const setWon = parseInt(score) > parseInt(otherScore)
+
+                                                                return (
+                                                                    <div
+                                                                        key={i}
+                                                                        className={`w-8 text-center py-2 flex-shrink-0 border-l ${isWinner ? 'border-green-100' : 'border-gray-50'} ${setWon ? 'font-bold text-gray-900 underline decoration-green-500 decoration-2 underline-offset-4' : 'text-gray-500'}`}
+                                                                    >
+                                                                        {score}
+                                                                    </div>
+                                                                )
+                                                            }) : (
+                                                                <div className="w-8 text-center py-2 text-gray-300">-</div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )
+
+                                        return (
+                                            <tr
+                                                key={match.match_id}
+                                                onClick={() => handleMatchClick(match.match_id)}
+                                                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                                            >
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {formatMatchTime(match.scheduled_time)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                                        match.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                            match.status === 'voting' ? 'bg-blue-100 text-blue-800' :
+                                                                'bg-gray-100 text-gray-800'
+                                                        }`}>
+                                                        {match.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.court_booked ? 'bg-indigo-100 text-indigo-800' : 'bg-red-50 text-red-700'
+                                                        }`}>
+                                                        {match.court_booked ? 'Booked' : 'Not Booked'}
+                                                    </span>
+                                                </td>
+
+                                                {/* Replaced merged columns with Mini Scorecard */}
+                                                <td className="px-6 py-4 align-top w-1/3 min-w-[300px]" colSpan={2}>
+                                                    {match.score_text ? renderScorecard() : (
+                                                        // Fallback for matches without scores: Just list players
+                                                        <div className="space-y-1">
+                                                            <div className="text-xs text-gray-900">
+                                                                {match.team_1_details?.map(p => p.name).join(' / ') || 'Team 1'}
+                                                            </div>
+                                                            <div className="text-xs text-gray-900">
+                                                                {match.team_2_details?.map(p => p.name).join(' / ') || 'Team 2'}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </td>
+
+                                                <td className="px-6 py-4 whitespace-nowrap align-top">
+                                                    {match.feedback_status && (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
+                                                                    'bg-gray-100 text-gray-600'
+                                                                }`}>
+                                                                {match.feedback_status}
+                                                            </span>
+                                                            {match.feedback_status === 'Sent' && (
+                                                                <button
+                                                                    onClick={(e) => handleResendFeedback(e, match.match_id)}
+                                                                    disabled={resendingId === match.match_id}
+                                                                    className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded hover:bg-blue-50 disabled:opacity-50"
+                                                                >
+                                                                    {resendingId === match.match_id ? 'Sending...' : 'Resend'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })
                                 ) : (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                                        <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                                             No matches found
                                         </td>
                                     </tr>

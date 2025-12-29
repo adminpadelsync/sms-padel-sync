@@ -5,7 +5,7 @@ Exactly like feedback_scheduler but only for the originator to report the Elo re
 
 from datetime import datetime, timedelta
 from database import supabase
-from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone
+from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime, format_sms_datetime
 import sms_constants as msg
 import pytz
 
@@ -100,17 +100,62 @@ def send_result_nudge_for_match(match: dict):
     player = player_res.data[0]
     
     club_name = "the club"
+    timezone_str = "America/New_York"
     if club_id:
-        club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+        club_res = supabase.table("clubs").select("name, timezone").eq("club_id", club_id).execute()
         if club_res.data:
             club_name = club_res.data[0]["name"]
+            timezone_str = club_res.data[0].get("timezone") or "America/New_York"
+
+    # Get Match Context (Time & Players)
+    # 1. Time
+    scheduled_iso = match.get("scheduled_time")
+    match_time_str = "the match"
+    if scheduled_iso:
+        try:
+            dt_utc = parse_iso_datetime(scheduled_iso)
+            # Ensure UTC aware
+            if not dt_utc.tzinfo:
+                dt_utc = dt_utc.replace(tzinfo=pytz.UTC)
+            
+            tz = pytz.timezone(timezone_str)
+            dt_local = dt_utc.astimezone(tz)
+            match_time_str = format_sms_datetime(dt_local)
+        except Exception as e:
+            print(f"Error formatting nudge time: {e}")
+
+    # 2. Players
+    team1_ids = match.get("team_1_players") or []
+    team2_ids = match.get("team_2_players") or []
+    all_wp_ids = [pid for pid in (team1_ids + team2_ids) if pid]
+    
+    player_map = {}
+    if all_wp_ids:
+        # Fetch names
+        p_res = supabase.table("players").select("player_id, name").in_("player_id", all_wp_ids).execute()
+        for p in (p_res.data or []):
+            # Use first name for brevity
+            full_name = p.get("name", "Unknown")
+            first_name = full_name.split(' ')[0]
+            player_map[p["player_id"]] = first_name
+            
+    def get_team_str(ids):
+        names = [player_map.get(pid, "Unknown") for pid in ids if pid]
+        return " & ".join(names)
+
+    team1_str = get_team_str(team1_ids)
+    team2_str = get_team_str(team2_ids)
+    
+    teams_context = ""
+    if team1_str and team2_str:
+        teams_context = f" ({team1_str} vs {team2_str})"
 
     # Determine nudge message
     nudge_count = match.get("result_nudge_count", 0)
     if nudge_count == 0:
-        nudge_msg = f"🎾 {club_name}: How did your match go? 🏸\n\nReply with the teams and score to update your Sync Rating! (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
+        nudge_msg = f"🎾 {club_name}: How did your match go on {match_time_str}{teams_context}? 🏸\n\nReply with the teams and score to update your Sync Rating! (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
     else:
-        nudge_msg = f"🎾 {club_name}: Just a follow-up—did you get a result for your match? 🏸\n\nReply back with the score so everyone's ratings stay accurate! 🎾"
+        nudge_msg = f"🎾 {club_name}: Just a follow-up—did you get a result for the match on {match_time_str}{teams_context}? 🏸\n\nReply back with the score so everyone's ratings stay accurate! 🎾"
     
     from twilio_client import send_sms
     if send_sms(player["phone_number"], nudge_msg):

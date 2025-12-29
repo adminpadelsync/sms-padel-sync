@@ -25,7 +25,7 @@ export default async function MatchesPage() {
             clubs(name),
             originator:originator_id(name, phone_number, declared_skill_level)
         `)
-        .order('scheduled_time', { ascending: true })
+        .order('scheduled_time', { ascending: false })
 
     // Fetch clubs for superusers
     let clubs: { club_id: string; name: string }[] = []
@@ -45,7 +45,7 @@ export default async function MatchesPage() {
         m.team_2_players?.forEach((id: string) => playerIds.add(id))
     })
 
-    let playerMap = new Map<string, any>()
+    const playerMap = new Map<string, any>()
     if (playerIds.size > 0) {
         const { data: players } = await supabase
             .from('players')
@@ -57,7 +57,7 @@ export default async function MatchesPage() {
 
     // 3. Check for Feedback Requests (to determine "Sent" status)
     const matchIds = matches?.map(m => m.match_id) || []
-    let feedbackRequestMatches = new Set<string>()
+    const feedbackRequestMatches = new Set<string>()
 
     if (matchIds.length > 0) {
         const { data: requests } = await supabase
