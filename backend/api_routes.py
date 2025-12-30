@@ -141,6 +141,17 @@ async def create_club(request: CreateClubRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Club Twilio Provisioning ---
+
+@router.get("/clubs/available-numbers")
+async def get_club_available_numbers(area_code: str = "305"):
+    """Search for available Twilio numbers by area code."""
+    try:
+        numbers = twilio_manager.search_available_numbers(area_code)
+        return {"numbers": numbers}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/clubs/{club_id}")
 async def get_club(club_id: str):
     """Get a single club by ID."""
@@ -1199,10 +1210,39 @@ async def provision_number(group_id: str, request: Dict[str, str]):
     
     return {"status": "success", "phone_number": result}
 
+
+@router.get("/groups/{group_id}/release-number")
+async def release_number_get(group_id: str):
+    """Legacy endpoint for release-number."""
+    return await release_number(group_id)
+
 @router.delete("/groups/{group_id}/release-number")
 async def release_number(group_id: str):
     """Release the dedicated phone number for a group."""
     success, result = twilio_manager.release_group_number(group_id)
+    if not success:
+        raise HTTPException(status_code=500, detail=result)
+    
+    return {"status": "success", "message": result}
+
+
+@router.post("/clubs/{club_id}/provision-number")
+async def provision_club_number(club_id: str, request: Dict[str, str]):
+    """Provision a specific phone number for a club."""
+    phone_number = request.get("phone_number")
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="phone_number is required")
+    
+    success, result = twilio_manager.provision_club_number(club_id, phone_number)
+    if not success:
+        raise HTTPException(status_code=500, detail=result)
+    
+    return {"status": "success", "phone_number": result}
+
+@router.delete("/clubs/{club_id}/release-number")
+async def release_club_number(club_id: str):
+    """Release the Twilio phone number for a club."""
+    success, result = twilio_manager.release_club_number(club_id)
     if not success:
         raise HTTPException(status_code=500, detail=result)
     

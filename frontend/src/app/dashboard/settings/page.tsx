@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { QrCode, ExternalLink } from 'lucide-react'
+import { QrCode, ExternalLink, Phone, Search, CheckCircle2, Trash2 } from 'lucide-react'
+import { getAvailableNumbers, provisionClubNumber, releaseClubNumber } from '../clubs/actions'
 
 interface Club {
     club_id: string
@@ -58,6 +59,14 @@ export default function SettingsPage() {
         feedback_reminder_delay_hours: 4.0,
         quiet_hours_start: 21,
         quiet_hours_end: 8
+    })
+
+    const [twilioState, setTwilioState] = useState({
+        isSearching: false,
+        searchResults: [] as { phone_number: string, friendly_name: string }[],
+        isProvisioning: false,
+        isReleasing: false,
+        error: ''
     })
 
     const bookingSystems = [
@@ -217,6 +226,54 @@ export default function SettingsPage() {
         setAddressFields(prev => ({ ...prev, [name]: value }))
     }
 
+    const handleSearchNumbers = async () => {
+        if (!club) return
+        setTwilioState(prev => ({ ...prev, isSearching: true, error: '' }))
+        try {
+            // Use club's main_phone or fallback to 305
+            const phoneDigits = (formData.main_phone || '').replace(/\D/g, '')
+            const areaCode = phoneDigits.length >= 3 ? phoneDigits.substring(0, 3) : '305'
+
+            const { numbers } = await getAvailableNumbers(areaCode)
+            setTwilioState(prev => ({ ...prev, searchResults: numbers }))
+        } catch (err: any) {
+            setTwilioState(prev => ({ ...prev, error: err.message || 'Failed to search numbers' }))
+        } finally {
+            setTwilioState(prev => ({ ...prev, isSearching: false }))
+        }
+    }
+
+    const handleProvision = async (number: string) => {
+        if (!club || !confirm(`Are you sure you want to provision ${number} for this club?`)) return
+
+        setTwilioState(prev => ({ ...prev, isProvisioning: true, error: '' }))
+        try {
+            await provisionClubNumber(club.club_id, number)
+            setFormData(prev => ({ ...prev, twilio_phone_number: number }))
+            setTwilioState(prev => ({ ...prev, searchResults: [] }))
+            setMessage({ type: 'success', text: `Provisioned ${number} successfully!` })
+        } catch (err: any) {
+            setTwilioState(prev => ({ ...prev, error: err.message || 'Failed to provision' }))
+        } finally {
+            setTwilioState(prev => ({ ...prev, isProvisioning: false }))
+        }
+    }
+
+    const handleRelease = async () => {
+        if (!club || !confirm('Are you sure you want to release this number? This will stop all automated SMS for this club until a new number is provisioned.')) return
+
+        setTwilioState(prev => ({ ...prev, isReleasing: true, error: '' }))
+        try {
+            await releaseClubNumber(club.club_id)
+            setFormData(prev => ({ ...prev, twilio_phone_number: '' }))
+            setMessage({ type: 'success', text: 'Number released successfully' })
+        } catch (err: any) {
+            setTwilioState(prev => ({ ...prev, error: err.message || 'Failed to release' }))
+        } finally {
+            setTwilioState(prev => ({ ...prev, isReleasing: false }))
+        }
+    }
+
     const getBookingUrl = () => {
         const system = formData.booking_system.toLowerCase()
         const slug = formData.booking_slug
@@ -362,15 +419,87 @@ export default function SettingsPage() {
 
                             <div className="sm:col-span-2">
                                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
-                                    <label className="block text-base font-bold text-blue-900 mb-2">Twilio Phone Number</label>
-                                    <input
-                                        type="text"
-                                        name="twilio_phone_number"
-                                        value={formData.twilio_phone_number}
-                                        onChange={handleChange}
-                                        className="block w-full rounded-lg border-blue-200 text-blue-900 placeholder-blue-300 focus:ring-blue-500 focus:border-blue-500 text-lg py-3 px-4"
-                                    />
-                                    <p className="mt-2 text-sm text-blue-700">ℹ️ The automated system sends messages from this number.</p>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <label className="block text-base font-bold text-blue-900">
+                                                Twilio Phone Number (Managed)
+                                            </label>
+                                            <p className="text-sm text-blue-700 mt-1">
+                                                The automated system sends messages from this dedicated number.
+                                            </p>
+                                        </div>
+                                        {formData.twilio_phone_number ? (
+                                            <button
+                                                type="button"
+                                                onClick={handleRelease}
+                                                disabled={twilioState.isReleasing}
+                                                className="inline-flex items-center px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50 focus:outline-none transition-colors disabled:opacity-50"
+                                            >
+                                                {twilioState.isReleasing ? 'Releasing...' : (
+                                                    <>
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Release Number
+                                                    </>
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={handleSearchNumbers}
+                                                disabled={twilioState.isSearching}
+                                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 focus:outline-none transition-colors disabled:opacity-50"
+                                            >
+                                                {twilioState.isSearching ? 'Searching...' : (
+                                                    <>
+                                                        <Search className="mr-2 h-4 w-4" />
+                                                        Provision Number
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {twilioState.error && (
+                                        <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-lg">
+                                            ⚠️ {twilioState.error}
+                                        </div>
+                                    )}
+
+                                    {formData.twilio_phone_number ? (
+                                        <div className="flex items-center p-4 bg-white border border-blue-200 rounded-lg shadow-sm">
+                                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                                                <CheckCircle2 className="h-6 w-6 text-green-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">Active Number</p>
+                                                <p className="text-lg font-bold text-gray-900">{formData.twilio_phone_number}</p>
+                                            </div>
+                                        </div>
+                                    ) : twilioState.searchResults.length > 0 ? (
+                                        <div className="mt-4">
+                                            <p className="text-sm font-bold text-blue-900 mb-3">Available local numbers:</p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                {twilioState.searchResults.map((num) => (
+                                                    <button
+                                                        key={num.phone_number}
+                                                        type="button"
+                                                        onClick={() => handleProvision(num.phone_number)}
+                                                        disabled={twilioState.isProvisioning}
+                                                        className="px-4 py-3 bg-white border border-blue-200 rounded-lg text-sm font-medium text-blue-900 hover:border-blue-500 hover:bg-blue-50 transition-all text-center disabled:opacity-50"
+                                                    >
+                                                        {num.friendly_name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : !twilioState.isSearching && (
+                                        <div className="flex items-center p-4 bg-blue-100/50 rounded-lg border border-blue-100">
+                                            <Phone className="h-5 w-5 text-blue-600 mr-3 shrink-0" />
+                                            <p className="text-sm text-blue-800">
+                                                No active number. Provision a new one to enable automated SMS services.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

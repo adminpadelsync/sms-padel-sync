@@ -10,7 +10,8 @@ export interface CreateClubData {
     poc_phone?: string
     main_phone?: string
     booking_system?: string
-    twilio_phone_number: string
+    twilio_phone_number?: string // Now optional
+    selected_provision_number?: string // New field
     court_count: number
     timezone?: string
 }
@@ -42,7 +43,7 @@ export async function createClub(data: CreateClubData) {
             .from('clubs')
             .insert({
                 name: data.name,
-                phone_number: data.twilio_phone_number,
+                phone_number: data.twilio_phone_number || data.selected_provision_number,
                 court_count: data.court_count,
                 address: data.address,
                 poc_name: data.poc_name,
@@ -73,10 +74,57 @@ export async function createClub(data: CreateClubData) {
         if (courtsError) throw new Error(`Failed to create courts: ${courtsError.message}`)
 
         revalidatePath('/dashboard')
+
+        // 3. Provision Twilio Number if selected
+        if (data.selected_provision_number) {
+            try {
+                // Call the backend API we just created
+                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+                const provisionRes = await fetch(`${baseUrl}/api/clubs/${club.club_id}/provision-number`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: data.selected_provision_number })
+                })
+
+                if (!provisionRes.ok) {
+                    console.error('Failed to provision number after club creation')
+                }
+            } catch (provErr) {
+                console.error('Error provisioning number:', provErr)
+            }
+        }
+
         return { success: true, clubId: club.club_id }
 
     } catch (error) {
         console.error('Create Club Error:', error)
         throw error
     }
+}
+
+export async function getAvailableNumbers(areaCode: string) {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+    const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`)
+    if (!res.ok) throw new Error('Failed to fetch available numbers')
+    return res.json()
+}
+
+export async function provisionClubNumber(clubId: string, phoneNumber: string) {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+    const res = await fetch(`${baseUrl}/api/clubs/${clubId}/provision-number`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phoneNumber })
+    })
+    if (!res.ok) throw new Error('Failed to provision number')
+    return res.json()
+}
+
+export async function releaseClubNumber(clubId: string) {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+    const res = await fetch(`${baseUrl}/api/clubs/${clubId}/release-number`, {
+        method: 'DELETE'
+    })
+    if (!res.ok) throw new Error('Failed to release number')
+    return res.json()
 }

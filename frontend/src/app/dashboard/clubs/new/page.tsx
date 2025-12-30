@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClub } from '../actions'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Phone, Search, CheckCircle2 } from 'lucide-react'
+import { createClub, getAvailableNumbers } from '../actions'
 
 export default function NewClubPage() {
     const router = useRouter()
@@ -24,9 +24,15 @@ export default function NewClubPage() {
         poc_phone: '',
         main_phone: '',
         booking_system: 'playtomic',
-        twilio_phone_number: '',
         court_count: 4,
         timezone: 'America/New_York'
+    })
+
+    const [twilioState, setTwilioState] = useState({
+        isSearching: false,
+        searchResults: [] as { phone_number: string, friendly_name: string }[],
+        selectedNumber: '',
+        error: ''
     })
 
 
@@ -58,7 +64,8 @@ export default function NewClubPage() {
         try {
             const result = await createClub({
                 ...formData,
-                address: fullAddress
+                address: fullAddress,
+                selected_provision_number: twilioState.selectedNumber
             })
             if (result.success && result.clubId) {
                 router.push(`/dashboard/clubs/${result.clubId}/poster`)
@@ -85,6 +92,27 @@ export default function NewClubPage() {
             ...prev,
             [name]: value
         }))
+    }
+
+    const handleSearchNumbers = async () => {
+        if (!formData.main_phone) {
+            setTwilioState(prev => ({ ...prev, error: 'Please enter a Main Club Phone number first to determine area code.' }))
+            return
+        }
+
+        // Extract area code from main_phone (simple regex for (XXX) or XXX-)
+        const phoneDigits = formData.main_phone.replace(/\D/g, '')
+        const areaCode = phoneDigits.length >= 3 ? phoneDigits.substring(0, 3) : '305'
+
+        setTwilioState(prev => ({ ...prev, isSearching: true, error: '' }))
+        try {
+            const { numbers } = await getAvailableNumbers(areaCode)
+            setTwilioState(prev => ({ ...prev, searchResults: numbers }))
+        } catch (err: any) {
+            setTwilioState(prev => ({ ...prev, error: err.message || 'Failed to search numbers' }))
+        } finally {
+            setTwilioState(prev => ({ ...prev, isSearching: false }))
+        }
     }
 
     return (
@@ -307,24 +335,89 @@ export default function NewClubPage() {
                                 Integration
                             </h3>
                             <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sm:col-span-2 mb-6">
-                                <label htmlFor="twilio_phone_number" className="block text-base font-bold text-blue-900 mb-2">
-                                    Twilio Phone Number (Active)
-                                </label>
-                                <div className="mt-1 relative rounded-md shadow-sm">
-                                    <input
-                                        type="tel"
-                                        name="twilio_phone_number"
-                                        id="twilio_phone_number"
-                                        required
-                                        placeholder="+1..."
-                                        value={formData.twilio_phone_number}
-                                        onChange={handleChange}
-                                        className="block w-full rounded-lg border-blue-200 text-blue-900 placeholder-blue-300 focus:ring-blue-500 focus:border-blue-500 text-lg py-3 px-4"
-                                    />
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <label className="block text-base font-bold text-blue-900">
+                                            Twilio Phone Number (Managed)
+                                        </label>
+                                        <p className="text-sm text-blue-700 mt-1">
+                                            The system will provision a dedicated number for this club to handle match invitations and results.
+                                        </p>
+                                    </div>
+                                    {!twilioState.selectedNumber && (
+                                        <button
+                                            type="button"
+                                            onClick={handleSearchNumbers}
+                                            disabled={twilioState.isSearching}
+                                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 focus:outline-none transition-colors disabled:opacity-50"
+                                        >
+                                            {twilioState.isSearching ? (
+                                                <>
+                                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Searching...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Search className="mr-2 h-4 w-4" />
+                                                    Provision Number
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
-                                <p className="mt-2 text-sm text-blue-700 flex items-center">
-                                    ℹ️ Must be formatted as <span className="font-mono font-bold mx-1">+1XXXXXXXXXX</span> (e.g., +13051234567).
-                                </p>
+
+                                {twilioState.error && (
+                                    <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-lg">
+                                        ⚠️ {twilioState.error}
+                                    </div>
+                                )}
+
+                                {twilioState.selectedNumber ? (
+                                    <div className="flex items-center justify-between p-4 bg-white border border-blue-200 rounded-lg shadow-sm">
+                                        <div className="flex items-center">
+                                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                                                <CheckCircle2 className="h-6 w-6 text-green-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">Selected Number</p>
+                                                <p className="text-lg font-bold text-gray-900">{twilioState.selectedNumber}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTwilioState(prev => ({ ...prev, selectedNumber: '', searchResults: [] }))}
+                                            className="text-sm font-bold text-blue-600 hover:text-blue-800"
+                                        >
+                                            Change
+                                        </button>
+                                    </div>
+                                ) : twilioState.searchResults.length > 0 ? (
+                                    <div className="mt-4">
+                                        <p className="text-sm font-bold text-blue-900 mb-3">Available local numbers:</p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            {twilioState.searchResults.map((num) => (
+                                                <button
+                                                    key={num.phone_number}
+                                                    type="button"
+                                                    onClick={() => setTwilioState(prev => ({ ...prev, selectedNumber: num.phone_number }))}
+                                                    className="px-4 py-3 bg-white border border-blue-200 rounded-lg text-sm font-medium text-blue-900 hover:border-blue-500 hover:bg-blue-50 transition-all text-center"
+                                                >
+                                                    {num.friendly_name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : !twilioState.isSearching && (
+                                    <div className="flex items-center p-4 bg-blue-100/50 rounded-lg border border-blue-100">
+                                        <Phone className="h-5 w-5 text-blue-600 mr-3 shrink-0" />
+                                        <p className="text-sm text-blue-800">
+                                            No number selected yet. Click "Provision Number" to find local options.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </section>
 
