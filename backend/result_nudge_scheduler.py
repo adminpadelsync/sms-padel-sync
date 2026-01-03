@@ -27,6 +27,7 @@ def get_matches_needing_result_nudge():
         settings = club.get("settings") or {}
         timezone_str = club.get("timezone") or "America/New_York"
         now_utc = get_now_utc()
+        delay_hours = float(settings.get("result_nudge_delay_hours", DEFAULT_RESULT_NUDGE_DELAY_HOURS))
         cutoff_time = now_utc - timedelta(hours=delay_hours)
         lookback_limit = now_utc - timedelta(hours=24)
         

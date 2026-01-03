@@ -202,10 +202,14 @@ def _manual_regex_fallback(text: str, timezone: str) -> Tuple[Optional[datetime]
         # If it's today and in the past, nudge to tomorrow if they didn't specify day
         if not has_relative and parsed_dt < now_in_tz:
              parsed_dt += timedelta(days=1)
-             
+        
+        # VERY IMPORTANT: Localize to the correct timezone before ISO conversion
+        # We use the tz object created earlier
+        aware_dt = tz.localize(parsed_dt)
+        
         human_readable = format_sms_datetime(parsed_dt)
-        print(f"[date_parser] Regex Fallback Success! '{text}' -> {human_readable}")
-        return parsed_dt, human_readable, parsed_dt.isoformat()
+        print(f"[date_parser] Regex Fallback Success! '{text}' -> {human_readable} (Aware: {aware_dt.isoformat()})")
+        return aware_dt, human_readable, aware_dt.isoformat()
         
     except Exception as e:
         print(f"[date_parser] Regex fallback failed: {e}")
@@ -238,6 +242,7 @@ def parse_natural_date_with_context(
     # If the user ONLY provided a time without a day word, we merge with base_dt's date
     if not has_day_context and time_match:
         print(f"[date_parser] Merging partial time '{text}' with base date {base_dt.date()}")
+        # parsed_dt is already aware if coming from parse_natural_date
         merged_dt = base_dt.replace(
             hour=parsed_dt.hour, 
             minute=parsed_dt.minute, 
@@ -288,6 +293,10 @@ def parse_natural_date(
             })
             
             if parsed:
+                # Localize if naive (dateparser usually returns naive if RELATIVE_BASE is naive)
+                if parsed.tzinfo is None:
+                    parsed = tz.localize(parsed)
+                
                 from logic_utils import format_sms_datetime
                 human_readable = format_sms_datetime(parsed)
                 return parsed, human_readable, parsed.isoformat()
