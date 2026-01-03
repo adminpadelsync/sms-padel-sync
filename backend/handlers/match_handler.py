@@ -348,7 +348,7 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
     """
     # Prioritize AI extracted selection (e.g. if user said "intermediate group", entity might be "2")
     ent_selection = entities.get("selection") if entities else None
-    selection = ent_selection if ent_selection else body.strip()
+    selection = str(ent_selection) if ent_selection is not None else body.strip()
     
     selection_lower = selection.lower()
     group_options = state_data.get("group_options", {})
