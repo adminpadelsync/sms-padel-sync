@@ -30,6 +30,9 @@ interface Match {
     team_2_players: string[]
     team_1_player_details?: Player[]
     team_2_player_details?: Player[]
+    court_booked?: boolean
+    booked_court_text?: string
+    originator_id?: string
 }
 
 interface Feedback {
@@ -69,6 +72,12 @@ export default function MatchDetailPage() {
     const [searchTerm, setSearchTerm] = useState('')
     const [searchResults, setSearchResults] = useState<Player[]>([])
     const [selectedToInvite, setSelectedToInvite] = useState<Set<string>>(new Set())
+
+    // For editing court booking
+    const [isEditingBooking, setIsEditingBooking] = useState(false)
+    const [editCourtBooked, setEditCourtBooked] = useState(false)
+    const [editCourtText, setEditCourtText] = useState('')
+    const [notifyPlayersOnUpdate, setNotifyPlayersOnUpdate] = useState(false)
 
     // Fetch match and invites
     useEffect(() => {
@@ -223,6 +232,32 @@ export default function MatchDetailPage() {
         setSelectedToInvite(newSet)
     }
 
+    const handleSaveBooking = async () => {
+        if (!match) return
+        setActionLoading(true)
+        try {
+            const res = await fetch(`/api/matches/${matchId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    court_booked: editCourtBooked,
+                    booked_court_text: editCourtText,
+                    notify_players: notifyPlayersOnUpdate
+                })
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setMatch(data.match)
+                setIsEditingBooking(false)
+                setNotifyPlayersOnUpdate(false)
+            }
+        } catch (error) {
+            console.error('Error saving booking info:', error)
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     const handleRemovePlayer = async (playerId: string) => {
         if (!match || !confirm('Remove this player from the match?')) return
         setActionLoading(true)
@@ -335,6 +370,92 @@ export default function MatchDetailPage() {
                             )}
                         </div>
                     </div>
+                </div>
+
+                {/* Court Booking Section */}
+                <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-indigo-50/30">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${match.court_booked ? 'bg-green-100' : 'bg-red-100'}`}>
+                                <span className="text-xl">{match.court_booked ? '🎾' : '⏳'}</span>
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">
+                                    {match.court_booked ? 'Court Booked' : 'Court Not Booked'}
+                                </h2>
+                                {match.court_booked && match.booked_court_text && (
+                                    <p className="text-indigo-600 font-semibold">{match.booked_court_text}</p>
+                                )}
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setIsEditingBooking(!isEditingBooking)}
+                            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium px-3 py-1 rounded-md border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                        >
+                            {isEditingBooking ? 'Cancel' : 'Edit Booking Detail'}
+                        </button>
+                    </div>
+
+                    {isEditingBooking ? (
+                        <div className="p-6 bg-indigo-50/10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            id="court_booked"
+                                            checked={editCourtBooked}
+                                            onChange={(e) => setEditCourtBooked(e.target.checked)}
+                                            className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="court_booked" className="text-sm font-medium text-gray-700">
+                                            Court is officially booked
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="court_text" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                                            Court Info (e.g. "Court 7")
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="court_text"
+                                            value={editCourtText}
+                                            onChange={(e) => setEditCourtText(e.target.value)}
+                                            placeholder="Enter court number or location..."
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                                        <input
+                                            type="checkbox"
+                                            id="notify_players"
+                                            checked={notifyPlayersOnUpdate}
+                                            onChange={(e) => setNotifyPlayersOnUpdate(e.target.checked)}
+                                            className="h-5 w-5 mt-0.5 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500"
+                                        />
+                                        <div>
+                                            <label htmlFor="notify_players" className="text-sm font-bold text-yellow-800">
+                                                Notify players via SMS?
+                                            </label>
+                                            <p className="text-xs text-yellow-700">
+                                                Send a confirmation text to all players with the court info.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleSaveBooking}
+                                        disabled={actionLoading}
+                                        className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 font-bold transition-shadow hover:shadow-lg"
+                                    >
+                                        {actionLoading ? 'Saving...' : 'Save Booking Info'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Two Column Layout */}

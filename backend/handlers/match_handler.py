@@ -208,7 +208,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
         gender=gender_display
     )
     
-    send_sms(from_number, confirm_msg)
+    send_sms(from_number, confirm_msg, club_id=player.get("club_id"))
     
     # Store in state for confirmation step
     set_user_state(from_number, msg.STATE_MATCH_REQUEST_CONFIRM, {
@@ -421,7 +421,7 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
         return
     
     # Invalid selection
-    send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.")
+    send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.", club_id=player.get("club_id"))
 
 
 
@@ -506,7 +506,7 @@ def _create_match(
                     club_name=get_club_name(), time=friendly_time, count=count
                 ), club_id=player["club_id"])
         else:
-            send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
+            send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL, club_id=player.get("club_id"))
             
     except Exception as e:
         log_match_error(
@@ -523,7 +523,7 @@ def _create_match(
                 "skip_filters": skip_filters
             }
         )
-        send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR)
+        send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR, club_id=player.get("club_id"))
 
 
 def _handle_range_match(from_number: str, date_str: str, player: dict):

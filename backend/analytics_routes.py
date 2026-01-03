@@ -16,13 +16,24 @@ async def get_club_health(club_id: str):
     - Skill Level Distribution
     """
     try:
-        # Fetch all active players for the club
-        # We fetch columns needed for metrics
+        # 1. Fetch player IDs for this club from club_members
+        members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+        member_ids = [m["player_id"] for m in (members_res.data or [])]
+        
+        if not member_ids:
+            return {
+                "total_players": 0,
+                "verified_pct": 0,
+                "availability_pct": 0,
+                "skill_distribution": {}
+            }
+
+        # 2. Fetch data for these players
         result = supabase.table("players").select(
             "player_id, declared_skill_level, pro_verified, "
             "avail_weekday_morning, avail_weekday_afternoon, avail_weekday_evening, "
             "avail_weekend_morning, avail_weekend_afternoon, avail_weekend_evening"
-        ).eq("club_id", club_id).eq("active_status", True).execute()
+        ).in_("player_id", member_ids).eq("active_status", True).execute()
         
         players = result.data or []
         total_players = len(players)

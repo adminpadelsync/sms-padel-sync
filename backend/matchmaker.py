@@ -75,7 +75,11 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         level_max = target_level + 0.25
     
     # 2. Find active players in the club
-    candidates_res = supabase.table("players").select("*").eq("club_id", club_id).eq("active_status", True).execute()
+    # First get member IDs
+    members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+    member_ids = [m["player_id"] for m in (members_res.data or [])]
+    
+    candidates_res = supabase.table("players").select("*").in_("player_id", member_ids).eq("active_status", True).execute()
     
     # Filter by Group if applicable
     target_group_id = match.get("target_group_id")
@@ -223,7 +227,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
                 f"Reply YES to join, NO to decline, or MUTE to pause invites today."
             )
         
-        send_sms(p["phone_number"], sms_msg)
+        send_sms(p["phone_number"], sms_msg, club_id=club_id)
         
         # CLEAR STATE so they don't get stuck in old feedback loops
         clear_user_state(p["phone_number"])
@@ -386,7 +390,7 @@ def _check_match_deadpool(match_id: str):
             time=time_str
         )
         
-        send_sms(originator["phone_number"], sms_msg)
+        send_sms(originator["phone_number"], sms_msg, club_id=club_id)
         set_user_state(originator["phone_number"], msg.STATE_DEADPOOL_REFILL, {"match_id": match_id})
 
 

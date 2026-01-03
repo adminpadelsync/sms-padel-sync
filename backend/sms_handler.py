@@ -113,12 +113,25 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
         
         set_club_name(club_name)
 
-        # 1. Check if user exists in DB for THIS CLUB
-        # Note: A player can be registered at multiple clubs with the same phone number
+        # 1. Identify player by phone number (Universal Player Model)
         player = None
-        if club_id:
-            response = supabase.table("players").select("*").eq("phone_number", from_number).eq("club_id", club_id).execute()
-            player = response.data[0] if response.data else None
+        player_res = supabase.table("players").select("*").eq("phone_number", from_number).execute()
+        potential_player = player_res.data[0] if player_res.data else None
+        
+        if potential_player:
+            # 2. Verify membership in THIS CLUB
+            if club_id:
+                member_res = supabase.table("club_members").select("*").eq("club_id", club_id).eq("player_id", potential_player["player_id"]).execute()
+                if member_res.data:
+                    # Player is a member of this club
+                    player = potential_player
+                    # For compatibility with existing handlers that might still expect club_id in player object
+                    player["club_id"] = str(club_id)
+                else:
+                    print(f"[SMS] Player {from_number} exists but is not a member of club {club_id}")
+            else:
+                # No club_id context (unlikely but possible if unknown Twilio number)
+                player = potential_player
 
         # 2. Get current conversation state from Redis
         state_data = get_user_state(from_number)

@@ -34,9 +34,17 @@ def get_player_recommendations(
     """
     
     # Base query
+    # 1. Fetch player IDs for this club from club_members
+    members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+    member_ids = [m["player_id"] for m in (members_res.data or [])]
+    
+    if not member_ids:
+        return []
+
+    # 2. Fetch data for these players
     query = supabase.table("players")\
         .select("*")\
-        .eq("club_id", club_id)\
+        .in_("player_id", member_ids)\
         .eq("active_status", True)
         
     # Filter by level (allow +/- 0.5 range)

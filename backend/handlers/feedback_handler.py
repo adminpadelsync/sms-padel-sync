@@ -21,14 +21,14 @@ def handle_feedback_response(from_number: str, body: str, player: dict, state_da
     # Check for skip
     if body == "SKIP":
         clear_user_state(from_number)
-        send_sms(from_number, msg.MSG_FEEDBACK_SKIPPED)
+        send_sms(from_number, msg.MSG_FEEDBACK_SKIPPED, club_id=player.get("club_id"))
         return
     
     # Parse ratings
     ratings = parse_ratings(body)
     
     if ratings is None:
-        send_sms(from_number, msg.MSG_FEEDBACK_INVALID)
+        send_sms(from_number, msg.MSG_FEEDBACK_INVALID, club_id=player.get("club_id"))
         return
     
     # Get players to rate from state (stored as JSON string or list)
@@ -47,7 +47,7 @@ def handle_feedback_response(from_number: str, body: str, player: dict, state_da
     match_id = state_data.get("match_id")
     
     if len(ratings) != len(players_to_rate) or len(ratings) != 3:
-        send_sms(from_number, msg.MSG_FEEDBACK_INVALID)
+        send_sms(from_number, msg.MSG_FEEDBACK_INVALID, club_id=player.get("club_id"))
         return
     
     # Build ratings dict: {player_id: score}
@@ -68,7 +68,7 @@ def handle_feedback_response(from_number: str, body: str, player: dict, state_da
     
     # Clear state and thank player
     clear_user_state(from_number)
-    send_sms(from_number, msg.MSG_FEEDBACK_THANKS)
+    send_sms(from_number, msg.MSG_FEEDBACK_THANKS, club_id=player.get("club_id"))
 
 
 def parse_ratings(body: str) -> Optional[List[int]]:

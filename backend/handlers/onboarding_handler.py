@@ -149,43 +149,77 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                 if letter in body_upper:
                     avail_updates[key] = True
         
-        # Save to DB
-        name = state_data.get("name")
-        level = float(state_data.get("level"))
-        gender = state_data.get("gender")
-        
-        # Use the club_id passed through the flow
-        if not club_id:
-            # Fallback to first club if somehow not set
-            club_res = supabase.table("clubs").select("club_id").limit(1).execute()
-            if not club_res.data:
-                send_sms(from_number, msg.MSG_SYSTEM_ERROR)
-                return
-            club_id = club_res.data[0]["club_id"]
-
-        from logic.elo_service import get_initial_elo
-        initial_elo = get_initial_elo(level)
-        new_player = {
-            "phone_number": from_number,
-            "name": name,
-            "gender": gender,
-            "declared_skill_level": level,
-            "adjusted_skill_level": level,
-            "elo_rating": initial_elo,
-            "club_id": club_id,
-            "active_status": True,
-            **avail_updates
-        }
-
         try:
-            player_res = supabase.table("players").insert(new_player).execute()
+            # Check if player already exists by phone number (Universal Player Model)
+            existing_res = supabase.table("players").select("*").eq("phone_number", from_number).execute()
+            
+            if existing_res.data:
+                player = existing_res.data[0]
+                player_id = player["player_id"]
+                
+                # Player exists! Update their profile with new info (confirmational flow)
+                # Changes affect ALL clubs
+                supabase.table("players").update({
+                    "name": name,
+                    "gender": gender,
+                    "declared_skill_level": level,
+                    "adjusted_skill_level": level,
+                    **avail_updates
+                }).eq("player_id", player_id).execute()
+                
+                # Check if already a member of this club
+                member_res = supabase.table("club_members").select("*").eq("club_id", club_id).eq("player_id", player_id).execute()
+                if not member_res.data:
+                    # Add to this club
+                    supabase.table("club_members").insert({
+                        "club_id": club_id,
+                        "player_id": player_id
+                    }).execute()
+                
+                # Add to selected groups
+                selected_group_ids = state_data.get("selected_group_ids", [])
+                if selected_group_ids:
+                    # Filter out ones they are already in
+                    existing_groups_res = supabase.table("group_memberships").select("group_id").eq("player_id", player_id).in_("group_id", selected_group_ids).execute()
+                    existing_gids = {row["group_id"] for row in (existing_groups_res.data or [])}
+                    
+                    new_memberships = [
+                        {"group_id": gid, "player_id": player_id} 
+                        for gid in selected_group_ids if gid not in existing_gids
+                    ]
+                    if new_memberships:
+                        supabase.table("group_memberships").insert(new_memberships).execute()
+                
+                clear_user_state(from_number)
+                send_sms(from_number, f"Welcome back to {get_club_name()}! I've updated your profile. All set! 🎾")
+                return
+
+            # NEW PLAYER - Create record
+            from logic.elo_service import get_initial_elo
+            initial_elo = get_initial_elo(level)
+            new_player_data = {
+                "phone_number": from_number,
+                "name": name,
+                "gender": gender,
+                "declared_skill_level": level,
+                "adjusted_skill_level": level,
+                "elo_rating": initial_elo,
+                "active_status": True,
+                **avail_updates
+            }
+            
+            player_res = supabase.table("players").insert(new_player_data).execute()
             if player_res.data:
                 new_player = player_res.data[0]
                 new_player_id = new_player["player_id"]
                 
-                # Record Initial History
-                from logic.elo_service import get_initial_elo
-                initial_elo = get_initial_elo(level)
+                # 1. Add to club_members
+                supabase.table("club_members").insert({
+                    "club_id": club_id,
+                    "player_id": new_player_id
+                }).execute()
+                
+                # 2. Record Initial History
                 supabase.table("player_rating_history").insert({
                     "player_id": new_player_id,
                     "old_elo_rating": None,
@@ -195,7 +229,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                     "change_type": "onboarding"
                 }).execute()
 
-                # Add to selected groups if any
+                # 3. Add to selected groups
                 selected_group_ids = state_data.get("selected_group_ids", [])
                 if selected_group_ids:
                     memberships = [{"group_id": gid, "player_id": new_player_id} for gid in selected_group_ids]
@@ -204,6 +238,6 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             clear_user_state(from_number)
             send_sms(from_number, msg.MSG_PROFILE_SETUP_DONE.format(club_name=get_club_name()))
         except Exception as e:
-            print(f"Error creating player: {e}")
+            print(f"Error creating/updating player: {e}")
             send_sms(from_number, msg.MSG_PROFILE_ERROR)
 

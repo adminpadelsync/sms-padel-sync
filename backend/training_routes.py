@@ -31,8 +31,14 @@ async def training_step(request: TrainingStepRequest):
         player = player_res.data[0]
         
         # 2. Fetch club settings for phone number context if possible
-        club_res = supabase.table("clubs").select("phone_number").eq("club_id", player["club_id"]).execute()
-        to_number = club_res.data[0]["phone_number"] if club_res.data else None
+        # Since players.club_id is gone, we check club_members
+        member_res = supabase.table("club_members").select("club_id").eq("player_id", player["player_id"]).limit(1).execute()
+        club_id = member_res.data[0]["club_id"] if member_res.data else None
+        
+        to_number = None
+        if club_id:
+            club_res = supabase.table("clubs").select("phone_number").eq("club_id", club_id).execute()
+            to_number = club_res.data[0]["phone_number"] if club_res.data else None
 
         # 3. Call sms_handler in dry_run mode
         result = handle_incoming_sms(

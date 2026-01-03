@@ -41,6 +41,9 @@ class MatchUpdateRequest(BaseModel):
     status: Optional[str] = None
     score_text: Optional[str] = None
     winner_team: Optional[int] = None
+    court_booked: Optional[bool] = None
+    booked_court_text: Optional[str] = None
+    notify_players: Optional[bool] = False
 
 class AddPlayerRequest(BaseModel):
     player_id: str
@@ -225,12 +228,14 @@ async def get_players(request: Request):
         print(f"DEBUG: get_players explicitly called with club_id={club_id}")
         
         query = supabase.table("players").select(
-            "player_id, name, phone_number, declared_skill_level, gender, active_status, pro_verified, responsiveness_score, reputation_score, total_matches_played, club_id"
+            "player_id, name, phone_number, declared_skill_level, gender, active_status, pro_verified, responsiveness_score, reputation_score, total_matches_played"
         )
         
         if club_id and club_id.strip() and club_id != "undefined" and club_id != "null":
-            print(f"DEBUG: Applying club_id filter: {club_id}")
-            query = query.eq("club_id", club_id)
+            print(f"DEBUG: Applying club_id filter via club_members: {club_id}")
+            members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+            member_ids = [m["player_id"] for m in (members_res.data or [])]
+            query = query.in_("player_id", member_ids)
         
         result = query.eq("active_status", True).order("name").execute()
         players = result.data or []
@@ -305,9 +310,17 @@ async def get_club_rankings(club_id: str):
 
 
     try:
+        # 1. Fetch player IDs for this club
+        members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+        member_ids = [m["player_id"] for m in (members_res.data or [])]
+        
+        if not member_ids:
+            return {"rankings": []}
+
+        # 2. Fetch data for these players
         result = supabase.table("players").select(
             "player_id, name, elo_rating, elo_confidence, adjusted_skill_level, gender"
-        ).eq("club_id", club_id).eq("active_status", True).order("elo_rating", desc=True).execute()
+        ).in_("player_id", member_ids).eq("active_status", True).order("elo_rating", desc=True).execute()
         return {"rankings": result.data or []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -332,9 +345,17 @@ async def search_players(club_id: str, q: str = ""):
 
 
     try:
+        # 1. Fetch player IDs for this club
+        members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+        member_ids = [m["player_id"] for m in (members_res.data or [])]
+        
+        if not member_ids:
+            return {"players": []}
+
+        # 2. Search within these players
         query = supabase.table("players").select(
             "player_id, name, phone_number, declared_skill_level, gender"
-        ).eq("club_id", club_id).eq("active_status", True)
+        ).in_("player_id", member_ids).eq("active_status", True)
         
         if q:
             query = query.ilike("name", f"%{q}%")
@@ -552,12 +573,23 @@ async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):
             updates['score_text'] = request.score_text
         if request.winner_team is not None:
             updates['winner_team'] = request.winner_team
+        if request.court_booked is not None:
+            updates['court_booked'] = request.court_booked
+        if request.booked_court_text is not None:
+            updates['booked_court_text'] = request.booked_court_text
         
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
         
         match = update_match(match_id, updates)
         
+        # Trigger SMS notification if requested
+        if request.notify_players and request.booked_court_text:
+            try:
+                notify_players_of_booking(match_id, request.booked_court_text)
+            except Exception as notify_err:
+                print(f"Error notifying players of booking: {notify_err}")
+
         # Trigger Elo update if result is set or changed
         if (updates.get('status') == 'completed' or 'winner_team' in updates) and match.get('winner_team'):
             try:

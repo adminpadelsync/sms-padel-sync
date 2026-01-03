@@ -13,26 +13,34 @@ export default async function PlayersPage() {
         redirect('/not-setup')
     }
 
-    // Fetch ALL Players with their group memberships
-    const { data: rawPlayers } = await supabase
-        .from('players')
+    // Fetch ALL Players via club_members to ensure they have a club_id
+    // and correctly handle the join
+    const { data: members } = await supabase
+        .from('club_members')
         .select(`
-            *,
-            clubs(name),
-            group_memberships(
-                player_groups(group_id, name)
+            club_id,
+            players (
+                *,
+                clubs(name),
+                group_memberships(
+                    player_groups(group_id, name)
+                )
             )
         `)
-        .order('created_at', { ascending: false })
+        .order('added_at', { ascending: false })
 
-    // Transform players to flatten the groups structure
-    const players = rawPlayers?.map(player => ({
-        ...player,
-        groups: player.group_memberships
-            ?.map((m: any) => m.player_groups)
-            .filter((g: any) => g !== null)
-            .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
-    })) || []
+    // Transform and flatten the structure
+    const players = members?.map((m: any) => {
+        const player = m.players
+        return {
+            ...player,
+            club_id: m.club_id, // Ensure club_id is present for the client-side filter
+            groups: player.group_memberships
+                ?.map((gm: any) => gm.player_groups)
+                .filter((g: any) => g !== null)
+                .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
+        }
+    }) || []
 
     // Fetch clubs for the switcher
     const { data: clubs } = await supabase

@@ -209,7 +209,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
                 r.hset(key, k, v)
             r.expire(key, 86400)
         
-        if send_sms(player["phone_number"], message):
+        if send_sms(player["phone_number"], message, club_id=club_id):
             sent_count += 1
         else:
             print(f"Failed to send SMS to {player['phone_number']}, rolling back DB record")
@@ -292,7 +292,7 @@ Reply with 3 numbers (e.g., "8 7 9") or SKIP"""
             r.hset(key, k, v)
         r.expire(key, 86400)
     
-    if send_sms(player["phone_number"], message):
+    if send_sms(player["phone_number"], message, club_id=match.get("club_id")):
         return True
     else:
         print(f"Failed to send reminder SMS to {player['phone_number']}, reverting claim")

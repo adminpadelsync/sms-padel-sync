@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS courts (
 -- Players
 CREATE TABLE IF NOT EXISTS players (
   player_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  phone_number TEXT NOT NULL,
+  phone_number TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   gender TEXT CHECK (gender IN ('male', 'female')),
   
@@ -56,8 +56,7 @@ CREATE TABLE IF NOT EXISTS players (
   total_no_shows INTEGER DEFAULT 0,
   average_response_time_seconds INTEGER,
   
-  -- Club and status
-  club_id UUID NOT NULL REFERENCES clubs(club_id),
+  -- Status
   active_status BOOLEAN DEFAULT true,
   muted_until TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -74,9 +73,15 @@ CREATE TABLE IF NOT EXISTS players (
   avail_weekday_evening BOOLEAN DEFAULT false,
   avail_weekend_morning BOOLEAN DEFAULT false,
   avail_weekend_afternoon BOOLEAN DEFAULT false,
-  avail_weekend_evening BOOLEAN DEFAULT false,
-  
-  UNIQUE (phone_number, club_id)
+  avail_weekend_evening BOOLEAN DEFAULT false
+);
+
+-- Club Memberships
+CREATE TABLE IF NOT EXISTS club_members (
+  club_id UUID NOT NULL REFERENCES clubs(club_id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+  added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (club_id, player_id)
 );
 
 -- Player Groups

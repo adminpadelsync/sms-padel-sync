@@ -140,7 +140,7 @@ def send_result_nudge_for_match(match: dict):
         nudge_msg = f"🎾 {club_name}: Just a follow-up—did you get a result for the match on {match_time_str}?\n\nAs a reminder, here is who played:\n{players_list_str}\n\nReply back with the score so everyone's ratings stay accurate! 🎾"
     
     from twilio_client import send_sms
-    if send_sms(player["phone_number"], nudge_msg):
+    if send_sms(player["phone_number"], nudge_msg, club_id=club_id):
         # Update match with nudge tracking
         new_count = nudge_count + 1
         supabase.table("matches").update({

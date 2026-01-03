@@ -38,17 +38,20 @@ export default async function Dashboard() {
         redirect('/not-setup')
     }
 
-    // Fetch Players with server-side filtering
-    let playerQuery = supabase
-        .from('players')
+    // Fetch Players via club_members to ensure they have a club_id
+    let memberQuery = supabase
+        .from('club_members')
         .select(`
-            *,
-            clubs(name),
-            group_memberships(
-                player_groups(group_id, name)
+            club_id,
+            players (
+                *,
+                clubs(name),
+                group_memberships(
+                    player_groups(group_id, name)
+                )
             )
         `)
-        .order('created_at', { ascending: false })
+        .order('added_at', { ascending: false })
 
     // Fetch Matches with server-side filtering
     let matchQuery = supabase
@@ -56,22 +59,26 @@ export default async function Dashboard() {
         .select('*, clubs(name)')
         .order('created_at', { ascending: false })
 
-    // Optimization: Filter by club for non-superusers to reduce data load
+    // Optimization: Filter by club for non-superusers
     if (!userClub.is_superuser) {
-        playerQuery = playerQuery.eq('club_id', userClub.club_id)
+        memberQuery = memberQuery.eq('club_id', userClub.club_id)
         matchQuery = matchQuery.eq('club_id', userClub.club_id)
     }
 
-    const { data: rawPlayers } = await playerQuery
+    const { data: members } = await memberQuery
 
-    // Transform players to flatten the groups structure
-    const players = rawPlayers?.map(player => ({
-        ...player,
-        groups: player.group_memberships
-            ?.map((m: any) => m.player_groups)
-            .filter((g: any) => g !== null)
-            .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
-    })) || []
+    // Transform and flatten
+    const players = members?.map((m: any) => {
+        const player = m.players
+        return {
+            ...player,
+            club_id: m.club_id,
+            groups: player.group_memberships
+                ?.map((gm: any) => gm.player_groups)
+                .filter((g: any) => g !== null)
+                .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
+        }
+    }) || []
 
     const { data: matches } = await matchQuery
 
