@@ -229,7 +229,7 @@ def initiate_match_outreach(
                             body += f"{idx}. {other_time} ({count}/4)\n"
                     body += "\nReply 2Y/3Y to join, 2N/3N to decline."
                 
-                if send_sms(phone, body):
+                if send_sms(phone, body, club_id=club_id):
                     success_count += 1
                     print(f"Sent invite to {name} ({phone})")
                 else:
@@ -390,7 +390,7 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
                 f"Reply YES to join, NO to decline."
             )
             
-            if send_sms(phone, body):
+            if send_sms(phone, body, club_id=match['club_id']):
                 success_count += 1
                 print(f"Sent invite to {name} ({phone})")
             else:
@@ -521,7 +521,7 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
                     f"🎾 {club_name}: You've been removed from the match on {formatted_time}.\n\n"
                     f"If you have questions, please contact the organizer."
                 )
-                send_sms(phone, message)
+                send_sms(phone, message, club_id=match['club_id'])
                 print(f"Sent removal notification to {player.get('name')} ({phone})")
     except Exception as e:
         print(f"[WARNING] Failed to send removal SMS: {e}")

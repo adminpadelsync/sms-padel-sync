@@ -16,6 +16,7 @@ from match_organizer import (
     add_player_to_match,
     remove_player_from_match
 )
+from handlers.match_handler import notify_players_of_booking
 
 router = APIRouter()
 
@@ -56,6 +57,7 @@ class AssessmentResultRequest(BaseModel):
 
 class BookingMarkRequest(BaseModel):
     user_id: str
+    court_text: Optional[str] = None
 
 class AssessmentUpdate(BaseModel):
     player_name: str
@@ -424,7 +426,8 @@ async def mark_match_booked(match_id: str, request: BookingMarkRequest):
         now = get_now_utc().isoformat()
         update_data = {
             "court_booked": True,
-            "booked_at": now
+            "booked_at": now,
+            "booked_court_text": request.court_text
         }
         
         # Only set booked_by if it's a valid UUID
@@ -438,6 +441,13 @@ async def mark_match_booked(match_id: str, request: BookingMarkRequest):
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Match not found")
+        
+        # Trigger SMS notification if court text was provided
+        if request.court_text:
+            try:
+                notify_players_of_booking(match_id, request.court_text)
+            except Exception as e:
+                print(f"[ERROR] Failed to send booking notification: {e}")
             
         return {"match": result.data[0], "message": "Match marked as booked"}
     except HTTPException:

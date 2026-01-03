@@ -253,6 +253,14 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
                     print(f"[ERROR] Failed to process RESULT report: {e}")
                     send_sms(from_number, "Sorry, I had trouble recording that result.", club_id=club_id)
                 return
+            elif intent == "BOOK_COURT" and confidence > 0.8:
+                print(f"[SMS DEBUG] Routing to handle_court_booking_sms. intent='{intent}'")
+                try:
+                    handle_court_booking_sms(from_number, player, reasoner_result.entities)
+                except Exception as e:
+                    print(f"[ERROR] Failed to process court booking SMS: {e}")
+                    send_sms(from_number, "Sorry, I had trouble recording that booking.", club_id=club_id)
+                return
             elif cmd == "mute":
                 # Mute player for rest of day
                 from datetime import timedelta

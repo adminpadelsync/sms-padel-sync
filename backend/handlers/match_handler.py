@@ -112,12 +112,12 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
     if parsed_dt is None:
         # Neither worked - if the body was just "play" or similar, ask friendly
         if body.lower().strip() in ["play", "start", "match"]:
-            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=get_club_name()))
+            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=get_club_name()), club_id=club_id)
             # Set state to wait for date
             set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
         else:
             # Re-ask if they sent something we couldn't parse
-            send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
+            send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD, club_id=club_id)
         return
     
     # Date parsed successfully - check if we should auto-scope to a group
@@ -237,13 +237,13 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
     gender_preference = state_data.get("gender_preference", "mixed")
     
     if not scheduled_time_iso:
-        send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR)
+        send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR, club_id=player.get("club_id"))
         clear_user_state(from_number)
         return
     
     # Check for cancel
     if response_lower in ["no", "n", "cancel", "nope"]:
-        send_sms(from_number, msg.MSG_DATE_CANCELLED)
+        send_sms(from_number, msg.MSG_DATE_CANCELLED, club_id=player.get("club_id"))
         clear_user_state(from_number)
         return
     
@@ -281,7 +281,7 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
             gender=gender_display
         )
         
-        send_sms(from_number, confirm_msg)
+        send_sms(from_number, confirm_msg, club_id=player.get("club_id"))
         set_user_state(from_number, msg.STATE_MATCH_REQUEST_CONFIRM, {
             "scheduled_time_iso": scheduled_time_iso,
             "scheduled_time_human": scheduled_time_human,
@@ -338,7 +338,7 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         pass
     
     # Still not understood
-    send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
+    send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD, club_id=player.get("club_id"))
 
 
 def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None):
@@ -441,7 +441,7 @@ def _handle_mute(from_number: str, player: dict):
         "muted_until": tomorrow.isoformat()
     }).eq("player_id", player["player_id"]).execute()
     
-    send_sms(from_number, msg.MSG_MUTED)
+    send_sms(from_number, msg.MSG_MUTED, club_id=player.get("club_id"))
 
 
 def _create_match(
@@ -462,7 +462,7 @@ def _create_match(
     If skip_filters is True, invites all group members regardless of level/gender.
     """
     if not player:
-        send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND)
+        send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND, club_id=None) # Fallback to default if no player
         clear_user_state(from_number)
         return
     
@@ -504,7 +504,7 @@ def _create_match(
             else:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
                     club_name=get_club_name(), time=friendly_time, count=count
-                ))
+                ), club_id=player["club_id"])
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
             
@@ -533,13 +533,13 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
     try:
         parts = date_str.split(" ")
         if len(parts) < 2:
-            send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT)
+            send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT, club_id=player.get("club_id"))
             return
 
         date_part = parts[0]
         time_range = parts[1]
         if "-" not in time_range:
-            send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT)
+            send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT, club_id=player.get("club_id"))
             return
              
         start_time_str, end_time_str = time_range.split("-")
@@ -555,11 +555,11 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
             current_slot += timedelta(minutes=120)
         
         if not slots:
-            send_sms(from_number, msg.MSG_RANGE_TOO_SHORT)
+            send_sms(from_number, msg.MSG_RANGE_TOO_SHORT, club_id=player.get("club_id"))
             return
 
         if not player:
-            send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND)
+            send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND, club_id=None)
             clear_user_state(from_number)
             return
 
@@ -590,12 +590,81 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
 
             from matchmaker import find_and_invite_players
             count = find_and_invite_players(match_id)
-            send_sms(from_number, msg.MSG_MATCH_REQUESTED_VOTING.format(club_name=get_club_name(), count=count))
+            send_sms(from_number, msg.MSG_MATCH_REQUESTED_VOTING.format(club_name=get_club_name(), count=count), club_id=player["club_id"])
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
 
     except ValueError:
-        send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT)
+        send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT, club_id=player.get("club_id"))
+
+
+
+def handle_court_booking_sms(from_number: str, player: dict, entities: dict):
+    """
+    Handle an SMS from an originator saying they've booked a court.
+    """
+    court_text = entities.get("court_text")
+    if not court_text:
+        # If Reasoner didn't catch it, maybe it's in the message
+        # But for now, we'll ask for clarification if it's missing
+        send_sms(from_number, "Got it! Which court did you book?", club_id=player.get("club_id"))
+        return
+
+    # Find the player's most recent confirmed match that isn't booked yet
+    player_id = player["player_id"]
+    match_res = supabase.table("matches").select("*").eq("status", "confirmed").eq("court_booked", False).or_(
+        f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
+    ).order("scheduled_time", desc=True).limit(1).execute()
+
+    if not match_res.data:
+        send_sms(from_number, "I couldn't find a confirmed match for you to book a court for. Have you already marked it as booked?", club_id=player.get("club_id"))
+        return
+
+    match = match_res.data[0]
+    match_id = match["match_id"]
+
+    # Mark as booked
+    now = get_now_utc().isoformat()
+    supabase.table("matches").update({
+        "court_booked": True,
+        "booked_at": now,
+        "booked_court_text": court_text
+    }).eq("match_id", match_id).execute()
+
+    # Notify all players
+    notify_players_of_booking(match_id, court_text)
+
+
+def notify_players_of_booking(match_id: str, court_text: str):
+    """
+    Notify all confirmed players that the court has been booked.
+    """
+    # Fetch match and players
+    match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    if not match_res.data:
+        return
+    
+    match = match_res.data[0]
+    club_id = match["club_id"]
+    all_pids = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
+    
+    # Format time
+    friendly_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']))
+    
+    # Get club name
+    club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+    club_name = club_res.data[0]["name"] if club_res.data else "the club"
+
+    message = msg.MSG_COURT_BOOKED.format(
+        club_name=club_name,
+        time=friendly_time,
+        court_text=court_text
+    )
+
+    for pid in all_pids:
+        p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
+        if p_res.data:
+            send_sms(p_res.data[0]["phone_number"], message, club_id=club_id)
 
 
 # Backwards compatibility alias

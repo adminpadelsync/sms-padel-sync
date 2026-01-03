@@ -16,7 +16,10 @@ def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
                 p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                 if p_res.data:
                     phone = p_res.data[0]["phone_number"]
-                    send_sms(phone, msg.MSG_UPDATE_JOINED.format(club_name=get_club_name(), name=joiner_name, spots=spots_left))
+                    # Fetch club_id from match
+                    m_res = supabase.table("matches").select("club_id").eq("match_id", match_id).execute()
+                    club_id = m_res.data[0]["club_id"] if m_res.data else None
+                    send_sms(phone, msg.MSG_UPDATE_JOINED.format(club_name=get_club_name(), name=joiner_name, spots=spots_left), club_id=club_id)
     except Exception as e:
         print(f"Error notifying maybe players: {e}")
 
@@ -43,7 +46,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             "status": "declined", 
             "responded_at": get_now_utc().isoformat()
         }).eq("invite_id", invite["invite_id"]).execute()
-        send_sms(from_number, msg.MSG_DECLINE)
+        send_sms(from_number, msg.MSG_DECLINE, club_id=player.get("club_id"))
         
         # Immediately invite a replacement player
         from matchmaker import invite_replacement_player
@@ -58,7 +61,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             "responded_at": get_now_utc().isoformat()
         }).eq("invite_id", invite["invite_id"]).execute()
         
-        send_sms(from_number, msg.MSG_MAYBE)
+        send_sms(from_number, msg.MSG_MAYBE, club_id=player.get("club_id"))
         return
 
     
@@ -80,7 +83,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 votes.append(options[idx])
         
         if not votes:
-            send_sms(from_number, f"Please reply with valid options (e.g., {', '.join(valid_letters)}).")
+            send_sms(from_number, f"Please reply with valid options (e.g., {', '.join(valid_letters)}).", club_id=player.get("club_id"))
             return
 
         # Record Votes
@@ -106,7 +109,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                     new_team_2 = match["team_2_players"] + [player["player_id"]]
                     supabase.table("matches").update({"team_2_players": new_team_2}).eq("match_id", match_id).execute()
 
-        send_sms(from_number, f"Votes received for {', '.join(votes)}! We'll confirm if we get 4 players.")
+        send_sms(from_number, f"Votes received for {', '.join(votes)}! We'll confirm if we get 4 players.", club_id=player.get("club_id"))
 
         # Check for Winner (First to 4)
         # Get all votes for this match
@@ -131,7 +134,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
-                        send_sms(p_res.data[0]["phone_number"], msg.MSG_MATCH_CONFIRMED.format(club_name=get_club_name(), time=opt))
+                        send_sms(p_res.data[0]["phone_number"], msg.MSG_MATCH_CONFIRMED.format(club_name=get_club_name(), time=opt), club_id=updated_match["club_id"])
                 return
 
     elif match["status"] == "pending":
@@ -150,7 +153,8 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 send_sms(from_number, 
                     f"🎾 {get_club_name()}: Sorry, this match is already full! 🏸\n\n"
-                    "Text PLAY to request a new match, or reply MATCHES to see your invites."
+                    "Text PLAY to request a new match, or reply MATCHES to see your invites.",
+                    club_id=player.get("club_id")
                 )
                 return
             
@@ -213,7 +217,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 response_msg = None  # Will send the full confirmation message below
             
             if response_msg:
-                send_sms(from_number, response_msg)
+                send_sms(from_number, response_msg, club_id=player.get("club_id"))
 
             # Notify MAYBE players
             if spots_left > 0:
@@ -301,7 +305,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                             f"{role_text}"
                         )
                         
-                        send_sms(phone, confirmation_msg)
+                        send_sms(phone, confirmation_msg, club_id=updated_match["club_id"])
                     except Exception as e:
                         print(f"Error notifying player {pid} of confirmation: {e}")
         return
@@ -317,7 +321,8 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             
             send_sms(from_number, 
                 f"🎾 {get_club_name()}: Sorry, this match is already full! 🏸\n\n"
-                "Text PLAY to request a new match, or reply MATCHES to see your invites."
+                "Text PLAY to request a new match, or reply MATCHES to see your invites.",
+                club_id=player.get("club_id")
             )
         return
 
@@ -334,4 +339,4 @@ def _handle_mute_from_invite(from_number: str, player: dict):
         "muted_until": tomorrow.isoformat()
     }).eq("player_id", player["player_id"]).execute()
     
-    send_sms(from_number, msg.MSG_MUTED)
+    send_sms(from_number, msg.MSG_MUTED, club_id=player.get("club_id"))

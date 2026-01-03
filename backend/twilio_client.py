@@ -119,27 +119,38 @@ def send_sms(to_number: str, body: str, reply_from: str = None, club_id: str = N
                    If not provided, uses the context variable or falls back to TWILIO_PHONE_NUMBER
         club_id: Optional - the ID of the club to fetch specific settings (test_mode, whitelist)
     """
-    # Priority: explicit reply_from > context variable > default from env
-    send_from = reply_from or get_reply_from() or from_number
+    # Priority: explicit reply_from > context variable > club-specific lookup > default from env
+    send_from = reply_from or get_reply_from()
     
-    # 1. Fetch settings (Per-club or Global fallback)
+    # 1. Fetch settings and phone number (Per-club or Global fallback)
     current_test_mode = test_mode
     current_whitelist = sms_whitelist
+    club_phone = None
     
     if club_id:
         try:
             from database import supabase
-            res = supabase.table("clubs").select("settings").eq("club_id", club_id).maybe_single().execute()
-            if res.data and res.data.get("settings"):
-                settings = res.data["settings"]
-                # Use per-club settings if explicitly defined, otherwise stay with global
-                if "sms_test_mode" in settings:
-                    current_test_mode = settings["sms_test_mode"]
-                if "sms_whitelist" in settings and settings["sms_whitelist"]:
-                    raw_wl = settings["sms_whitelist"]
-                    current_whitelist = set(num.strip() for num in raw_wl.split(",") if num.strip())
+            res = supabase.table("clubs").select("settings, phone_number").eq("club_id", club_id).maybe_single().execute()
+            if res.data:
+                club_phone = res.data.get("phone_number")
+                settings = res.data.get("settings")
+                if settings:
+                    # Use per-club settings if explicitly defined, otherwise stay with global
+                    if "sms_test_mode" in settings:
+                        current_test_mode = settings["sms_test_mode"]
+                    if "sms_whitelist" in settings and settings["sms_whitelist"]:
+                        raw_wl = settings["sms_whitelist"]
+                        current_whitelist = set(num.strip() for num in raw_wl.split(",") if num.strip())
         except Exception as e:
-            print(f"[SMS ERROR] Failed to fetch per-club settings for {club_id}: {e}")
+            print(f"[SMS ERROR] Failed to fetch per-club data for {club_id}: {e}")
+
+    # Use club_phone if we don't have a sender yet
+    if not send_from and club_phone:
+        send_from = club_phone
+        
+    # Final fallback to global default
+    if not send_from:
+        send_from = from_number
 
     # Debug: log every SMS attempt
     print(f"[SMS DEBUG] send_sms called: to={to_number}, from={send_from}, club_id={club_id}")

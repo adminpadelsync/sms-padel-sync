@@ -44,6 +44,7 @@ Current User Profile: {user_profile}
 - UNMUTE: Resuming invites (Look for "unmute", "resume", "start").
 - SUBMIT_FEEDBACK: Providing numeric ratings for players (Look for sequence of numbers e.g. "1 9 8" or "10 10 10").
 - REPORT_RESULT: Reporting the outcome of a match including teams and score (Look for "won", "lost", "score was", "beat").
+- BOOK_COURT: Explicitly stating that a court has been booked (Look for "booked court", "i got court 6", "confirmed court 4").
 - RESET: Wanting to start over or clear state.
 - GREETING: Just saying hello.
 - CHITCHAT: General banter or feedback.
@@ -60,6 +61,7 @@ Current User Profile: {user_profile}
 - winner: e.g., "Team 1", "Me", "Opponents", or participant names.
 - team_a: e.g., ["Me", "Dave"] (names of players on first team).
 - team_b: e.g., ["Sarah", "Mike"] (names of players on second team).
+- court_text: e.g., "Court 6", "Court 4", "Indoor 2" (name or number of the booked court).
 
 ### Instructions for Generating Reply:
 - If the intent is GREETING, respond warmly and ask how you can help.

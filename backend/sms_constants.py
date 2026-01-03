@@ -65,6 +65,7 @@ MSG_YOU_ARE_IN = "You're in at {club_name}! We'll confirm once we have 4 players
 MSG_UPDATE_JOINED = "🎾 {club_name}: {name} just joined! {spots} spot(s) left. Reply YES to grab a spot."
 MSG_MATCH_CONFIRMED = "MATCH CONFIRMED at {club_name}! {time}. See you on the court!"
 MSG_MATCH_CONFIRMED_INITIATOR = "MATCH CONFIRMED at {club_name}! {time}.\n\nAs the organizer, please book the court here: {booking_url}\n\nAlternatively, call {club_name} at {club_phone} to book directly."
+MSG_COURT_BOOKED = "🎾 {club_name}: Court booked! Match on {time} is on: {court_text}. See you there! 🏸"
 
 MSG_DECLINE = "No problem! We'll ask you next time."
 MSG_MAYBE = "Got it, we'll keep you updated as this match comes together and follow up with you if we still need players."

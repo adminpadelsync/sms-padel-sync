@@ -28,6 +28,7 @@ interface Match {
     team_2_details?: PlayerDetail[]
     score_text?: string
     winner_team?: number
+    booked_court_text?: string
 }
 
 interface PlayerDetail {
@@ -168,12 +169,26 @@ export function MatchesClient({
             if (!proceed) return
         }
 
+        // Prompt for court details
+        const matchTime = match ? formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined) : 'this match'
+        const courtText = window.prompt(
+            `Marking match on ${matchTime} as booked.\n\n` +
+            `Please enter the court details (e.g. "Court 6"):`,
+            ""
+        )
+
+        // If user cancels the prompt, don't proceed
+        if (courtText === null) return
+
         setMarkingBookedId(matchId)
         try {
             const res = await fetch(`/api/matches/${matchId}/mark-booked`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId })
+                body: JSON.stringify({
+                    user_id: userId,
+                    court_text: courtText
+                })
             })
 
             if (!res.ok) {
@@ -183,7 +198,11 @@ export function MatchesClient({
 
             // Update local state
             setLocalMatches(prev => prev.map(m =>
-                m.match_id === matchId ? { ...m, court_booked: true } : m
+                m.match_id === matchId ? {
+                    ...m,
+                    court_booked: true,
+                    booked_court_text: courtText || m.booked_court_text
+                } : m
             ))
         } catch (err: any) {
             console.error(err)
@@ -410,10 +429,17 @@ export function MatchesClient({
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.court_booked ? 'bg-indigo-100 text-indigo-800' : 'bg-red-50 text-red-700'
-                                                        }`}>
-                                                        {match.court_booked ? 'Booked' : 'Not Booked'}
-                                                    </span>
+                                                    <div className="flex flex-col">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full w-fit ${match.court_booked ? 'bg-indigo-100 text-indigo-800' : 'bg-red-50 text-red-700'
+                                                            }`}>
+                                                            {match.court_booked ? 'Booked' : 'Not Booked'}
+                                                        </span>
+                                                        {match.court_booked && match.booked_court_text && (
+                                                            <span className="text-[10px] text-gray-500 mt-1 ml-1 font-medium">
+                                                                {match.booked_court_text}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
 
                                                 {/* Replaced merged columns with Mini Scorecard */}
