@@ -218,7 +218,13 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
                         return
                     
                     selected_invite = all_sent_invites[invite_index]
-                    handle_invite_response(from_number, action, player, selected_invite)
+                    try:
+                        handle_invite_response(from_number, action, player, selected_invite)
+                    except Exception as e:
+                        print(f"[ERROR] handle_invite_response failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        send_sms(from_number, "Sorry, I had trouble processing your response. Please try again.", club_id=club_id)
                     return
 
 

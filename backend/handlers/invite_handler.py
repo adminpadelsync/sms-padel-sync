@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from database import supabase
 from twilio_client import send_sms, get_club_name, set_reply_from, set_club_name
 import sms_constants as msg
-from logic_utils import parse_iso_datetime, format_sms_datetime
+from logic_utils import parse_iso_datetime, format_sms_datetime, get_now_utc
 
 def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
     """Notify players who replied MAYBE that someone joined."""
@@ -41,7 +41,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
         # Decline
         supabase.table("match_invites").update({
             "status": "declined", 
-            "responded_at": datetime.utcnow().isoformat()
+            "responded_at": get_now_utc().isoformat()
         }).eq("invite_id", invite["invite_id"]).execute()
         send_sms(from_number, msg.MSG_DECLINE)
         
@@ -55,7 +55,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
         # Mark as MAYBE
         supabase.table("match_invites").update({
             "status": "maybe",
-            "responded_at": datetime.utcnow().isoformat()
+            "responded_at": get_now_utc().isoformat()
         }).eq("invite_id", invite["invite_id"]).execute()
         
         send_sms(from_number, msg.MSG_MAYBE)
@@ -95,7 +95,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 }).execute()
         
         # Update Invite
-        supabase.table("match_invites").update({"status": "accepted", "responded_at": datetime.utcnow().isoformat()}).eq("invite_id", invite["invite_id"]).execute()
+        supabase.table("match_invites").update({"status": "accepted", "responded_at": get_now_utc().isoformat()}).eq("invite_id", invite["invite_id"]).execute()
         
         # Add to Match (if not already)
         if player["player_id"] not in match["team_1_players"] and player["player_id"] not in match["team_2_players"]:
@@ -121,7 +121,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 # Confirm Match
                 supabase.table("matches").update({
                     "status": "confirmed", 
-                    "confirmed_at": datetime.utcnow().isoformat(),
+                    "confirmed_at": get_now_utc().isoformat(),
                     "scheduled_time": opt # Set the winning time
                 }).eq("match_id", match_id).execute()
                 
@@ -145,7 +145,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 # Mark invite as expired so we don't keep picking it up
                 supabase.table("match_invites").update({
                     "status": "expired",
-                    "responded_at": datetime.utcnow().isoformat()
+                    "responded_at": get_now_utc().isoformat()
                 }).eq("invite_id", invite["invite_id"]).execute()
                 
                 send_sms(from_number, 
@@ -157,7 +157,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             # 1. Update Invite
             supabase.table("match_invites").update({
                 "status": "accepted", 
-                "responded_at": datetime.utcnow().isoformat()
+                "responded_at": get_now_utc().isoformat()
             }).eq("invite_id", invite["invite_id"]).execute()
             
             # 2. Add to Match (Fill Team 1, then Team 2)
@@ -224,7 +224,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 # Confirm Match!
                 supabase.table("matches").update({
                     "status": "confirmed", 
-                    "confirmed_at": datetime.utcnow().isoformat()
+                    "confirmed_at": get_now_utc().isoformat()
                 }).eq("match_id", match_id).execute()
                 
                 # Fetch updated match for player list and time
@@ -275,47 +275,35 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 # Notify all players
                 for pid in all_player_ids:
-                    p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
-                    if p_res.data:
+                    try:
+                        p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
+                        if not p_res.data:
+                            continue
+                            
                         phone = p_res.data[0]["phone_number"]
                         
+                        # Build the message content based on role
                         if pid == initiator_id:
-                            # Special message for the initiator
-                            msg_text = msg.MSG_MATCH_CONFIRMED_INITIATOR.format(
-                                club_name=club_name,
-                                time=friendly_time,
-                                booking_url=booking_url,
-                                club_phone=club_phone
+                            # Booking instructions for the initiator
+                            role_text = (
+                                f"As the organizer, please book the court here: {booking_url}\n\n"
+                                f"Alternatively, call {club_name} at {club_phone} to book directly."
                             )
                         else:
-                            # Standard message for others
-                            msg_text = msg.MSG_MATCH_CONFIRMED.format(
-                                club_name=club_name,
-                                time=friendly_time
-                            )
+                            # Standard sign-off for others
+                            role_text = "See you on the court! 🏸"
                         
+                        # Construct final message (clean and professional)
                         confirmation_msg = (
                             f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
                             f"📅 {friendly_time}\n\n"
                             f"👥 Players:\n{players_text}\n\n"
-                            f"{msg_text if pid == initiator_id else 'See you on the court! 🏸'}"
+                            f"{role_text}"
                         )
                         
-                        # If it's the initiator, we use the custom message entirely if possible, 
-                        # but the existing code builds a structured message. 
-                        # Let's override the last part.
-                        
-                        if pid == initiator_id:
-                             # Full custom message for initiator to include booking link and phone
-                             initiator_confirmation = (
-                                f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
-                                f"📅 {formatted_time}\n\n"
-                                f"👥 Players:\n{players_text}\n\n"
-                                f"Organizer: {msg_text}"
-                             )
-                             send_sms(phone, initiator_confirmation)
-                        else:
-                            send_sms(phone, confirmation_msg)
+                        send_sms(phone, confirmation_msg)
+                    except Exception as e:
+                        print(f"Error notifying player {pid} of confirmation: {e}")
         return
 
     elif match["status"] == "confirmed":
@@ -324,7 +312,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             # Mark this invite as expired so we don't keep picking it up
             supabase.table("match_invites").update({
                 "status": "expired",
-                "responded_at": datetime.utcnow().isoformat()
+                "responded_at": get_now_utc().isoformat()
             }).eq("invite_id", invite["invite_id"]).execute()
             
             send_sms(from_number, 

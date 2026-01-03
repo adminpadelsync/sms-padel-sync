@@ -6,6 +6,7 @@ import { cookies } from 'next/headers'
 export interface UserClub {
     club_id: string | null
     club_name: string | null
+    club_timezone: string | null
     is_superuser: boolean
     role: string
 }
@@ -23,7 +24,8 @@ export async function getUserClub(): Promise<UserClub | null> {
             is_superuser,
             role,
             clubs (
-                name
+                name,
+                timezone
             )
         `)
         .eq('user_id', user.id)
@@ -62,6 +64,7 @@ export async function getUserClub(): Promise<UserClub | null> {
     return {
         club_id: finalClubId,
         club_name: finalClubName || null,
+        club_timezone: (data.clubs as any)?.timezone || null,
         is_superuser: data.is_superuser,
         role: data.role
     }

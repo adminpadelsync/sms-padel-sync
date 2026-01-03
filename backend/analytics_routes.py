@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from database import supabase
 from datetime import datetime, timedelta
+from logic_utils import get_now_utc
 from typing import Dict, List, Any
 import json
 
@@ -101,7 +102,7 @@ async def get_activity_metrics(club_id: str):
     - Invite Acceptance Rate
     """
     try:
-        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        thirty_days_ago = (get_now_utc() - timedelta(days=30)).isoformat()
         
         # 1. Match Stats
         matches_res = supabase.table("matches").select("status, match_id").eq("club_id", club_id).gte("created_at", thirty_days_ago).execute()

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
-from logic_utils import parse_iso_datetime
+from logic_utils import parse_iso_datetime, get_now_utc
 import sms_constants as msg
 from database import supabase
 from match_organizer import (
@@ -377,7 +377,7 @@ async def get_club_booking_status(club_id: str):
         # User said: "matches (that are in the future) listing the matches without courts booked at the top"
         # We'll filter for status in ('confirmed', 'pending')
         
-        now = datetime.now().isoformat()
+        now = get_now_utc().isoformat()
         
         query = supabase.table("matches").select(
             "*, originator:originator_id(name, phone_number, declared_skill_level)"
@@ -421,7 +421,7 @@ async def mark_match_booked(match_id: str, request: BookingMarkRequest):
 
     import uuid
     try:
-        now = datetime.now().isoformat()
+        now = get_now_utc().isoformat()
         update_data = {
             "court_booked": True,
             "booked_at": now
@@ -667,7 +667,7 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
             # Parse and re-serialize to ensure it's a valid standard ISO format
             scheduled_time = parse_iso_datetime(request.scheduled_time).isoformat()
         else:
-            scheduled_time = datetime.now().isoformat()
+            scheduled_time = get_now_utc().isoformat()
         
         # Split players into 2 teams
         team_1 = request.player_ids[:2]
@@ -703,8 +703,8 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
                 "match_id": match["match_id"],
                 "player_id": pid,
                 "status": "accepted",
-                "sent_at": datetime.now().isoformat(),
-                "responded_at": datetime.now().isoformat()
+                "sent_at": get_now_utc().isoformat(),
+                "responded_at": get_now_utc().isoformat()
             })
         
         supabase.table("match_invites").insert(invite_data).execute()

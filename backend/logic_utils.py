@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pytz
 from database import supabase
 
@@ -79,27 +79,28 @@ def get_booking_url(club: dict) -> str:
     
     return "the booking portal"
 
+def get_now_utc() -> datetime:
+    """Return the current time as a timezone-aware UTC datetime."""
+    return datetime.now(timezone.utc)
+
 def parse_iso_datetime(dt_str: str) -> datetime:
     """
     Robustly parse ISO datetime strings from Javascript or Postgres.
-    Handles 'Z' suffix and varying microsecond precision.
+    Ensures the returned object is ALWAYS timezone-aware (defaulting to UTC).
     """
     if not dt_str:
         return None
         
-    # Replace 'Z' with UTC offset for across-version compatibility
+    # Replace 'Z' with +00:00 for fromisoformat compatibility
     clean_dt = dt_str.replace('Z', '+00:00')
     
     try:
-        return datetime.fromisoformat(clean_dt)
+        dt = datetime.fromisoformat(clean_dt)
     except ValueError:
-        # Fallback for weird precisions or formats
-        # datetime.fromisoformat can be picky about the number of sub-second digits in older Python
+        # Fallback for variable sub-second precision (older Python 3.x)
         try:
-            # Try removing sub-seconds if they are the problem
             if '.' in clean_dt:
                 base, fraction = clean_dt.split('.')
-                # Keep up to 6 digits for microseconds, but handle variable lengths
                 if '+' in fraction:
                     frac_part, tz_part = fraction.split('+')
                     clean_dt = f"{base}.{frac_part[:6].ljust(6, '0')}+{tz_part}"
@@ -108,18 +109,26 @@ def parse_iso_datetime(dt_str: str) -> datetime:
                     clean_dt = f"{base}.{frac_part[:6].ljust(6, '0')}-{tz_part}"
                 else:
                     clean_dt = f"{base}.{fraction[:6].ljust(6, '0')}"
-                return datetime.fromisoformat(clean_dt)
+                dt = datetime.fromisoformat(clean_dt)
+            else:
+                # No microseconds, potentially weird format
+                for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        # Strip timezone for strptime then re-add
+                        naive_part = clean_dt.split('+')[0].split('-')[0] if '-' in clean_dt and len(clean_dt) > 10 else clean_dt
+                        dt = datetime.strptime(naive_part, fmt)
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    raise ValueError(f"Could not parse '{dt_str}' with available formats")
         except Exception:
-            pass
-            
-        # Last resort: common formats
-        for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
-            try:
-                return datetime.strptime(dt_str.split('+')[0].split('Z')[0], fmt)
-            except ValueError:
-                continue
-                
-    raise ValueError(f"Invalid isoformat string: '{dt_str}'")
+            raise ValueError(f"Invalid isoformat string: '{dt_str}'")
+
+    # Final check: Ensure it is aware. If naive, assume UTC.
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 def format_sms_datetime(dt: datetime) -> str:
     """

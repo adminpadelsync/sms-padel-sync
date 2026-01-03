@@ -1,6 +1,7 @@
 import re
 from typing import Optional, Tuple
 from datetime import datetime, timedelta
+from logic_utils import get_now_utc
 
 
 def _parse_gender(text: str) -> Optional[str]:
@@ -569,7 +570,7 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
             "scheduled_time": slots[0],
             "status": "voting",
             "voting_options": slots,
-            "voting_deadline": (datetime.utcnow() + timedelta(hours=24)).isoformat()
+            "voting_deadline": (get_now_utc() + timedelta(hours=24)).isoformat()
         }
         
         res = supabase.table("matches").insert(match_data).execute()

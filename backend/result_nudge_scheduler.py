@@ -5,7 +5,7 @@ Exactly like feedback_scheduler but only for the originator to report the Elo re
 
 from datetime import datetime, timedelta
 from database import supabase
-from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime, format_sms_datetime
+from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime, format_sms_datetime, get_now_utc
 import sms_constants as msg
 import pytz
 
@@ -26,16 +26,9 @@ def get_matches_needing_result_nudge():
         club_id = club["club_id"]
         settings = club.get("settings") or {}
         timezone_str = club.get("timezone") or "America/New_York"
-        delay_hours = float(settings.get("result_nudge_delay_hours", DEFAULT_RESULT_NUDGE_DELAY_HOURS))
-        
-        try:
-            tz = pytz.timezone(timezone_str)
-        except Exception:
-            tz = pytz.timezone("America/New_York")
-            
-        now_local = datetime.now(tz).replace(tzinfo=None)
-        cutoff_time = now_local - timedelta(hours=delay_hours)
-        lookback_limit = now_local - timedelta(hours=24)
+        now_utc = get_now_utc()
+        cutoff_time = now_utc - timedelta(hours=delay_hours)
+        lookback_limit = now_utc - timedelta(hours=24)
         
         # Query matches for this club that are confirmed but NOT completed
         # AND have received fewer than 2 nudges
@@ -67,8 +60,8 @@ def get_matches_needing_result_nudge():
                 last_nudge_at_str = match.get("last_result_nudge_at")
                 if last_nudge_at_str:
                     try:
-                        last_nudge_at = datetime.fromisoformat(last_nudge_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
-                        if now_local >= last_nudge_at + timedelta(hours=4):
+                        last_nudge_at = parse_iso_datetime(last_nudge_at_str)
+                        if now_utc >= last_nudge_at + timedelta(hours=4):
                             matches_to_process.append(match)
                     except Exception:
                         # Fallback if parsing fails
@@ -163,7 +156,7 @@ def send_result_nudge_for_match(match: dict):
         new_count = nudge_count + 1
         supabase.table("matches").update({
             "result_nudge_count": new_count,
-            "last_result_nudge_at": datetime.now().isoformat()
+            "last_result_nudge_at": get_now_utc().isoformat()
         }).eq("match_id", match_id).execute()
         
         print(f"Sent result nudge #{new_count} to {player['name']} for match {match_id}")

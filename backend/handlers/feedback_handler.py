@@ -7,6 +7,7 @@ import sms_constants as msg
 from redis_client import clear_user_state
 import re
 import json
+from logic_utils import get_now_utc
 
 
 def handle_feedback_response(from_number: str, body: str, player: dict, state_data: dict):
@@ -123,10 +124,9 @@ def save_feedback(match_id: str, player_id: str, individual_ratings: dict):
 
 def mark_feedback_received(match_id: str, player_id: str):
     """Mark a feedback request as having received a response."""
-    from datetime import datetime
     try:
         supabase.table("feedback_requests").update({
-            "response_received_at": datetime.utcnow().isoformat()
+            "response_received_at": get_now_utc().isoformat()
         }).eq("match_id", match_id).eq("player_id", player_id).execute()
     except Exception as e:
         # Non-critical, just log it

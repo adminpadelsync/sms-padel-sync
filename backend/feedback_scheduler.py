@@ -12,7 +12,7 @@ Configurable per club:
 
 from datetime import datetime, timedelta
 from database import supabase
-from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime
+from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime, get_now_utc
 import sms_constants as msg
 from redis_client import get_redis_client
 import json
@@ -41,17 +41,12 @@ def get_matches_needing_feedback():
         timezone_str = club.get("timezone") or "America/New_York"
         delay_hours = float(settings.get("feedback_delay_hours", DEFAULT_FEEDBACK_DELAY_HOURS))
         
-        # Calculate the time window in the club's local time
-        try:
-            tz = pytz.timezone(timezone_str)
-        except Exception:
-            tz = pytz.timezone("America/New_York")
-            
-        # Get current local time and convert back to naive for comparison with DB
-        now_local = datetime.now(tz).replace(tzinfo=None)
+        # Get current time in UTC
+        now_utc = get_now_utc()
+        
         # Delay is counted from match END, so add assumed duration to the offset
-        cutoff_time = now_local - timedelta(hours=delay_hours + ASSUMED_MATCH_DURATION_HOURS)
-        lookback_limit = now_local - timedelta(hours=48)
+        cutoff_time = now_utc - timedelta(hours=delay_hours + ASSUMED_MATCH_DURATION_HOURS)
+        lookback_limit = now_utc - timedelta(hours=48)
         
         # Query matches for this club
         result = supabase.table("matches").select("*").eq(
@@ -88,17 +83,7 @@ def get_requests_needing_reminder():
         timezone_str = club.get("timezone") or "America/New_York"
         reminder_hours = float(settings.get("feedback_reminder_delay_hours", DEFAULT_REMINDER_DELAY_HOURS))
         
-        # Calculate timezone-aware cutoff times
-        try:
-            tz = pytz.timezone(timezone_str)
-        except Exception:
-            tz = pytz.timezone("America/New_York")
-            
-        # Requests are stored with UTC ISO strings usually, but let's check.
-        # However, initial_sent_at is stored via datetime.utcnow().isoformat() in this file.
-        # So for initial_sent_at, we SHOULD use utcnow().
-        
-        now_utc = datetime.utcnow()
+        now_utc = get_now_utc()
         cutoff_time = now_utc - timedelta(hours=reminder_hours)
         lookback_limit = now_utc - timedelta(hours=48)
         
@@ -175,7 +160,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
             if player_id in existing_player_ids:
                 if force:
                     supabase.table("feedback_requests").update({
-                        "initial_sent_at": datetime.utcnow().isoformat(),
+                        "initial_sent_at": get_now_utc().isoformat(),
                         "reminder_sent_at": None,
                         "response_received_at": None
                     }).eq("match_id", match_id).eq("player_id", player_id).execute()
@@ -185,7 +170,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
                 supabase.table("feedback_requests").insert({
                     "match_id": match_id,
                     "player_id": player_id,
-                    "initial_sent_at": datetime.utcnow().isoformat()
+                    "initial_sent_at": get_now_utc().isoformat()
                 }).execute()
         except Exception as e:
             print(f"Skipping feedback for {player_id} in {match_id}: likely duplicate process ({e})")

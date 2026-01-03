@@ -22,7 +22,7 @@ export default async function MatchesPage() {
         .from('matches')
         .select(`
             *,
-            clubs(name),
+            clubs(name, timezone),
             originator:originator_id(name, phone_number, declared_skill_level)
         `)
         .order('scheduled_time', { ascending: false })
@@ -32,7 +32,7 @@ export default async function MatchesPage() {
     if (userClub.is_superuser) {
         const { data: clubsData } = await supabase
             .from('clubs')
-            .select('club_id, name')
+            .select('club_id, name, timezone')
             .eq('active', true)
             .order('name')
         clubs = clubsData || []
@@ -118,6 +118,7 @@ export default async function MatchesPage() {
             userClubId={userClub.club_id}
             clubs={clubs}
             userId={user.id}
+            userClubTimezone={userClub.club_timezone}
         />
     )
 }

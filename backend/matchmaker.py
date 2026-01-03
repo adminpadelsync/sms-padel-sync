@@ -1,7 +1,7 @@
 from database import supabase
 from twilio_client import send_sms
-from datetime import datetime, timedelta
-from logic_utils import is_quiet_hours, parse_iso_datetime
+from datetime import datetime, timedelta, timezone
+from logic_utils import is_quiet_hours, parse_iso_datetime, get_now_utc
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
 
@@ -100,7 +100,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     already_invited = {inv["player_id"] for inv in (existing_invites.data or [])}
     
     # Current time for mute check
-    now = datetime.utcnow()
+    now = get_now_utc()
     
     candidates = []
     for p in candidates_res.data:
@@ -179,7 +179,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     # 5. Send invites
     invite_count = 0
-    expires_at = (datetime.utcnow() + timedelta(minutes=invite_timeout_minutes)).isoformat()
+    expires_at = (get_now_utc() + timedelta(minutes=invite_timeout_minutes)).isoformat()
     
     for p in sorted_candidates[:invite_limit]:
         # Create Invite with expiration and SCORES
@@ -187,7 +187,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             "match_id": match_id,
             "player_id": p["player_id"],
             "status": "sent",
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": get_now_utc().isoformat(),
             "expires_at": expires_at,
             "batch_number": batch_number,
             "invite_score": p.get("_invite_score"),
@@ -261,7 +261,7 @@ def process_expired_invites():
     """
     print("Processing expired invites...")
     
-    now = datetime.utcnow().isoformat()
+    now = get_now_utc().isoformat()
     
     # Find expired sent invites
     # Use explicit UTC comparison if possible, or ensure 'now' is interpreted correctly

@@ -12,6 +12,7 @@ interface Match {
     club_id: string
     clubs?: {
         name: string
+        timezone?: string
     }
     player_names?: string[]
     feedback_status?: string
@@ -41,12 +42,13 @@ interface MatchesClientProps {
     initialMatches: Match[]
     isSuperuser: boolean
     userClubId: string | null
-    clubs: { club_id: string; name: string }[]
+    clubs: { club_id: string; name: string; timezone?: string }[]
     userId: string
+    userClubTimezone: string | null
 }
 
-// Format date with day of week: "Mon, Dec 16, 4:00 PM"
-function formatMatchTime(dateString: string): string {
+// Format date with day of week in a specific timezone: "Mon, Dec 16, 4:00 PM"
+function formatMatchTime(dateString: string, timeZone?: string): string {
     const date = new Date(dateString)
     const options: Intl.DateTimeFormatOptions = {
         weekday: 'short',
@@ -54,6 +56,7 @@ function formatMatchTime(dateString: string): string {
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
+        timeZone: timeZone || undefined
     }
     return date.toLocaleString('en-US', options)
 }
@@ -74,7 +77,8 @@ export function MatchesClient({
     isSuperuser,
     userClubId,
     clubs,
-    userId
+    userId,
+    userClubTimezone
 }: MatchesClientProps) {
     const [mounted, setMounted] = useState(false)
     const [selectedClubId, setSelectedClubId] = useState<string>(() => {
@@ -228,7 +232,7 @@ export function MatchesClient({
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
                                             <p className="text-sm font-bold text-indigo-600">
-                                                {formatMatchTime(match.scheduled_time)}
+                                                {formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined)}
                                             </p>
                                             <p className="text-xs text-gray-500 mt-0.5 capitalize">
                                                 Status: {match.status}
@@ -394,7 +398,7 @@ export function MatchesClient({
                                                 className="cursor-pointer hover:bg-gray-50 transition-colors"
                                             >
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {formatMatchTime(match.scheduled_time)}
+                                                    {formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.status === 'confirmed' ? 'bg-green-100 text-green-800' :

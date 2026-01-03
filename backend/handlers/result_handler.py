@@ -3,7 +3,8 @@ from twilio_client import send_sms, get_club_name
 import sms_constants as msg
 from logic.elo_service import update_match_elo
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+from logic_utils import get_now_utc
 
 def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any]):
     """
@@ -14,7 +15,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     
     # 1. Find the most recent confirmed or completed match for this player
     # Look for matches in the last 24 hours
-    since = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    since = (get_now_utc() - timedelta(hours=24)).isoformat()
     
     match_res = supabase.table("matches").select("*").or_(
         f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
@@ -108,4 +109,3 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         print(f"Error handling result report: {e}")
         send_sms(from_number, "Sorry, I had trouble recording that result. Please try again later.")
 
-from datetime import timedelta

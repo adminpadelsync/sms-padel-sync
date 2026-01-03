@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from database import supabase
-from logic_utils import parse_iso_datetime
+from logic_utils import parse_iso_datetime, get_now_utc
 
 def _get_club_name(club_id: str) -> str:
     """Helper to get club name from ID."""
@@ -120,7 +120,7 @@ def initiate_match_outreach(
         "team_1_players": initial_player_ids,  # Start with committed players
         "team_2_players": [],
         "originator_id": originator_id or (initial_player_ids[0] if initial_player_ids else None),
-        "created_at": datetime.now().isoformat()
+        "created_at": get_now_utc().isoformat()
     }
     
     match_result = supabase.table("matches").insert(match_data).execute()
@@ -137,7 +137,7 @@ def initiate_match_outreach(
             "match_id": match_id,
             "player_id": pid,
             "status": "sent",
-            "sent_at": datetime.now().isoformat()
+            "sent_at": get_now_utc().isoformat()
         })
         
     if invites:
@@ -363,7 +363,7 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
             "match_id": match_id,
             "player_id": pid,
             "status": "sent",
-            "sent_at": datetime.now().isoformat()
+            "sent_at": get_now_utc().isoformat()
         })
     
     if invites:
@@ -496,7 +496,7 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
     # Update the player's invite status to 'removed'
     supabase.table("match_invites").update({
         "status": "removed",
-        "responded_at": datetime.now().isoformat()
+        "responded_at": get_now_utc().isoformat()
     }).eq("match_id", match_id).eq("player_id", player_id).execute()
     
     # Send SMS notification to the removed player
