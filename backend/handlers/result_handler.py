@@ -52,6 +52,9 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         name_lower = name_str.lower().strip()
         if name_lower in ["me", "i", "myself"]:
             return sender_id
+        if name_lower in ["we", "us"]:
+            # This is slightly ambiguous if used without other names, but usually means the sender's team
+            return sender_id
             
         exact_full_matches = []
         exact_first_matches = []
@@ -80,45 +83,85 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             
         return None
 
-    final_team_1 = []
-    final_team_2 = []
+    resolved_a = []
+    resolved_b = []
     
-    if team_a_names and team_b_names:
+    if team_a_names:
         for name in team_a_names:
             resolved = resolve_name(name, players_data, player_id)
-            if resolved and resolved not in final_team_1:
-                final_team_1.append(resolved)
+            if resolved and resolved not in resolved_a:
+                resolved_a.append(resolved)
+    
+    if team_b_names:
         for name in team_b_names:
             resolved = resolve_name(name, players_data, player_id)
-            if resolved and resolved not in final_team_2:
-                final_team_2.append(resolved)
+            if resolved and resolved not in resolved_b:
+                resolved_b.append(resolved)
 
-    # 4. Handle Ambiguity or Incomplete Resolution
-    # We must have exactly 2 unique players on each team, and no overlap
-    unique_pids = set(final_team_1 + final_team_2)
+    # 4. Resolve Teams from Match Record
+    # We want to map resolved_a and resolved_b to match['team_1_players'] or match['team_2_players']
+    match_t1 = set(match["team_1_players"])
+    match_t2 = set(match["team_2_players"])
     
-    if len(final_team_1) == 2 and len(final_team_2) == 2 and len(unique_pids) == 4:
-        # Success!
-        team_1_players = final_team_1
-        team_2_players = final_team_2
-        teams_verified = True
+    final_team_1 = match["team_1_players"]
+    final_team_2 = match["team_2_players"]
+    teams_verified = False
+
+    # If they mentioned names, try to verify which match team they correspond to
+    if resolved_a or resolved_b:
+        # Check if resolved_a matches Team 1 or Team 2
+        set_a = set(resolved_a)
+        set_b = set(resolved_b)
+        
+        # Scenario A: team_a maps to match_t1
+        if set_a.issubset(match_t1) and (not set_b or set_b.issubset(match_t2)):
+            # This is the expected ordering: Team A is Match Team 1, Team B is Match Team 2
+            teams_verified = True
+            team_1_players = final_team_1
+            team_2_players = final_team_2
+        # Scenario B: team_a maps to match_t2
+        elif set_a.issubset(match_t2) and (not set_b or set_b.issubset(match_t1)):
+            # Swapped ordering: Team A is Match Team 2, Team B is Match Team 1
+            teams_verified = True
+            team_1_players = final_team_2
+            team_2_players = final_team_1
+            # We also need to swap the winner logic later if they use "Team A/B" winner text
+            # But let's keep it simple: we now know who team_1 and team_2 are in the context of this report.
+        else:
+            # Ambiguous or mismatched
+            p_map = {p["player_id"]: p["name"] for p in players_data}
+            t1_names = [p_map.get(pid, "Unknown") for pid in match_t1]
+            t2_names = [p_map.get(pid, "Unknown") for pid in match_t2]
+            
+            msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying the teams based on your message."
+            msg_clarify += f"\n\nAs a reminder, the match was:\nTeam 1: {', '.join(t1_names)}\nTeam 2: {', '.join(t2_names)}"
+            msg_clarify += "\n\nCould you please clarify who won? (e.g. 'Team 1 won 6-4 6-2' or 'Dave and I beat Sarah and Mike 6-4 6-2')"
+            send_sms(from_number, msg_clarify)
+            return
     else:
-        # Ambiguous or incomplete
-        # Construct a helpful clarifying question
-        p_map = {p["player_id"]: p["name"] for p in players_data}
-        # Try to suggest based on what we FOUND
-        found_names = [p_map.get(pid, "Unknown") for pid in unique_pids]
-        missing_count = 4 - len(unique_pids)
-        
-        msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying the teams. "
-        if len(final_team_1) > 0 or len(final_team_2) > 0:
-            t1_names = [p_map.get(pid, "Unknown") for pid in final_team_1]
-            t2_names = [p_map.get(pid, "Unknown") for pid in final_team_2]
-            msg_clarify += f"I see Team A as ({', '.join(t1_names) or '?'}) and Team B as ({', '.join(t2_names) or '?'}). "
-        
-        msg_clarify += "\n\nCould you please clarify the teams? (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
-        send_sms(from_number, msg_clarify)
-        return
+        # No names provided - assume they are reporting for themselves
+        # If they just say "I won 6-0", resolved_a should at least have the sender
+        # But if the reasoner didn't extract any names, we fall back to clarification or 
+        # assume they mean themselves as "Team 1" if they are on Team 1?
+        # Let's be safe and clarify if NO names were caught but REPORT_RESULT intent was high.
+        # Actually, if winner_str is "we", the reasoner might not put "we" in team_a but set winner="we".
+        pass
+
+    if not teams_verified:
+        # If we reach here and haven't verified, it means resolved_a/b were empty
+        # If winner_str is "we" or "me" or "i", and the sender is in the match, we can infer.
+        if "me" in winner_str or "we" in winner_str or "i " in winner_str or winner_str == "i":
+            teams_verified = True
+            if player_id in match_t1:
+                team_1_players = final_team_1
+                team_2_players = final_team_2
+            else:
+                team_1_players = final_team_2
+                team_2_players = final_team_1
+        else:
+            # Still don't know who is who
+            send_sms(from_number, "I caught that you're reporting a result, but I'm having trouble identifying the teams. Could you please clarify? (e.g. 'We won 6-4 6-2')")
+            return
 
     # 5. Determine Winner Team Index
     winner_team = 1 # Default
