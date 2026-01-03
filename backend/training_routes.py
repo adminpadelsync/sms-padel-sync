@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from sms_handler import handle_incoming_sms
 from database import supabase
 import json
 
@@ -23,6 +22,7 @@ async def training_step(request: TrainingStepRequest):
     """
     Process a single message in dry-run mode for training purposes.
     """
+    from sms_handler import handle_incoming_sms
     try:
         # 1. Fetch player details for context
         player_res = supabase.table("players").select("*").eq("player_id", request.player_id).execute()

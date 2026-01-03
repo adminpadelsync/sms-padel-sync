@@ -1,9 +1,7 @@
 import re
 from typing import Optional, Tuple
 from datetime import datetime, timedelta
-# ... (rest of imports)
 
-# ... (down to parse_gender)
 
 def _parse_gender(text: str) -> Optional[str]:
     """
