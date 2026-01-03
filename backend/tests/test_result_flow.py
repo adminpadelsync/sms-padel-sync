@@ -21,7 +21,7 @@ sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
 # Mock redis_client and twilio_client before they are imported
 mock_redis_client = MagicMock()
-mock_redis_client.get_redis_client.return_value = MagicMock()
+mock_redis_client.get_user_state.return_value = {}
 sys.modules["redis_client"] = mock_redis_client
 
 mock_twilio_client = MagicMock()
@@ -36,7 +36,13 @@ def verify_result_flow():
     
     # 1. Setup Test Data
     club_name = "Test Elo Club " + datetime.now().strftime("%H%M%S")
-    club_id = supabase.table("clubs").insert({"name": club_name, "active": True}).execute().data[0]["club_id"]
+    club_phone = f"+1999{datetime.now().strftime('%H%M%S')}"
+    club_id = supabase.table("clubs").insert({
+        "name": club_name, 
+        "active": True, 
+        "court_count": 4,
+        "phone_number": club_phone
+    }).execute().data[0]["club_id"]
     
     # Create 4 test players
     p_ids = []
@@ -66,12 +72,11 @@ def verify_result_flow():
     
     print(f"Match created: {match_id}")
 
-    # 3. Simulate SMS: "We won 6-4 6-2" from Player 1
-    print(f"Simulating SMS from {phones[0]}: 'We won 6-4 6-2'")
+    # Simulate SMS: "Elo Player 2 and I beat Elo Player 3 and Elo Player 4 6-4 6-2" from Player 1
+    # Note: Player names must match the test data names
+    print(f"Simulating SMS from {phones[0]}: 'Elo Player 2 and I beat Elo Player 3 and Elo Player 4 6-4 6-2'")
     
-    # Bypass Reasoner if needed, but let's see if it works with logic_utils/etc
-    # handle_incoming_sms uses the real reasoner (Gemini)
-    handle_incoming_sms(from_number=phones[0], body="We won 6-4 6-2", to_number="+1234567890")
+    handle_incoming_sms(from_number=phones[0], body="Elo Player 2 and I beat Elo Player 3 and Elo Player 4 6-4 6-2", to_number=club_phone)
 
     # 4. Verify Results
     match_final = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]

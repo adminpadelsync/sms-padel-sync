@@ -45,48 +45,89 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         return
 
     # 3. Team Verification Logic
-    # If the user provided names, we try to match them to the player IDs in the match
     all_pids = match["team_1_players"] + match["team_2_players"]
     players_data = supabase.table("players").select("player_id, name").in_("player_id", all_pids).execute().data or []
-    name_to_id = {p["name"].lower(): p["player_id"] for p in players_data}
-    # Add "me" and "i" aliases for the sender
-    name_to_id["me"] = player_id
-    name_to_id["i"] = player_id
     
+    def resolve_name(name_str, players_data, sender_id):
+        name_lower = name_str.lower().strip()
+        if name_lower in ["me", "i", "myself"]:
+            return sender_id
+            
+        exact_full_matches = []
+        exact_first_matches = []
+        partial_matches = []
+        
+        for p in players_data:
+            full_name = p["name"].lower()
+            first_name = full_name.split(' ')[0]
+            
+            if name_lower == full_name:
+                exact_full_matches.append(p["player_id"])
+            elif name_lower == first_name:
+                exact_first_matches.append(p["player_id"])
+            elif (first_name.startswith(name_lower) or name_lower.startswith(first_name)) and len(name_lower) >= 2:
+                partial_matches.append(p["player_id"])
+                
+        # Priority 1: Exact Full Match
+        if len(exact_full_matches) == 1:
+            return exact_full_matches[0]
+        # Priority 2: Exact First Match (if unique among ALL 4 players)
+        if len(exact_first_matches) == 1:
+            return exact_first_matches[0]
+        # Priority 3: Partial/Shortname Match (if unique among ALL 4 players)
+        if len(partial_matches) == 1:
+            return partial_matches[0]
+            
+        return None
+
     final_team_1 = []
     final_team_2 = []
     
     if team_a_names and team_b_names:
-        # Try to resolve IDs from names
         for name in team_a_names:
-            resolved = name_to_id.get(name.lower())
-            if resolved: final_team_1.append(resolved)
+            resolved = resolve_name(name, players_data, player_id)
+            if resolved and resolved not in final_team_1:
+                final_team_1.append(resolved)
         for name in team_b_names:
-            resolved = name_to_id.get(name.lower())
-            if resolved: final_team_2.append(resolved)
-            
-    # If we couldn't resolve exactly 2 vs 2, we fallback to existing match teams
-    # but adjust winner_team based on "winner" entity
-    if len(final_team_1) == 2 and len(final_team_2) == 2:
-        # Successfully identified new teams
+            resolved = resolve_name(name, players_data, player_id)
+            if resolved and resolved not in final_team_2:
+                final_team_2.append(resolved)
+
+    # 4. Handle Ambiguity or Incomplete Resolution
+    # We must have exactly 2 unique players on each team, and no overlap
+    unique_pids = set(final_team_1 + final_team_2)
+    
+    if len(final_team_1) == 2 and len(final_team_2) == 2 and len(unique_pids) == 4:
+        # Success!
         team_1_players = final_team_1
         team_2_players = final_team_2
         teams_verified = True
     else:
-        # Fallback to existing
-        team_1_players = match["team_1_players"]
-        team_2_players = match["team_2_players"]
-        teams_verified = False
+        # Ambiguous or incomplete
+        # Construct a helpful clarifying question
+        p_map = {p["player_id"]: p["name"] for p in players_data}
+        # Try to suggest based on what we FOUND
+        found_names = [p_map.get(pid, "Unknown") for pid in unique_pids]
+        missing_count = 4 - len(unique_pids)
         
-    # 4. Determine Winner Team Index
-    # Reasoner might return "team_a", "me", "opponents", or names
-    winner_team = 1 # Default 
+        msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying the teams. "
+        if len(final_team_1) > 0 or len(final_team_2) > 0:
+            t1_names = [p_map.get(pid, "Unknown") for pid in final_team_1]
+            t2_names = [p_map.get(pid, "Unknown") for pid in final_team_2]
+            msg_clarify += f"I see Team A as ({', '.join(t1_names) or '?'}) and Team B as ({', '.join(t2_names) or '?'}). "
+        
+        msg_clarify += "\n\nCould you please clarify the teams? (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
+        send_sms(from_number, msg_clarify)
+        return
+
+    # 5. Determine Winner Team Index
+    winner_team = 1 # Default
     if "b" in winner_str or "opponent" in winner_str or "them" in winner_str or "lost" in winner_str:
         winner_team = 2
     elif "a" in winner_str or "me" in winner_str or "we" in winner_str or "won" in winner_str:
         winner_team = 1
         
-    # 5. Update Match and Apply Elo
+    # 6. Update Match and Apply Elo
     try:
         supabase.table("matches").update({
             "score_text": score,

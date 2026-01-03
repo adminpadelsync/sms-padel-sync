@@ -121,35 +121,23 @@ def send_result_nudge_for_match(match: dict):
     # 2. Players
     team1_ids = match.get("team_1_players") or []
     team2_ids = match.get("team_2_players") or []
-    all_wp_ids = [pid for pid in (team1_ids + team2_ids) if pid]
+    all_player_ids = [pid for pid in (team1_ids + team2_ids) if pid]
     
-    player_map = {}
-    if all_wp_ids:
+    player_names = []
+    if all_player_ids:
         # Fetch names
-        p_res = supabase.table("players").select("player_id, name").in_("player_id", all_wp_ids).execute()
+        p_res = supabase.table("players").select("player_id, name").in_("player_id", all_player_ids).execute()
         for p in (p_res.data or []):
-            # Use first name for brevity
-            full_name = p.get("name", "Unknown")
-            first_name = full_name.split(' ')[0]
-            player_map[p["player_id"]] = first_name
+            player_names.append(p.get("name", "Unknown"))
             
-    def get_team_str(ids):
-        names = [player_map.get(pid, "Unknown") for pid in ids if pid]
-        return " & ".join(names)
-
-    team1_str = get_team_str(team1_ids)
-    team2_str = get_team_str(team2_ids)
-    
-    teams_context = ""
-    if team1_str and team2_str:
-        teams_context = f" ({team1_str} vs {team2_str})"
+    players_list_str = "\n".join([f"• {name}" for name in player_names])
 
     # Determine nudge message
     nudge_count = match.get("result_nudge_count", 0)
     if nudge_count == 0:
-        nudge_msg = f"🎾 {club_name}: How did your match go on {match_time_str}{teams_context}? 🏸\n\nReply with the teams and score to update your Sync Rating! (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
+        nudge_msg = f"🎾 {club_name}: How did your match go on {match_time_str}?\n\nAs a reminder, here is who played:\n{players_list_str}\n\nReply with the teams and score to update your Sync Rating! (e.g. 'Dave and I beat Sarah and Mike 6-4 6-2')"
     else:
-        nudge_msg = f"🎾 {club_name}: Just a follow-up—did you get a result for the match on {match_time_str}{teams_context}? 🏸\n\nReply back with the score so everyone's ratings stay accurate! 🎾"
+        nudge_msg = f"🎾 {club_name}: Just a follow-up—did you get a result for the match on {match_time_str}?\n\nAs a reminder, here is who played:\n{players_list_str}\n\nReply back with the score so everyone's ratings stay accurate! 🎾"
     
     from twilio_client import send_sms
     if send_sms(player["phone_number"], nudge_msg):
