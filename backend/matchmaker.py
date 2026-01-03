@@ -51,12 +51,16 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         return 0
     requester = player_res.data[0]
     
-    # Fetch club name for SMS messages
+    # Fetch club name and settings for SMS messages and timeout
     club_name = "the club"
+    invite_timeout_minutes = INVITE_TIMEOUT_MINUTES
     if club_id:
-        club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+        club_res = supabase.table("clubs").select("name, settings").eq("club_id", club_id).execute()
         if club_res.data:
-            club_name = club_res.data[0]["name"]
+            club_data = club_res.data[0]
+            club_name = club_data["name"]
+            settings = club_data.get("settings") or {}
+            invite_timeout_minutes = settings.get("invite_timeout_minutes", INVITE_TIMEOUT_MINUTES)
     
     # Get match preferences (or use defaults) - only used if not skipping filters
     level_min = match.get("level_range_min")
@@ -172,7 +176,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     # 5. Send invites
     invite_count = 0
-    expires_at = (datetime.utcnow() + timedelta(minutes=INVITE_TIMEOUT_MINUTES)).isoformat()
+    expires_at = (datetime.utcnow() + timedelta(minutes=invite_timeout_minutes)).isoformat()
     
     for p in sorted_candidates[:invite_limit]:
         # Create Invite with expiration and SCORES
@@ -251,7 +255,8 @@ def process_expired_invites():
     now = datetime.utcnow().isoformat()
     
     # Find expired sent invites
-    expired = supabase.table("match_invites").select("invite_id, match_id, player_id").eq("status", "sent").lt("expires_at", now).execute()
+    # Use explicit UTC comparison if possible, or ensure 'now' is interpreted correctly
+    expired = supabase.table("match_invites").select("invite_id, match_id, player_id").eq("status", "sent").filter("expires_at", "lt", now).execute()
     
     if not expired.data:
         print("No expired invites found.")

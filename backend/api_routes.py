@@ -783,6 +783,7 @@ class ClubSettingsUpdate(BaseModel):
     quiet_hours_end: Optional[int] = None
     sms_test_mode: Optional[bool] = None
     sms_whitelist: Optional[str] = None
+    invite_timeout_minutes: Optional[int] = None
 
 
 @router.get("/clubs/{club_id}/settings")
@@ -802,7 +803,8 @@ async def get_club_settings(club_id: str):
             "quiet_hours_start": settings.get("quiet_hours_start", 21),
             "quiet_hours_end": settings.get("quiet_hours_end", 8),
             "sms_test_mode": settings.get("sms_test_mode", False),
-            "sms_whitelist": settings.get("sms_whitelist", "")
+            "sms_whitelist": settings.get("sms_whitelist", ""),
+            "invite_timeout_minutes": settings.get("invite_timeout_minutes", 15)
         }
     except HTTPException:
         raise
@@ -835,6 +837,8 @@ async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
             current_settings["sms_test_mode"] = updates.sms_test_mode
         if updates.sms_whitelist is not None:
             current_settings["sms_whitelist"] = updates.sms_whitelist
+        if updates.invite_timeout_minutes is not None:
+            current_settings["invite_timeout_minutes"] = updates.invite_timeout_minutes
         
         # Save
         supabase.table("clubs").update({

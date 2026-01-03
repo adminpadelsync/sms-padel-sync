@@ -479,16 +479,12 @@ def _create_match(
             "originator_id": player["player_id"]
         }
         
-        supabase.table("matches").insert(match_data).execute()
+        # INSERT and use returned data to avoid race condition
+        res = supabase.table("matches").insert(match_data).execute()
         clear_user_state(from_number)
         
-        # Trigger Matchmaker
-        matches_res = supabase.table("matches").select("match_id").contains(
-            "team_1_players", [player["player_id"]]
-        ).order("created_at", desc=True).limit(1).execute()
-        
-        if matches_res.data:
-            match_id = matches_res.data[0]["match_id"]
+        if res.data:
+            match_id = res.data[0]["match_id"]
             from matchmaker import find_and_invite_players
             count = find_and_invite_players(match_id, skip_filters=skip_filters)
             
@@ -576,16 +572,11 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
             "voting_deadline": (datetime.utcnow() + timedelta(hours=24)).isoformat()
         }
         
-        supabase.table("matches").insert(match_data).execute()
+        res = supabase.table("matches").insert(match_data).execute()
         clear_user_state(from_number)
         
-        # Trigger Matchmaker
-        matches_res = supabase.table("matches").select("match_id").contains(
-            "team_1_players", [player["player_id"]]
-        ).order("created_at", desc=True).limit(1).execute()
-        
-        if matches_res.data:
-            match_id = matches_res.data[0]["match_id"]
+        if res.data:
+            match_id = res.data[0]["match_id"]
             
             # Auto-vote for all options for the requester
             for slot in slots:

@@ -26,6 +26,7 @@ interface Club {
         quiet_hours_end?: number
         sms_test_mode?: boolean
         sms_whitelist?: string
+        invite_timeout_minutes?: number
     } | null
 }
 
@@ -62,7 +63,8 @@ export default function SettingsPage() {
         quiet_hours_start: 21,
         quiet_hours_end: 8,
         sms_test_mode: false,
-        sms_whitelist: ""
+        sms_whitelist: "",
+        invite_timeout_minutes: 15
     })
 
     const [twilioState, setTwilioState] = useState({
@@ -162,7 +164,8 @@ export default function SettingsPage() {
                         quiet_hours_start: clubData.settings?.quiet_hours_start ?? 21,
                         quiet_hours_end: clubData.settings?.quiet_hours_end ?? 8,
                         sms_test_mode: clubData.settings?.sms_test_mode ?? false,
-                        sms_whitelist: clubData.settings?.sms_whitelist ?? ""
+                        sms_whitelist: clubData.settings?.sms_whitelist ?? "",
+                        invite_timeout_minutes: clubData.settings?.invite_timeout_minutes ?? 15
                     })
                 }
             }
@@ -616,6 +619,19 @@ export default function SettingsPage() {
                                     />
                                     <p className="mt-2 text-xs text-gray-500">
                                         Comma-separated phone numbers. If populated, ONLY these numbers will receive real SMS messages, even in Live Mode.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Invitation Timeout (Minutes)</label>
+                                    <input
+                                        type="number"
+                                        value={feedbackSettings.invite_timeout_minutes}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, invite_timeout_minutes: parseInt(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Time before an invitation expires and a replacement is invited. Set to 0 to disable timeouts (not recommended).
                                     </p>
                                 </div>
                             </div>
