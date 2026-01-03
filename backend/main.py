@@ -2,6 +2,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
 import api_routes
+import training_routes
 
 class Settings(BaseSettings):
     app_name: str = "Padel Sync API"
@@ -53,6 +54,7 @@ import analytics_routes
 prefix = "" if is_vercel else "/api"
 app.include_router(api_routes.router, prefix=prefix)
 app.include_router(analytics_routes.router, prefix=f"{prefix}/insights")
+app.include_router(training_routes.router, prefix=prefix)
 
 @app.get("/")
 async def root():

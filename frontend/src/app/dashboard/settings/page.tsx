@@ -24,6 +24,8 @@ interface Club {
         feedback_reminder_delay_hours?: number
         quiet_hours_start?: number
         quiet_hours_end?: number
+        sms_test_mode?: boolean
+        sms_whitelist?: string
     } | null
 }
 
@@ -58,7 +60,9 @@ export default function SettingsPage() {
         feedback_delay_hours: 3.0,
         feedback_reminder_delay_hours: 4.0,
         quiet_hours_start: 21,
-        quiet_hours_end: 8
+        quiet_hours_end: 8,
+        sms_test_mode: false,
+        sms_whitelist: ""
     })
 
     const [twilioState, setTwilioState] = useState({
@@ -156,7 +160,9 @@ export default function SettingsPage() {
                         feedback_delay_hours: clubData.settings?.feedback_delay_hours ?? 3.0,
                         feedback_reminder_delay_hours: clubData.settings?.feedback_reminder_delay_hours ?? 4.0,
                         quiet_hours_start: clubData.settings?.quiet_hours_start ?? 21,
-                        quiet_hours_end: clubData.settings?.quiet_hours_end ?? 8
+                        quiet_hours_end: clubData.settings?.quiet_hours_end ?? 8,
+                        sms_test_mode: clubData.settings?.sms_test_mode ?? false,
+                        sms_whitelist: clubData.settings?.sms_whitelist ?? ""
                     })
                 }
             }
@@ -567,6 +573,50 @@ export default function SettingsPage() {
                                         ))}
                                     </select>
                                     <p className="mt-1 text-xs text-gray-500">Messages will resume being sent at this time.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SMS Configuration */}
+                        <div className="pt-6 border-t border-gray-100">
+                            <h4 className="text-lg font-bold text-gray-900 mb-4">SMS Configuration</h4>
+                            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                                Control how SMS messages are sent for this club.
+                            </p>
+
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div>
+                                        <h5 className="font-bold text-gray-900">SMS Live Mode</h5>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {feedbackSettings.sms_test_mode
+                                                ? "Test Mode: Messages go to the outbox only."
+                                                : "Live Mode: Messages are sent via Twilio."}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFeedbackSettings(prev => ({ ...prev, sms_test_mode: !prev.sms_test_mode }))}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${!feedbackSettings.sms_test_mode ? 'bg-green-500' : 'bg-gray-200'
+                                            }`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${!feedbackSettings.sms_test_mode ? 'translate-x-6' : 'translate-x-1'
+                                            }`} />
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">SMS Whitelist (Optional)</label>
+                                    <textarea
+                                        value={feedbackSettings.sms_whitelist}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, sms_whitelist: e.target.value }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4 font-mono text-sm"
+                                        placeholder="+15551234567, +15559876543"
+                                        rows={3}
+                                    />
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        Comma-separated phone numbers. If populated, ONLY these numbers will receive real SMS messages, even in Live Mode.
+                                    </p>
                                 </div>
                             </div>
                         </div>

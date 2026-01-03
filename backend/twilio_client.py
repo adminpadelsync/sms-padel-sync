@@ -20,6 +20,8 @@ sms_whitelist = set(num.strip() for num in sms_whitelist_raw.split(",") if num.s
 # This is set at the start of handling an incoming SMS and used by send_sms
 _reply_from_context: ContextVar[str] = ContextVar('reply_from', default=None)
 _club_name_context: ContextVar[str] = ContextVar('club_name', default=None)
+_dry_run_context: ContextVar[bool] = ContextVar('dry_run', default=False)
+_dry_run_responses: ContextVar[List[str]] = ContextVar('dry_run_responses', default=[])
 
 
 def set_reply_from(phone_number: str):
@@ -40,6 +42,23 @@ def set_club_name(name: str):
 def get_club_name() -> str:
     """Get the club name for the current request context."""
     return _club_name_context.get() or "the club"
+
+
+def set_dry_run(enabled: bool):
+    """Enable or disable dry run mode for the current context."""
+    _dry_run_context.set(enabled)
+    if enabled:
+        _dry_run_responses.set([])
+
+
+def get_dry_run() -> bool:
+    """Check if dry run mode is enabled."""
+    return _dry_run_context.get()
+
+
+def get_dry_run_responses() -> List[str]:
+    """Get all messages captured during dry run."""
+    return _dry_run_responses.get()
 
 
 # Debug logging for SMS configuration
@@ -88,7 +107,7 @@ def get_twilio_client():
     return Client(account_sid, auth_token)
 
 
-def send_sms(to_number: str, body: str, reply_from: str = None) -> bool:
+def send_sms(to_number: str, body: str, reply_from: str = None, club_id: str = None) -> bool:
     """
     Send an SMS message.
     
@@ -97,22 +116,63 @@ def send_sms(to_number: str, body: str, reply_from: str = None) -> bool:
         body: The message content
         reply_from: Optional - the Twilio number to send from (for multi-club support)
                    If not provided, uses the context variable or falls back to TWILIO_PHONE_NUMBER
+        club_id: Optional - the ID of the club to fetch specific settings (test_mode, whitelist)
     """
     # Priority: explicit reply_from > context variable > default from env
     send_from = reply_from or get_reply_from() or from_number
     
-    # Debug: log every SMS attempt
-    print(f"[SMS DEBUG] send_sms called: to={to_number}, from={send_from}")
-    print(f"[SMS DEBUG] test_mode={test_mode}, whitelist_empty={len(sms_whitelist)==0}")
+    # 1. Fetch settings (Per-club or Global fallback)
+    current_test_mode = test_mode
+    current_whitelist = sms_whitelist
     
+    if club_id:
+        try:
+            from database import supabase
+            res = supabase.table("clubs").select("settings").eq("club_id", club_id).maybe_single().execute()
+            if res.data and res.data.get("settings"):
+                settings = res.data["settings"]
+                # Use per-club settings if explicitly defined, otherwise stay with global
+                if "sms_test_mode" in settings:
+                    current_test_mode = settings["sms_test_mode"]
+                if "sms_whitelist" in settings and settings["sms_whitelist"]:
+                    raw_wl = settings["sms_whitelist"]
+                    current_whitelist = set(num.strip() for num in raw_wl.split(",") if num.strip())
+        except Exception as e:
+            print(f"[SMS ERROR] Failed to fetch per-club settings for {club_id}: {e}")
+
+    # Debug: log every SMS attempt
+    print(f"[SMS DEBUG] send_sms called: to={to_number}, from={send_from}, club_id={club_id}")
+    print(f"[SMS DEBUG] test_mode={current_test_mode}, whitelist_empty={len(current_whitelist)==0}")
+    
+    # Dry Run mode: capture message and return
+    if get_dry_run():
+        print(f"[DRY RUN] Capturing SMS to {to_number}: {body[:50]}...")
+        current_responses = _dry_run_responses.get()
+        current_responses.append(body)
+        _dry_run_responses.set(current_responses)
+        return True
+
     # Full test mode: store all messages in outbox
-    if test_mode:
+    if current_test_mode:
         print(f"[SMS DEBUG] Routing to outbox (test_mode=True)")
         return store_in_outbox(to_number, body)
     
     # Whitelist mode: only send real SMS to whitelisted numbers
-    if sms_whitelist:
-        is_wl = is_whitelisted(to_number)
+    if current_whitelist:
+        # Normalize to_number for comparison
+        normalized_to = to_number.strip().replace(" ", "").replace("-", "")
+        if not normalized_to.startswith("+"):
+            normalized_to = "+" + normalized_to
+            
+        is_wl = False
+        for whitelisted in current_whitelist:
+            nw = whitelisted.strip().replace(" ", "").replace("-", "")
+            if not nw.startswith("+"):
+                nw = "+" + nw
+            if normalized_to == nw:
+                is_wl = True
+                break
+                
         print(f"[SMS DEBUG] Whitelist check: is_whitelisted({to_number})={is_wl}")
         if not is_wl:
             print(f"[WHITELIST] Number {to_number} not whitelisted, routing to simulator")

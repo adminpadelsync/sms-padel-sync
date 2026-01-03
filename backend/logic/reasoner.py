@@ -12,25 +12,32 @@ load_dotenv()
 GEMINI_API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
 
 class ReasonerResult:
-    def __init__(self, intent: str, confidence: float, entities: Dict[str, Any], raw_reply: Optional[str] = None):
+    def __init__(self, intent: str, confidence: float, entities: Dict[str, Any], reply_text: Optional[str] = None, raw_reply: Optional[str] = None):
         self.intent = intent
         self.confidence = confidence
         self.entities = entities
+        self.reply_text = reply_text
         self.raw_reply = raw_reply
 
     def __repr__(self):
-        return f"ReasonerResult(intent={self.intent}, confidence={self.confidence}, entities={self.entities})"
+        return f"ReasonerResult(intent={self.intent}, confidence={self.confidence}, entities={self.entities}, reply_text={self.reply_text})"
 
 PROMPT_TEMPLATE = """
 You are the reasoning engine for an SMS-based Padel Matchmaking application.
-Your goal is to extract the user's intent and any relevant entities from their message.
+Your goal is to extract the user's intent, relevant entities, and generate a natural human-like reply.
 
 Current User State: {current_state}
 Current User Profile: {user_profile}
 
+### Conversation History:
+{history}
+
+### Golden Samples (Follow these patterns):
+{golden_samples}
+
 ### Intents:
 - START_MATCH: Requesting to play a match (Look for "play", "match", "game").
-- JOIN_GROUP: Wanting to join a specific group (Look for "groups", number selections LIKE "1", "2").
+- JOIN_GROUP: Viewing, joining, or managing player group memberships (Look for "groups", "what groups am i in", "join group", number selections LIKE "1", "2").
 - SET_AVAILABILITY: Providing availability (Look for "mornings", "weekends", "anytime").
 - CHECK_STATUS: Asking for match invites or next matches (Look for "matches", "next", "status").
 - MUTE: Wanting to pause invites (Look for "mute", "pause", "stop").
@@ -54,31 +61,15 @@ Current User Profile: {user_profile}
 - team_a: e.g., ["Me", "Dave"] (names of players on first team).
 - team_b: e.g., ["Sarah", "Mike"] (names of players on second team).
 
-### Examples:
-User: "1 9 8"
-Result: {{ "intent": "SUBMIT_FEEDBACK", "confidence": 0.9, "entities": {{ "ratings": [1, 9, 8] }} }}
-
-User: "play today at 4pm"
-Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "today", "time": "4pm" }} }}
-
-User: "actually i want to join group 2"
-Result: {{ "intent": "JOIN_GROUP", "confidence": 0.9, "entities": {{ "selection": 2 }} }}
-
-User: "play around 4pm today"
-Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "today", "time": "4pm" }} }}
-
-User: "play at 6:30 tomorrow"
-Result: {{ "intent": "START_MATCH", "confidence": 1.0, "entities": {{ "date": "tomorrow", "time": "6:30" }} }}
-
-User: "Me and Dave beat Sarah and Mike 6-4 6-4"
-Result: {{ "intent": "REPORT_RESULT", "confidence": 1.0, "entities": {{ "score": "6-4 6-4", "team_a": ["Me", "Dave"], "team_b": ["Sarah", "Mike"], "winner": "team_a" }} }}
-
-User: "We lost 7-5 6-2"
-Result: {{ "intent": "REPORT_RESULT", "confidence": 0.9, "entities": {{ "score": "7-5 6-2", "winner": "team_b" }} }}
-
-### Explicit Instructions:
-- If use says "play", "match", "game", "reset", "matches", "groups", "mute", or "unmute", this is a HIGH CONFIDENCE intent that should interrupt any current flow.
-- "1 9 8" or similar numeric sequences are ONLY for feedback.
+### Instructions for Generating Reply:
+- If the intent is GREETING, respond warmly and ask how you can help.
+- If the intent is CHITCHAT, engage briefly and steer back to Padel if appropriate.
+- If info is missing (e.g. START_MATCH but no time), ask for it naturally.
+- If the user provides a partial update (like "5pm instead"), acknowledge the full updated date/time (e.g. "Got it, shifting to tomorrow at 5pm") to confirm context is preserved.
+- When in "STATE_MATCH_GROUP_SELECTION", if the user mentions a group name or number (e.g., "Intermediate"), extract it as an entity "selection", but DO NOT switch to JOIN_GROUP intent. Keep it as the current intent (START_MATCH) or a generic SELECT_OPTION. JOIN_GROUP is ONLY for browsing/joining club groups.
+- If the user asks "what groups am i in" or similar, use the JOIN_GROUP intent and reply warmly that you are checking their memberships now.
+- Be concise, friendly, and act like a helpful Padel club manager.
+- ALWAYS use the player's name if provided in the profile.
 
 ### Output Format:
 Return ONLY a JSON object:
@@ -86,6 +77,7 @@ Return ONLY a JSON object:
   "intent": "INTENT_NAME",
   "confidence": 0.0-1.0,
   "entities": {{ ... }},
+  "reply_text": "Your human-sounding SMS response to the user",
   "reasoning": "Brief explanation of why"
 }}
 
@@ -134,36 +126,48 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.0-fla
                 pass
         return None
 
-def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict[str, Any] = None) -> ReasonerResult:
+def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict[str, Any] = None, history: List[Dict[str, str]] = None, golden_samples: List[Dict[str, Any]] = None) -> ReasonerResult:
     """
-    Analyzes the message to determine intent and entities.
+    Analyzes the message to determine intent and entities, and generates a human reply.
     """
     # 1. Check for Fast Path (Hard-coded Keywords)
     body_clean = message.strip().upper()
     
     # Priority Keywords (Global Interrupts)
     if body_clean == "RESET":
-        return ReasonerResult("RESET", 1.0, {})
+        return ReasonerResult("RESET", 1.0, {}, reply_text="System reset. How can I help you from scratch?")
     if body_clean in ["PLAY", "START"]:
-        return ReasonerResult("START_MATCH", 1.0, {})
+        return ReasonerResult("START_MATCH", 1.0, {}, reply_text="Great! When would you like to play?")
     if body_clean == "GROUPS":
-        return ReasonerResult("JOIN_GROUP", 1.0, {})
+        return ReasonerResult("JOIN_GROUP", 1.0, {}, reply_text="Here are the available groups you can join.")
     if body_clean in ["MATCHES", "NEXT"]:
-        return ReasonerResult("CHECK_STATUS", 1.0, {})
+        return ReasonerResult("CHECK_STATUS", 1.0, {}, reply_text="Checking your upcoming matches now...")
 
     # 2. Check for Simple Choices (Regex-like)
     if body_clean.isdigit():
-        return ReasonerResult("CHOOSE_OPTION", 0.9, {"selection": int(body_clean)})
+        return ReasonerResult("CHOOSE_OPTION", 0.9, {"selection": int(body_clean)}, reply_text=f"Got it, option {body_clean}.")
 
     # 3. Slow Path (Gemini REST API)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Missing GEMINI_API_KEY"}')
+        return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="Sorry, I'm having trouble thinking right now (API Key missing).", raw_reply='{"error": "Missing GEMINI_API_KEY"}')
+
+    # Format History
+    history_str = "No previous messages."
+    if history:
+        history_str = "\n".join([f"{m['role'].upper()}: {m['text']}" for m in history[-5:]]) # Last 5 messages
+
+    # Format Golden Samples
+    samples_str = "No specific patterns provided. Use your best judgment."
+    if golden_samples:
+        samples_str = json.dumps(golden_samples, indent=2)
 
     prompt = PROMPT_TEMPLATE.format(
         message=message,
         current_state=current_state,
         user_profile=json.dumps(user_profile or {}),
+        history=history_str,
+        golden_samples=samples_str
     )
 
     max_retries = 3
@@ -187,13 +191,9 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
                     intent=data.get("intent", "UNKNOWN"),
                     confidence=data.get("confidence", 0.0),
                     entities=data.get("entities", {}),
+                    reply_text=data.get("reply_text"),
                     raw_reply=clean_text
                 )
-            
-            # If we got here and res_text is None, it might have been a transient error captured in logs
-            # We can retry if loop continues, but call_gemini_api handles its own single request.
-            # Ideally call_gemini_api would raise for us to catch/retry here. 
-            # For simplicity, let's treat None as a failure worthy of retry if it was a network issue.
             
             if attempt < max_retries:
                  # Exponential backoff
@@ -206,7 +206,9 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
             if attempt < max_retries:
                 time.sleep(1)
             else:
-                return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply=f'{{"error": "{str(e)}"}}')
+                return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="I encountered an error while processing your request.", raw_reply=f'{{"error": "{str(e)}"}}')
+
+    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="I'm sorry, I timed out. Can you try again?", raw_reply='{"error": "Failed to generate response after retries"}')
 
     return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Failed to generate response after retries"}')
 

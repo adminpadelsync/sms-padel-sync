@@ -781,6 +781,8 @@ class ClubSettingsUpdate(BaseModel):
     feedback_reminder_delay_hours: Optional[float] = None
     quiet_hours_start: Optional[int] = None
     quiet_hours_end: Optional[int] = None
+    sms_test_mode: Optional[bool] = None
+    sms_whitelist: Optional[str] = None
 
 
 @router.get("/clubs/{club_id}/settings")
@@ -798,7 +800,9 @@ async def get_club_settings(club_id: str):
             "feedback_delay_hours": settings.get("feedback_delay_hours", 3.0),
             "feedback_reminder_delay_hours": settings.get("feedback_reminder_delay_hours", 4.0),
             "quiet_hours_start": settings.get("quiet_hours_start", 21),
-            "quiet_hours_end": settings.get("quiet_hours_end", 8)
+            "quiet_hours_end": settings.get("quiet_hours_end", 8),
+            "sms_test_mode": settings.get("sms_test_mode", False),
+            "sms_whitelist": settings.get("sms_whitelist", "")
         }
     except HTTPException:
         raise
@@ -827,6 +831,10 @@ async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
             current_settings["quiet_hours_start"] = updates.quiet_hours_start
         if updates.quiet_hours_end is not None:
             current_settings["quiet_hours_end"] = updates.quiet_hours_end
+        if updates.sms_test_mode is not None:
+            current_settings["sms_test_mode"] = updates.sms_test_mode
+        if updates.sms_whitelist is not None:
+            current_settings["sms_whitelist"] = updates.sms_whitelist
         
         # Save
         supabase.table("clubs").update({

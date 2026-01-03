@@ -142,6 +142,30 @@ export default function AdminPage() {
                 <div className="bg-white rounded-lg shadow p-6 max-w-2xl border border-gray-200">
                     <div className="flex items-start justify-between">
                         <div>
+                            <h2 className="text-lg font-semibold text-gray-900">AI Reasoner Training Jig</h2>
+                            <p className="text-gray-500 mt-1 max-w-md">
+                                Coach the AI by simulating conversations. Mark responses as correct or incorrect to build the "Golden Dataset" and improve reasoning.
+                            </p>
+                        </div>
+                        <div className="bg-indigo-50 p-2 rounded-lg">
+                            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div className="mt-6">
+                        <a
+                            href="/dashboard/admin/training"
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            Open Training Jig
+                        </a>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6 max-w-2xl border border-gray-200">
+                    <div className="flex items-start justify-between">
+                        <div>
                             <h2 className="text-lg font-semibold text-gray-900">Level Assessments</h2>
                             <p className="text-gray-500 mt-1 max-w-md">
                                 View results from the public padel skill assessment tool. Track lead generation and player skill distributions.

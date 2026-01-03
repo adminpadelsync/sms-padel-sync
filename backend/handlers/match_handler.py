@@ -50,8 +50,8 @@ from database import supabase
 from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
-from logic_utils import get_club_timezone, format_sms_datetime
-from handlers.date_parser import parse_natural_date
+from logic_utils import get_club_timezone, format_sms_datetime, parse_iso_datetime
+from handlers.date_parser import parse_natural_date, parse_natural_date_with_context
 
 from error_logger import log_match_error
 
@@ -221,7 +221,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
     })
 
 
-def handle_match_confirmation(from_number: str, body: str, player: dict, state_data: dict):
+def handle_match_confirmation(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None):
     """
     Handle confirmation of parsed date/time with preferences (second phase).
     Parses gender (M/F) and level range (e.g., 3.0-4.0).
@@ -307,10 +307,20 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         )
         return
     
-    # Try parsing as a new date/time
+    # Try parsing as a new date/time with context
     club_id = player.get("club_id")
     timezone_str = get_club_timezone(club_id) if club_id else "America/New_York"
-    parsed_dt, human_readable, iso_format = parse_natural_date(response, timezone=timezone_str)
+    
+    # Check entities first
+    ent_date = entities.get("date") if entities else None
+    ent_time = entities.get("time") if entities else None
+    parse_input = response
+    if ent_date or ent_time:
+        parse_input = f"{ent_date or ''} {ent_time or ''}".strip()
+
+    # Get base date from state for merging
+    base_dt = parse_iso_datetime(scheduled_time_iso) if scheduled_time_iso else None
+    parsed_dt, human_readable, iso_format = parse_natural_date_with_context(parse_input, base_dt=base_dt, timezone=timezone_str)
 
     
     if parsed_dt is not None:
@@ -332,13 +342,16 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
     send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD)
 
 
-def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict):
+def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None):
     """
     Handle selection of group to invite.
     - If "1" (Everyone): go to preferences confirmation
     - If a group number: create match immediately, skip all filters
     """
-    selection = body.strip()
+    # Prioritize AI extracted selection (e.g. if user said "intermediate group", entity might be "2")
+    ent_selection = entities.get("selection") if entities else None
+    selection = ent_selection if ent_selection else body.strip()
+    
     selection_lower = selection.lower()
     group_options = state_data.get("group_options", {})
     scheduled_time_iso = state_data.get("scheduled_time_iso")
@@ -374,7 +387,17 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
     # Check if user entered a new time instead of a number
     club_id = player.get("club_id")
     timezone_str = get_club_timezone(club_id) if club_id else "America/New_York"
-    parsed_dt, human_readable, iso_format = parse_natural_date(selection, timezone=timezone_str)
+    
+    # Check entities first
+    ent_date = entities.get("date") if entities else None
+    ent_time = entities.get("time") if entities else None
+    parse_input = selection
+    if ent_date or ent_time:
+        parse_input = f"{ent_date or ''} {ent_time or ''}".strip()
+
+    # Get base date from state for merging
+    base_dt = parse_iso_datetime(scheduled_time_iso) if scheduled_time_iso else None
+    parsed_dt, human_readable, iso_format = parse_natural_date_with_context(parse_input, base_dt=base_dt, timezone=timezone_str)
 
     if parsed_dt is not None:
         # Re-show group selection with new time

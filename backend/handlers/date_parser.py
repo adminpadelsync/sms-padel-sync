@@ -212,6 +212,43 @@ def _manual_regex_fallback(text: str, timezone: str) -> Tuple[Optional[datetime]
         return None, None, None
 
 
+def parse_natural_date_with_context(
+    text: str, 
+    base_dt: Optional[datetime] = None,
+    timezone: str = "America/New_York"
+) -> Tuple[Optional[datetime], Optional[str], Optional[str]]:
+    """
+    Parse a date/time string, using base_dt as context if it's a partial time update.
+    Example: "5pm" with base_dt of "2026-01-02 16:00" -> "2026-01-02 17:00"
+    """
+    # 1. Parse normally first
+    parsed_dt, human, iso = parse_natural_date(text, timezone)
+    
+    if not parsed_dt or not base_dt:
+        return parsed_dt, human, iso
+
+    # 2. Check if the input was likely "just a time"
+    # Heuristic: if normalized text doesn't contain day/date words but does have time patterns
+    clean = normalize_sms_text(text).lower()
+    day_words = ['tomorrow', 'today', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'monday', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', '/']
+    
+    has_day_context = any(word in clean for word in day_words)
+    time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', clean)
+    
+    # If the user ONLY provided a time without a day word, we merge with base_dt's date
+    if not has_day_context and time_match:
+        print(f"[date_parser] Merging partial time '{text}' with base date {base_dt.date()}")
+        merged_dt = base_dt.replace(
+            hour=parsed_dt.hour, 
+            minute=parsed_dt.minute, 
+            second=0, 
+            microsecond=0
+        )
+        return merged_dt, format_sms_datetime(merged_dt), merged_dt.isoformat()
+
+    return parsed_dt, human, iso
+
+
 def parse_natural_date(
     text: str, 
     timezone: str = "America/New_York"
