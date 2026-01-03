@@ -320,15 +320,31 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
                     print(f"[DEBUG] MATCHES for player {player_id} ({from_number})")
                     
                     # Get current time for filtering past matches
-                    now = datetime.utcnow()
+                    # Get current time in club's timezone for comparison
+                    from logic_utils import get_club_timezone
+                    import pytz
+                    tz_str = get_club_timezone(club_id)
+                    try:
+                        tz = pytz.timezone(tz_str)
+                    except:
+                        tz = pytz.timezone("America/New_York")
+                    
+                    # Store aware now, but we compare naive-to-naive for safety with DB strings
+                    now_local = datetime.now(tz).replace(tzinfo=None)
                     
                     def is_future_match(match):
                         """Check if match scheduled_time is in the future."""
                         try:
                             scheduled = parse_iso_datetime(match['scheduled_time'])
-                            scheduled = scheduled.replace(tzinfo=None)
-                            return scheduled > now
-                        except:
+                            # If scheduled is aware, make it naive local or aware-to-aware
+                            if scheduled.tzinfo:
+                                # Match DB is aware (UTC), compare to aware now
+                                return scheduled > datetime.now(tz)
+                            else:
+                                # Match DB is naive (Local), compare to naive local now
+                                return scheduled > now_local
+                        except Exception as e:
+                            print(f"Error checking future match: {e}")
                             return True
                     
                     # 1. Get matches where player is already in teams (as requester or confirmed)
@@ -453,20 +469,55 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
             elif cmd == "next":
                 # Show next confirmed match
                 player_id = player["player_id"]
-                invites = supabase.table("match_invites").select("match_id").eq("player_id", player_id).eq("status", "accepted").execute().data
                 
-                if not invites:
-                    send_sms(from_number, f"🎾 {club_name}: No confirmed matches yet. Reply MATCHES to see pending invites!", club_id=club_id)
+                # Broaden search to matches table directly OR invites
+                # 1. Matches where player is in teams
+                matches_as_player = supabase.table("matches").select("*").eq("status", "confirmed").or_(
+                    f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
+                ).execute().data or []
+                
+                # 2. Matches where player accepted an invite
+                invites = supabase.table("match_invites").select("match_id").eq("player_id", player_id).eq("status", "accepted").execute().data or []
+                invite_match_ids = [i["match_id"] for i in invites]
+                
+                matches_from_invites = []
+                if invite_match_ids:
+                    matches_from_invites = supabase.table("matches").select("*").eq("status", "confirmed").in_("match_id", invite_match_ids).execute().data or []
+                
+                # Combine and dedupe
+                all_matches_by_id = {m["match_id"]: m for m in matches_as_player}
+                for m in matches_from_invites:
+                    all_matches_by_id[m["match_id"]] = m
+                
+                # Get club timezone for future check
+                from logic_utils import get_club_timezone
+                import pytz
+                tz_str = get_club_timezone(club_id)
+                try:
+                    tz = pytz.timezone(tz_str)
+                except:
+                    tz = pytz.timezone("America/New_York")
+                now_local = datetime.now(tz).replace(tzinfo=None)
+                
+                def is_future(m):
+                    try:
+                        dt = parse_iso_datetime(m['scheduled_time'])
+                        if dt.tzinfo:
+                            return dt > datetime.now(tz)
+                        return dt > now_local
+                    except:
+                        return True
+
+                confirmed_matches = sorted(
+                    [m for m in all_matches_by_id.values() if is_future(m)],
+                    key=lambda x: parse_iso_datetime(x['scheduled_time']).replace(tzinfo=None)
+                )
+                
+                if not confirmed_matches:
+                    send_sms(from_number, f"🎾 {club_name}: No confirmed future matches. Reply MATCHES to see pending invites!", club_id=club_id)
                     return
                 
-                match_ids = [i["match_id"] for i in invites]
-                matches = supabase.table("matches").select("*").in_("match_id", match_ids).eq("status", "confirmed").order("scheduled_time").limit(1).execute().data
-                
-                if not matches:
-                    send_sms(from_number, f"🎾 {club_name}: No confirmed matches yet. Reply MATCHES to see pending invites!", club_id=club_id)
-                    return
-                
-                m = matches[0]
+                m = confirmed_matches[0]
                 try:
                     dt = parse_iso_datetime(m['scheduled_time'])
                     time_str = dt.strftime("%A, %b %d at %I:%M %p")
