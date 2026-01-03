@@ -2,6 +2,7 @@ import os
 from contextvars import ContextVar
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
+from typing import List
 from dotenv import load_dotenv
 
 load_dotenv()
