@@ -92,6 +92,10 @@ Who would you like to invite?
 Reply with a number, or a different time."""
 
 MSG_MATCH_REQUESTED_GROUP = "🎾 {club_name}: Match requested for {time}! Inviting {count} players from {group_name}. We'll let you know when they respond."
+MSG_DEADPOOL_NOTIFICATION = (
+    "🎾 {club_name}: It looks like we've run out of players in the '{group_name}' group who can play at {time}.\n\n"
+    "Would you like to broaden the search and invite everyone in the club? (Reply YES to broaden, or NO to cancel)"
+)
 
 # Group Management
 MSG_ASK_GROUPS_ONBOARDING = "Would you like to join any player groups? (Reply with numbers, e.g. 1 3, or SKIP)\n\n{groups_list}"
@@ -119,6 +123,7 @@ STATE_COMPLETED = "COMPLETED"
 STATE_WAITING_FEEDBACK = "WAITING_FEEDBACK"
 STATE_UPDATING_AVAILABILITY = "UPDATING_AVAILABILITY"
 STATE_BROWSING_GROUPS = "BROWSING_GROUPS"
+STATE_DEADPOOL_REFILL = "DEADPOOL_REFILL"
 
 # Feedback Collection
 MSG_FEEDBACK_REQUEST = """🎾 {club_name}: Quick feedback for your match on {match_time}.

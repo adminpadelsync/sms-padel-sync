@@ -27,6 +27,7 @@ interface Club {
         sms_test_mode?: boolean
         sms_whitelist?: string
         invite_timeout_minutes?: number
+        initial_batch_size?: number
     } | null
 }
 
@@ -64,7 +65,8 @@ export default function SettingsPage() {
         quiet_hours_end: 8,
         sms_test_mode: false,
         sms_whitelist: "",
-        invite_timeout_minutes: 15
+        invite_timeout_minutes: 15,
+        initial_batch_size: 6
     })
 
     const [twilioState, setTwilioState] = useState({
@@ -165,7 +167,8 @@ export default function SettingsPage() {
                         quiet_hours_end: clubData.settings?.quiet_hours_end ?? 8,
                         sms_test_mode: clubData.settings?.sms_test_mode ?? false,
                         sms_whitelist: clubData.settings?.sms_whitelist ?? "",
-                        invite_timeout_minutes: clubData.settings?.invite_timeout_minutes ?? 15
+                        invite_timeout_minutes: clubData.settings?.invite_timeout_minutes ?? 15,
+                        initial_batch_size: clubData.settings?.initial_batch_size ?? 6
                     })
                 }
             }
@@ -532,24 +535,55 @@ export default function SettingsPage() {
                         </div>
                     </section>
 
-                    {/* 3. Messaging & Feedback Settings */}
+                    {/* 3. Matchmaking & Messaging */}
                     <section>
                         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
                             <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">3</span>
-                            Messaging & Feedback
+                            Matchmaking & Messaging
                         </h3>
 
-                        {/* Quiet Hours */}
+                        {/* Matchmaking Configuration */}
                         <div className="mb-10">
+                            <h4 className="text-lg font-bold text-gray-900 mb-4">Matchmaking Configuration</h4>
+                            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                                Control how the automated matchmaker invites players and handles timeouts.
+                            </p>
+                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Invitation Timeout (Minutes)</label>
+                                    <input
+                                        type="number"
+                                        value={feedbackSettings.invite_timeout_minutes}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, invite_timeout_minutes: parseInt(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Time before an invitation expires and a replacement is invited.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Initial Batch size</label>
+                                    <input
+                                        type="number"
+                                        value={feedbackSettings.initial_batch_size}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, initial_batch_size: parseInt(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Number of players to invite in the first round (for "Everyone" matches).
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Quiet Hours */}
+                        <div className="mb-10 pt-6 border-t border-gray-100">
                             <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-lg font-bold text-gray-900">SMS Quiet Hours</h4>
                             </div>
-
                             <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                                Quiet Hours prevent <strong>proactive</strong> messages like Match Invites and Feedback Requests from being sent during sleep times.
-                                Immediate/reactive responses to user commands (like <code className="text-indigo-600 font-mono">PLAY</code>, <code className="text-indigo-600 font-mono">YES</code>, <code className="text-indigo-600 font-mono">MATCHES</code>) will always be sent 24/7.
+                                Prevent proactive messages (Match Invites, Feedback) from being sent during these times.
                             </p>
-
                             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Quiet Hours Start</label>
@@ -562,7 +596,6 @@ export default function SettingsPage() {
                                             <option key={h} value={h}>{formatHour(h)}</option>
                                         ))}
                                     </select>
-                                    <p className="mt-1 text-xs text-gray-500">Messages will stop being sent starting at this time.</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Quiet Hours End</label>
@@ -575,39 +608,59 @@ export default function SettingsPage() {
                                             <option key={h} value={h}>{formatHour(h)}</option>
                                         ))}
                                     </select>
-                                    <p className="mt-1 text-xs text-gray-500">Messages will resume being sent at this time.</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* SMS Configuration */}
-                        <div className="pt-6 border-t border-gray-100">
-                            <h4 className="text-lg font-bold text-gray-900 mb-4">SMS Configuration</h4>
+                        {/* Feedback Settings */}
+                        <div className="mb-10 pt-6 border-t border-gray-100">
+                            <h4 className="text-lg font-bold text-gray-900 mb-4">Feedback Collection</h4>
                             <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                                Control how SMS messages are sent for this club.
+                                Configure post-match feedback collection delays.
                             </p>
+                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Initial Request (Hours)</label>
+                                    <input
+                                        type="number" step="0.5"
+                                        value={feedbackSettings.feedback_delay_hours}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_delay_hours: parseFloat(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Wait time after match ends.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Reminder Nudge (Hours)</label>
+                                    <input
+                                        type="number" step="0.5"
+                                        value={feedbackSettings.feedback_reminder_delay_hours}
+                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_reminder_delay_hours: parseFloat(e.target.value) || 0 }))}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Wait time after first request.</p>
+                                </div>
+                            </div>
+                        </div>
 
+                        {/* System Configuration */}
+                        <div className="pt-6 border-t border-gray-100">
+                            <h4 className="text-lg font-bold text-gray-900 mb-4">System Configuration</h4>
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
                                     <div>
                                         <h5 className="font-bold text-gray-900">SMS Live Mode</h5>
                                         <p className="text-xs text-gray-500 mt-1">
-                                            {feedbackSettings.sms_test_mode
-                                                ? "Test Mode: Messages go to the outbox only."
-                                                : "Live Mode: Messages are sent via Twilio."}
+                                            {feedbackSettings.sms_test_mode ? "Test Mode: Outbox only." : "Live Mode: Real SMS."}
                                         </p>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => setFeedbackSettings(prev => ({ ...prev, sms_test_mode: !prev.sms_test_mode }))}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${!feedbackSettings.sms_test_mode ? 'bg-green-500' : 'bg-gray-200'
-                                            }`}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${!feedbackSettings.sms_test_mode ? 'bg-green-500' : 'bg-gray-200'}`}
                                     >
-                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${!feedbackSettings.sms_test_mode ? 'translate-x-6' : 'translate-x-1'
-                                            }`} />
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${!feedbackSettings.sms_test_mode ? 'translate-x-6' : 'translate-x-1'}`} />
                                     </button>
                                 </div>
-
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">SMS Whitelist (Optional)</label>
                                     <textarea
@@ -615,55 +668,8 @@ export default function SettingsPage() {
                                         onChange={(e) => setFeedbackSettings(prev => ({ ...prev, sms_whitelist: e.target.value }))}
                                         className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4 font-mono text-sm"
                                         placeholder="+15551234567, +15559876543"
-                                        rows={3}
+                                        rows={2}
                                     />
-                                    <p className="mt-2 text-xs text-gray-500">
-                                        Comma-separated phone numbers. If populated, ONLY these numbers will receive real SMS messages, even in Live Mode.
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Invitation Timeout (Minutes)</label>
-                                    <input
-                                        type="number"
-                                        value={feedbackSettings.invite_timeout_minutes}
-                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, invite_timeout_minutes: parseInt(e.target.value) || 0 }))}
-                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">
-                                        Time before an invitation expires and a replacement is invited. Set to 0 to disable timeouts (not recommended).
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Feedback Delays */}
-                        <div className="pt-6 border-t border-gray-100">
-                            <h4 className="text-lg font-bold text-gray-900 mb-4">Feedback Settings</h4>
-                            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                                Configure when the system collects feedback from players after a match is completed.
-                            </p>
-
-                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Request Delay (Hours)</label>
-                                    <input
-                                        type="number" step="0.5"
-                                        value={feedbackSettings.feedback_delay_hours}
-                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_delay_hours: parseFloat(e.target.value) || 0 }))}
-                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">Hours to wait after a match ends before sending the initial feedback request.</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Reminder Delay (Hours)</label>
-                                    <input
-                                        type="number" step="0.5"
-                                        value={feedbackSettings.feedback_reminder_delay_hours}
-                                        onChange={(e) => setFeedbackSettings(prev => ({ ...prev, feedback_reminder_delay_hours: parseFloat(e.target.value) || 0 }))}
-                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3 px-4"
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">Hours to wait after the initial request before sending a reminder if no response is received.</p>
                                 </div>
                             </div>
                         </div>

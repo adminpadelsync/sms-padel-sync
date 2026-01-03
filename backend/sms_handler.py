@@ -715,6 +715,25 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
         elif current_state == msg.STATE_MATCH_GROUP_SELECTION:
             handle_group_selection(from_number, body, player, state_data, entities)
 
+        elif current_state == msg.STATE_DEADPOOL_REFILL:
+            match_id = state_data.get("match_id")
+            if not match_id:
+                clear_user_state(from_number)
+                return
+
+            if intent == "YES" or any(word in body.lower() for word in ["yes", "y", "broaden", "sure", "ok"]):
+                send_sms(from_number, "Broadening search... Inviting more players now!", club_id=club_id)
+                clear_user_state(from_number)
+                from matchmaker import find_and_invite_players
+                # Update match record to remove target_group_id so replacement logic works for everyone
+                supabase.table("matches").update({"target_group_id": None}).eq("match_id", match_id).execute()
+                find_and_invite_players(match_id)
+            elif intent == "NO" or any(word in body.lower() for word in ["no", "n", "cancel", "stop"]):
+                send_sms(from_number, "No problem. I've stopped looking for players for this match.", club_id=club_id)
+                clear_user_state(from_number)
+            else:
+                send_sms(from_number, "I didn't quite catch that. Reply YES to broaden the search to everyone, or NO to cancel.", club_id=club_id)
+
         # --- Feedback Collection Flow ---
         elif current_state == msg.STATE_WAITING_FEEDBACK:
             try:

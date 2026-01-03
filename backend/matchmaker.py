@@ -2,7 +2,8 @@ from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta
 from logic_utils import is_quiet_hours, parse_iso_datetime
-from redis_client import clear_user_state
+from redis_client import clear_user_state, set_user_state
+import sms_constants as msg
 
 
 # Configuration
@@ -172,7 +173,9 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     elif max_invites is not None:
         invite_limit = max_invites
     else:
-        invite_limit = BATCH_SIZE
+        # Use club setting or default BATCH_SIZE
+        batch_size = settings.get("initial_batch_size", BATCH_SIZE) if club_id else BATCH_SIZE
+        invite_limit = batch_size
     
     # 5. Send invites
     invite_count = 0
@@ -242,7 +245,13 @@ def invite_replacement_player(match_id: str, count: int = 1):
     if latest_invite.data:
         batch_number = latest_invite.data[0].get("batch_number", 1)
     
-    return find_and_invite_players(match_id, batch_number=batch_number, max_invites=count)
+    sent = find_and_invite_players(match_id, batch_number=batch_number, max_invites=count)
+    
+    # If we couldn't find enough players, check for deadpool (group-scoped only)
+    if sent < count:
+        _check_match_deadpool(match_id)
+        
+    return sent
 
 
 def process_expired_invites():
@@ -290,8 +299,95 @@ def process_expired_invites():
             new_invites = find_and_invite_players(match_id, batch_number=batch_number, max_invites=expired_count)
             total_new_invites += new_invites
             print(f"Sent {new_invites} replacement invites for match {match_id}")
+            
+            # If we couldn't find enough replacements, check for deadpool
+            if new_invites < expired_count:
+                _check_match_deadpool(match_id)
     
     return total_new_invites
+
+
+def _check_match_deadpool(match_id: str):
+    """
+    Checks if a match has reached a dead end (no more eligible players in group).
+    If so, notifies the originator.
+    """
+    print(f"Checking for deadpool on match {match_id}...")
+    
+    # 1. Fetch match details
+    match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    if not match_res.data:
+        return
+    match = match_res.data[0]
+    
+    if match["status"] not in ["pending", "voting"]:
+        return
+
+    target_group_id = match.get("target_group_id")
+    if not target_group_id:
+        return
+
+    # 2. Count current players and active invites
+    players_in_match = len(match.get("team_1_players", []) + match.get("team_2_players", []))
+    active_invites = supabase.table("match_invites").select("invite_id").eq("match_id", match_id).eq("status", "sent").execute()
+    active_count = len(active_invites.data or [])
+    
+    needed = 4 - players_in_match - active_count
+    if needed <= 0:
+        return
+
+    # 3. Check remaining eligible members in group
+    # Get group members
+    group_res = supabase.table("group_memberships").select("player_id").eq("group_id", target_group_id).execute()
+    group_member_ids = {row["player_id"] for row in (group_res.data or [])}
+    
+    # Get all involvements (in match, invited, or declined/expired)
+    involvement_res = supabase.table("match_invites").select("player_id, status").eq("match_id", match_id).execute()
+    already_involved = {inv["player_id"] for inv in (involvement_res.data or [])}
+    already_involved.update(set(match.get("team_1_players", []) + match.get("team_2_players", [])))
+    
+    pool = [pid for pid in group_member_ids if pid not in already_involved]
+    
+    if len(pool) < needed:
+        print(f"Match {match_id} in deadpool! Needed {needed}, only {len(pool)} left in group.")
+        
+        # Notify originator
+        originator_id = match.get("originator_id")
+        if not originator_id:
+            return
+            
+        orig_res = supabase.table("players").select("*").eq("player_id", originator_id).execute()
+        if not orig_res.data:
+            return
+        originator = orig_res.data[0]
+        
+        # Get group name
+        g_name_res = supabase.table("player_groups").select("name").eq("group_id", target_group_id).maybe_single().execute()
+        group_name = g_name_res.data["name"] if g_name_res.data else "the group"
+        
+        # Format time
+        try:
+            scheduled_dt = parse_iso_datetime(match['scheduled_time'])
+            time_str = scheduled_dt.strftime("%a at %I:%M %p")
+        except:
+            time_str = "your requested time"
+
+        # Get club name
+        club_name = "the club"
+        club_id = match.get("club_id")
+        if club_id:
+            club_res = supabase.table("clubs").select("name").eq("club_id", club_id).maybe_single().execute()
+            if club_res.data:
+                club_name = club_res.data["name"]
+
+        sms_msg = msg.MSG_DEADPOOL_NOTIFICATION.format(
+            club_name=club_name,
+            group_name=group_name,
+            time=time_str
+        )
+        
+        send_sms(originator["phone_number"], sms_msg)
+        set_user_state(originator["phone_number"], msg.STATE_DEADPOOL_REFILL, {"match_id": match_id})
 
 
 def process_pending_matches():
