@@ -86,6 +86,28 @@ Return ONLY a JSON object:
 User Message: "{message}"
 """
 
+NAME_RESOLUTION_PROMPT = """
+You are a helpful Padel club manager.
+Your task is to resolve a name or nickname mentioned in an SMS to one of the 4 players in a specific match.
+
+Mentioned Name: "{name_str}"
+
+Candidate Players in this Match:
+{candidates_json}
+
+Instructions:
+1. Identify which candidate player the name "{name_str}" most likely refers to.
+2. Consider common nicknames (e.g., Tony for Anthony, Alex for Alexander, Dave for David/Davide).
+3. If "{name_str}" matches multiple players equally well or is too ambiguous, set confidence low.
+4. If "{name_str}" refers to "me" or "i", it's usually the sender of the message. In this case, match it to the player with the name matching the sender (if known) or return None with a specific reasoning.
+5. Return ONLY a JSON object:
+{{
+  "player_id": "RESOLVED_PLAYER_ID_OR_NULL",
+  "confidence": 0.0-1.0,
+  "reasoning": "Brief explanation of the match"
+}}
+"""
+
 def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.0-flash") -> Optional[str]:
     """Helper to call Gemini via REST API to avoid SDK dependency issues."""
     url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
@@ -212,5 +234,44 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
 
     return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="I'm sorry, I timed out. Can you try again?", raw_reply='{"error": "Failed to generate response after retries"}')
 
-    return ReasonerResult("UNKNOWN", 0.0, {}, raw_reply='{"error": "Failed to generate response after retries"}')
+def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Use Gemini to resolve a nickname or fuzzy name to a specific player ID.
+    Returns: {"player_id": str or None, "confidence": float, "reasoning": str}
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {"player_id": None, "confidence": 0.0, "reasoning": "API key missing"}
+
+    candidates_json = json.dumps([{
+        "player_id": c["player_id"],
+        "name": c["name"]
+    } for c in candidates], indent=2)
+
+    prompt = NAME_RESOLUTION_PROMPT.format(
+        name_str=name_str,
+        candidates_json=candidates_json
+    )
+
+    model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash")
+    
+    try:
+        res_text = call_gemini_api(prompt, api_key, model_name)
+        if res_text:
+            clean_text = res_text.strip()
+            if "```json" in clean_text:
+                clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in clean_text:
+                clean_text = clean_text.split("```")[1].split("```")[0].strip()
+                
+            data = json.loads(clean_text)
+            return {
+                "player_id": data.get("player_id"),
+                "confidence": data.get("confidence", 0.0),
+                "reasoning": data.get("reasoning", "")
+            }
+    except Exception as e:
+        print(f"[REASONER] Name Resolution Logic Error: {e}")
+        
+    return {"player_id": None, "confidence": 0.0, "reasoning": "Error occurred"}
 

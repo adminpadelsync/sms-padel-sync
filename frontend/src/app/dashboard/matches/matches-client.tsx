@@ -81,6 +81,8 @@ export function MatchesClient({
     const [localMatches, setLocalMatches] = useState<Match[]>(initialMatches)
     const [markingBookedId, setMarkingBookedId] = useState<string | null>(null)
     const [resendingId, setResendingId] = useState<string | null>(null)
+    const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set())
+    const [isDeleting, setIsDeleting] = useState(false)
 
     // Update local matches if initialMatches changes
     useEffect(() => {
@@ -181,6 +183,64 @@ export function MatchesClient({
         }
     }
 
+    const handleBulkDelete = async () => {
+        if (selectedMatchIds.size === 0) return
+
+        const proceed = window.confirm(
+            `Are you sure you want to delete ${selectedMatchIds.size} matches?\n\n` +
+            `This action is PERMANENT and will delete all associated invites, feedback, and rating history.`
+        )
+
+        if (!proceed) return
+
+        setIsDeleting(true)
+        try {
+            const res = await fetch('/api/admin/matches/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ match_ids: Array.from(selectedMatchIds) })
+            })
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({ detail: 'Unknown error' }))
+                throw new Error(errorData.detail || 'Failed to delete matches')
+            }
+
+            const data = await res.json()
+            alert(data.message)
+
+            // Update local state by removing deleted matches
+            setLocalMatches(prev => prev.filter(m => !selectedMatchIds.has(m.match_id)))
+            setSelectedMatchIds(new Set())
+        } catch (err) {
+            const error = err as Error
+            console.error(error)
+            alert(`Error: ${error.message || 'Could not delete matches'}`)
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    const toggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            const allVisibleIds = filteredMatches.map(m => m.match_id)
+            setSelectedMatchIds(new Set(allVisibleIds))
+        } else {
+            setSelectedMatchIds(new Set())
+        }
+    }
+
+    const toggleSelect = (e: React.ChangeEvent<HTMLInputElement>, matchId: string) => {
+        e.stopPropagation()
+        const newSelected = new Set(selectedMatchIds)
+        if (e.target.checked) {
+            newSelected.add(matchId)
+        } else {
+            newSelected.delete(matchId)
+        }
+        setSelectedMatchIds(newSelected)
+    }
+
     const now = new Date()
     const bookingNeededMatches = filteredMatches.filter((m: Match) =>
         !m.court_booked &&
@@ -262,27 +322,66 @@ export function MatchesClient({
                 )}
 
                 <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                            <input
-                                type="checkbox"
-                                checked={showOlderMatches}
-                                onChange={(e) => setShowOlderMatches(e.target.checked)}
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                            />
-                            Show matches prior to yesterday
-                        </label>
+                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
+                        <div className="flex items-center gap-6">
+                            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showOlderMatches}
+                                    onChange={(e) => setShowOlderMatches(e.target.checked)}
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                />
+                                Show matches prior to yesterday
+                            </label>
+
+                            {selectedMatchIds.size > 0 && (
+                                <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
+                                    <span className="text-sm font-medium text-gray-700">
+                                        {selectedMatchIds.size} selected
+                                    </span>
+                                    <button
+                                        onClick={handleBulkDelete}
+                                        disabled={isDeleting}
+                                        className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                                    >
+                                        {isDeleting ? (
+                                            <>
+                                                <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                Delete Selected
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
+                                    <th className="px-6 py-3 text-left w-4">
+                                        <input
+                                            type="checkbox"
+                                            checked={filteredMatches.length > 0 && selectedMatchIds.size === filteredMatches.length}
+                                            onChange={toggleSelectAll}
+                                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                        />
+                                    </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled Time</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Court</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Players</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Result</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feedback</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score / Feedback</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -366,8 +465,16 @@ export function MatchesClient({
                                             <tr
                                                 key={match.match_id}
                                                 onClick={() => handleMatchClick(match.match_id)}
-                                                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                                                className={`cursor-pointer transition-colors ${selectedMatchIds.has(match.match_id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'hover:bg-gray-50'}`}
                                             >
+                                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedMatchIds.has(match.match_id)}
+                                                        onChange={(e) => toggleSelect(e, match.match_id)}
+                                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                     {formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined)}
                                                 </td>
@@ -394,39 +501,41 @@ export function MatchesClient({
                                                     </div>
                                                 </td>
 
-                                                <td className="px-6 py-4 align-top w-1/3 min-w-[300px]" colSpan={2}>
-                                                    {match.score_text ? renderScorecard() : (
-                                                        <div className="space-y-1">
-                                                            <div className="text-xs text-gray-900">
-                                                                {match.team_1_details?.map(p => p.name).join(' / ') || 'Team 1'}
-                                                            </div>
-                                                            <div className="text-xs text-gray-900">
-                                                                {match.team_2_details?.map(p => p.name).join(' / ') || 'Team 2'}
-                                                            </div>
+                                                <td className="px-6 py-4 align-top w-1/4">
+                                                    <div className="space-y-1">
+                                                        <div className="text-xs text-gray-900 font-medium">
+                                                            {match.team_1_details?.map(p => p.name).join(' / ') || (match.team_1_players?.length > 0 ? `${match.team_1_players.length} players` : 'Team 1')}
                                                         </div>
-                                                    )}
+                                                        <div className="text-xs text-gray-500 italic px-2">vs</div>
+                                                        <div className="text-xs text-gray-900 font-medium">
+                                                            {match.team_2_details?.map(p => p.name).join(' / ') || (match.team_2_players?.length > 0 ? `${match.team_2_players.length} players` : 'Team 2')}
+                                                        </div>
+                                                    </div>
                                                 </td>
 
-                                                <td className="px-6 py-4 whitespace-nowrap align-top">
-                                                    {match.feedback_status && (
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
-                                                                match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
-                                                                    'bg-gray-100 text-gray-600'
-                                                                }`}>
-                                                                {match.feedback_status}
-                                                            </span>
-                                                            {match.feedback_status === 'Sent' && (
-                                                                <button
-                                                                    onClick={(e) => handleResendFeedback(e, match.match_id)}
-                                                                    disabled={resendingId === match.match_id}
-                                                                    className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded hover:bg-blue-50 disabled:opacity-50"
-                                                                >
-                                                                    {resendingId === match.match_id ? 'Sending...' : 'Resend'}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                <td className="px-6 py-4 align-top">
+                                                    <div className="flex flex-col gap-3">
+                                                        {match.score_text && renderScorecard()}
+                                                        {match.feedback_status && (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`px-2 inline-flex text-[10px] uppercase tracking-wider leading-5 font-bold rounded-full ${match.feedback_status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                    match.feedback_status === 'Sent' ? 'bg-blue-100 text-blue-800' :
+                                                                        'bg-gray-100 text-gray-600'
+                                                                    }`}>
+                                                                    {match.feedback_status}
+                                                                </span>
+                                                                {match.feedback_status === 'Sent' && (
+                                                                    <button
+                                                                        onClick={(e) => handleResendFeedback(e, match.match_id)}
+                                                                        disabled={resendingId === match.match_id}
+                                                                        className="px-2 py-0.5 text-[10px] uppercase font-bold text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                                                                    >
+                                                                        {resendingId === match.match_id ? 'Sending...' : 'Resend'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )

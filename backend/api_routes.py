@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
-from logic_utils import parse_iso_datetime, get_now_utc
+from logic_utils import parse_iso_datetime, get_now_utc, to_utc_iso
 import sms_constants as msg
 from database import supabase
 from match_organizer import (
@@ -59,6 +59,9 @@ class AssessmentResultRequest(BaseModel):
     responses: Dict[str, Any]
     rating: float
     breakdown: Optional[Dict[str, Any]] = None
+
+class BulkMatchDeleteRequest(BaseModel):
+    match_ids: List[str]
 
 class BookingMarkRequest(BaseModel):
     user_id: str
@@ -692,7 +695,10 @@ async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):
         # Build updates dict from non-None fields
         updates = {}
         if request.scheduled_time is not None:
-            updates['scheduled_time'] = request.scheduled_time
+            # Need club_id for correct TZ conversion
+            m_res = supabase.table("matches").select("club_id").eq("match_id", match_id).execute()
+            cid = m_res.data[0]["club_id"] if m_res.data else None
+            updates['scheduled_time'] = to_utc_iso(request.scheduled_time, cid)
         if request.status is not None:
             updates['status'] = request.status
         if request.score_text is not None:
@@ -851,8 +857,8 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
             raise HTTPException(status_code=400, detail="Exactly 4 players are required.")
             
         if request.scheduled_time:
-            # Parse and re-serialize to ensure it's a valid standard ISO format
-            scheduled_time = parse_iso_datetime(request.scheduled_time).isoformat()
+            # Use to_utc_iso for consistent timezone handling
+            scheduled_time = to_utc_iso(request.scheduled_time, request.club_id)
         else:
             scheduled_time = get_now_utc().isoformat()
         
@@ -898,6 +904,55 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
         
         return {"match": match, "message": "Confirmed match created successfully."}
     except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/matches/bulk-delete")
+async def bulk_delete_matches(request: BulkMatchDeleteRequest):
+    """
+    Delete multiple matches and all their associated data.
+    Ensures cascading cleanup of invites, feedback, and rating history.
+    """
+    if not request.match_ids:
+        return {"message": "No matches selected for deletion.", "deleted_count": 0}
+
+    try:
+        match_ids = request.match_ids
+        print(f"ADMIN: Bulk deleting {len(match_ids)} matches: {match_ids}")
+
+        # 1. Delete associated records in order of dependency
+        # We use .in_() for batch deletion which is efficient
+        
+        # Delete match feedback
+        supabase.table("match_feedback").delete().in_("match_id", match_ids).execute()
+        
+        # Delete match invites
+        supabase.table("match_invites").delete().in_("match_id", match_ids).execute()
+
+        # Delete feedback requests
+        supabase.table("feedback_requests").delete().in_("match_id", match_ids).execute()
+        
+        # Delete rating history
+        supabase.table("player_rating_history").delete().in_("match_id", match_ids).execute()
+
+        # Delete match votes
+        supabase.table("match_votes").delete().in_("match_id", match_ids).execute()
+
+        # Finally, delete the matches themselves
+        result = supabase.table("matches").delete().in_("match_id", match_ids).execute()
+        
+        deleted_count = len(result.data or [])
+        print(f"ADMIN: Successfully deleted {deleted_count} matches.")
+        
+        return {
+            "message": f"Successfully deleted {deleted_count} matches and all associated records.",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        print(f"ERROR: Bulk delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Bulk delete failed: {str(e)}")
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

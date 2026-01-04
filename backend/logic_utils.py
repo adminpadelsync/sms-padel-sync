@@ -14,6 +14,8 @@ def get_club_settings(club_id: str) -> dict:
 
 def get_club_timezone(club_id: str) -> str:
     """Retrieve the timezone for a given club, defaulting to America/New_York."""
+    if not club_id:
+        return "America/New_York"
     try:
         result = supabase.table("clubs").select("timezone").eq("club_id", club_id).execute()
         if result.data and result.data[0].get("timezone"):
@@ -22,6 +24,38 @@ def get_club_timezone(club_id: str) -> str:
         # Fallback if column doesn't exist or query fails
         print(f"Note: Could not fetch timezone for club {club_id}, defaulting to America/New_York: {e}")
     return "America/New_York"
+
+def to_utc_iso(dt_str: str, club_id: str) -> str:
+    """
+    Convert a naive local datetime string to a UTC ISO string.
+    The input dt_str is assumed to be in the club's local timezone.
+    If it's already aware, it just converts to UTC.
+    """
+    if not dt_str:
+        return None
+        
+    try:
+        # Use our robust parser first
+        dt = parse_iso_datetime(dt_str)
+        
+        # If the original string didn't have timezone info, it was parsed as UTC by parse_iso_datetime
+        # But we actually want to interpret it as the club's local time if it was naive.
+        # Check if the original string had timezone indicator
+        is_naive_string = 'Z' not in dt_str and '+' not in dt_str and '-' not in dt_str[11:]
+        
+        if is_naive_string:
+            timezone_str = get_club_timezone(club_id)
+            local_tz = pytz.timezone(timezone_str)
+            # Replace the assumed UTC with None to make it naive, then localize correctly
+            dt_naive = dt.replace(tzinfo=None)
+            dt_local = local_tz.localize(dt_naive)
+            return dt_local.astimezone(timezone.utc).isoformat()
+        else:
+            # Already has TZ info, ensure it's UTC
+            return dt.astimezone(timezone.utc).isoformat()
+    except Exception as e:
+        print(f"Error converting to UTC ISO: {e}")
+        return dt_str # Return as-is on failure (best effort)
 
 
 def get_quiet_hours_info(club_id: str) -> tuple[bool, int]:

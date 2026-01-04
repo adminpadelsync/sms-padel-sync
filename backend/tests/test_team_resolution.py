@@ -2,6 +2,9 @@ import sys
 import os
 from unittest.mock import MagicMock
 
+# Add backend to path FIRST
+sys.path.append(os.path.join(os.getcwd(), 'backend'))
+
 # Mock Twilio and Redis
 sys.modules["twilio"] = MagicMock()
 sys.modules["twilio.rest"] = MagicMock()
@@ -9,10 +12,7 @@ sys.modules["twilio.base"] = MagicMock()
 sys.modules["twilio.base.exceptions"] = MagicMock()
 sys.modules["redis"] = MagicMock()
 
-# Add backend to path
-sys.path.append(os.path.join(os.getcwd(), 'backend'))
-
-# Mock supabase
+# Mock database
 mock_supabase = MagicMock()
 sys.modules["database"] = MagicMock()
 import database
@@ -22,6 +22,16 @@ database.supabase = mock_supabase
 mock_twilio_client = MagicMock()
 sys.modules["twilio_client"] = mock_twilio_client
 
+# Mock logic dependencies
+mock_reasoner = MagicMock()
+sys.modules["logic.reasoner"] = mock_reasoner
+mock_reasoner.resolve_names_with_ai.return_value = {"player_id": None, "confidence": 0.0, "reasoning": "Standard mock"}
+
+mock_elo = MagicMock()
+sys.modules["logic.elo_service"] = mock_elo
+mock_elo.update_match_elo.return_value = True
+
+# Now we can import the handler
 from handlers.result_handler import handle_result_report
 
 def test_resolve_name_logic():
@@ -48,16 +58,6 @@ def test_resolve_name_logic():
     # Mock supabase responses
     mock_supabase.table().select().or_().eq().order().limit().execute.return_value.data = [match]
     
-    # We need to mock the second call inside handle_result_report which is players fetch
-    # handle_result_report has multiple calls to supabase. 
-    # Let's mock side_effect for execute
-    
-    def side_effect():
-        # This is a bit complex to mock execute().data directly with side_effect
-        # Better to mock the table() calls
-        pass
-
-    # Simplified mock approach:
     # 1. Match fetch
     mock_supabase.table("matches").select().or_().eq().order().limit().execute.return_value.data = [match]
     # 2. Players fetch
@@ -65,11 +65,6 @@ def test_resolve_name_logic():
     # 3. Update call
     mock_supabase.table("matches").update().eq().execute.return_value.data = [{}]
     
-    # Mock update_match_elo
-    sys.modules["logic.elo_service"] = MagicMock()
-    import logic.elo_service
-    logic.elo_service.update_match_elo.return_value = True
-
     # Case 1: "Adam and Augustin beat Alex and Alexander Graham"
     print("\nCase 1: Adam and Augustin vs Alex and Alexander Graham (Ambiguous)")
     entities = {
@@ -87,8 +82,8 @@ def test_resolve_name_logic():
     assert mock_twilio_client.send_sms.called
     clarify_msg = mock_twilio_client.send_sms.call_args[0][1]
     print(f"Clarification sent: {clarify_msg[:50]}...")
-    assert "trouble identifying the teams" in clarify_msg
-    assert "Team A as (Adam Rogers, Augustin)" in clarify_msg
+    assert "trouble identifying some of the names" in clarify_msg
+    assert "Team 1: Adam Rogers, Augustin" in clarify_msg
     
     mock_twilio_client.send_sms.reset_mock()
 
@@ -112,6 +107,62 @@ def test_resolve_name_logic():
     assert set(update_call['team_1_players']) == {"p_adam", "p_augustin"}
     assert set(update_call['team_2_players']) == {"p_alexander", "p_alexander2"}
     
+    mock_supabase.table("matches").update.reset_mock()
+    mock_twilio_client.send_sms.reset_mock()
+
+    # Case 3: "Adam and Tony beat Alex and Agustin" (Nickname resolution)
+    # Tony -> Anthony
+    # Agustin -> Augustin
+    # Alex -> Alexander
+    print("\nCase 3: Adam and Tony vs Alex and Agustin (Nicknames)")
+    
+    # Setup mock behavior for AI resolution
+    def mock_resolve_ai(name, players):
+        n = name.lower()
+        if n == "tony":
+            return {"player_id": "p_anthony", "confidence": 0.9, "reasoning": "Tony is Anthony"}
+        if n == "agustin":
+            return {"player_id": "p_augustin", "confidence": 0.9, "reasoning": "Agustin is Augustin"}
+        if n == "alex":
+            # For Alex, we'll return alexander explicitly as a likely candidate
+            return {"player_id": "p_alexander", "confidence": 0.9, "reasoning": "Alex is Alexander"}
+        return {"player_id": None, "confidence": 0.0, "reasoning": "NotFound"}
+    
+    mock_reasoner.resolve_names_with_ai.side_effect = mock_resolve_ai
+    
+    players_with_tony = [
+        {"player_id": "p_adam", "name": "Adam Rogers"},
+        {"player_id": "p_augustin", "name": "Augustin"},
+        {"player_id": "p_alexander", "name": "Alexander"},
+        {"player_id": "p_anthony", "name": "Anthony"}
+    ]
+    match_with_tony = {
+        "match_id": "m124",
+        "team_1_players": ["p_adam", "p_anthony"],
+        "team_2_players": ["p_alexander", "p_augustin"],
+        "status": "confirmed"
+    }
+    
+    mock_supabase.table("matches").select().or_().eq().order().limit().execute.return_value.data = [match_with_tony]
+    mock_supabase.table("players").select().in_().execute.return_value.data = players_with_tony
+    
+    entities_3 = {
+        "score": "6-4 6-2",
+        "winner": "we",
+        "team_a": ["Adam", "Tony"],
+        "team_b": ["Alex", "Agustin"]
+    }
+    
+    handle_result_report(from_number, player_profile, entities_3)
+    
+    assert mock_supabase.table("matches").update.called
+    update_call_3 = mock_supabase.table("matches").update.call_args[0][0]
+    print(f"Updated Team 1: {update_call_3['team_1_players']}")
+    print(f"Updated Team 2: {update_call_3['team_2_players']}")
+    
+    assert set(update_call_3['team_1_players']) == {"p_adam", "p_anthony"}
+    assert set(update_call_3['team_2_players']) == {"p_alexander", "p_augustin"}
+
     print("\nVerification complete - All tests passed.")
 
 if __name__ == "__main__":

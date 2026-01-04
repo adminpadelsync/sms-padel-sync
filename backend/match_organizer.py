@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from database import supabase
-from logic_utils import parse_iso_datetime, get_now_utc
+from logic_utils import parse_iso_datetime, get_now_utc, to_utc_iso
 
 def _get_club_name(club_id: str) -> str:
     """Helper to get club name from ID."""
@@ -123,7 +123,7 @@ def initiate_match_outreach(
     # 1. Create the match record with initial players already in team_1
     match_data = {
         "club_id": club_id,
-        "scheduled_time": scheduled_time,
+        "scheduled_time": to_utc_iso(scheduled_time, club_id),
         "status": "pending",
         "team_1_players": initial_player_ids,  # Start with committed players
         "team_2_players": [],

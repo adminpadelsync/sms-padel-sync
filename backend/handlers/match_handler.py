@@ -49,7 +49,7 @@ from database import supabase
 from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
-from logic_utils import get_club_timezone, format_sms_datetime, parse_iso_datetime
+from logic_utils import get_club_timezone, format_sms_datetime, parse_iso_datetime, to_utc_iso
 from handlers.date_parser import parse_natural_date, parse_natural_date_with_context
 
 from error_logger import log_match_error
@@ -481,7 +481,7 @@ def _create_match(
             "club_id": player["club_id"],
             "team_1_players": [player["player_id"]],
             "team_2_players": [],
-            "scheduled_time": scheduled_time_iso,
+            "scheduled_time": to_utc_iso(scheduled_time_iso, player["club_id"]),
             "status": "pending",
             "level_range_min": level_min if not skip_filters else None,
             "level_range_max": level_max if not skip_filters else None,
@@ -582,7 +582,7 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
             "club_id": player["club_id"],
             "team_1_players": [player["player_id"]],
             "team_2_players": [],
-            "scheduled_time": slots[0],
+            "scheduled_time": to_utc_iso(slots[0], player["club_id"]),
             "status": "voting",
             "voting_options": slots,
             "voting_deadline": (get_now_utc() + timedelta(hours=24)).isoformat()

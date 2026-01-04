@@ -5,6 +5,7 @@ from logic.elo_service import update_match_elo
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from logic_utils import get_now_utc
+from logic.reasoner import resolve_names_with_ai
 
 def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any]):
     """
@@ -81,6 +82,13 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         if len(partial_matches) == 1:
             return partial_matches[0]
             
+        # Priority 4: AI Resolution Fallback
+        # If we have no match or multiple matches, let AI try to reason
+        ai_res = resolve_names_with_ai(name_lower, players_data)
+        if ai_res["player_id"] and ai_res["confidence"] >= 0.8:
+            print(f"[RESULT_HANDLER] AI resolved '{name_lower}' to {ai_res['player_id']} (conf: {ai_res['confidence']})")
+            return ai_res["player_id"]
+            
         return None
 
     resolved_a = []
@@ -97,6 +105,18 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             resolved = resolve_name(name, players_data, player_id)
             if resolved and resolved not in resolved_b:
                 resolved_b.append(resolved)
+
+    # NEW: Safety check - if they mentioned names but we couldn't resolve all of them, clarify.
+    if (team_a_names and len(resolved_a) < len(team_a_names)) or (team_b_names and len(resolved_b) < len(team_b_names)):
+        p_map = {p["player_id"]: p["name"] for p in players_data}
+        t1_names = [p_map.get(pid, "Unknown") for pid in match["team_1_players"]]
+        t2_names = [p_map.get(pid, "Unknown") for pid in match["team_2_players"]]
+        
+        msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying some of the names mentioned."
+        msg_clarify += f"\n\nAs a reminder, the match was:\nTeam 1: {', '.join(t1_names)}\nTeam 2: {', '.join(t2_names)}"
+        msg_clarify += "\n\nCould you please clarify? (e.g. 'Team 1 won 6-4 6-2' or 'Dave and I beat Sarah and Mike 6-4 6-2')"
+        send_sms(from_number, msg_clarify)
+        return
 
     # 4. Resolve Teams from Match Record
     # We want to map resolved_a and resolved_b to match['team_1_players'] or match['team_2_players']
