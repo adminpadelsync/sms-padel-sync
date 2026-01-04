@@ -51,9 +51,7 @@ export default async function PlayersPage() {
     return (
         <PlayersClient
             initialPlayers={players}
-            isSuperuser={userClub.is_superuser}
             userClubId={userClub.club_id}
-            clubs={clubs || []}
         />
     )
 }

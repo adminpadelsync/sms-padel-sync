@@ -114,9 +114,7 @@ export default async function MatchesPage() {
     return (
         <MatchesClient
             initialMatches={enrichedMatches}
-            isSuperuser={userClub.is_superuser}
             userClubId={userClub.club_id}
-            clubs={clubs}
             userId={user.id}
             userClubTimezone={userClub.club_timezone}
         />

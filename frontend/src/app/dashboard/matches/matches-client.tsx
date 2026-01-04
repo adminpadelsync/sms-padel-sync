@@ -43,7 +43,7 @@ interface MatchesClientProps {
     initialMatches: Match[]
     userClubId: string | null
     userId: string
-    userClubTimezone?: string
+    userClubTimezone?: string | null
 }
 
 // Format date with day of week in a specific timezone: "Mon, Dec 16, 4:00 PM"

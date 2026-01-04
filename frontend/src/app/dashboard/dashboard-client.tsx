@@ -20,9 +20,7 @@ interface DashboardClientProps {
     initialPlayers: Player[]
     initialMatches: Match[]
     userEmail: string
-    isSuperuser: boolean
     userClubId: string | null
-    clubs: { club_id: string; name: string }[]
 }
 
 export function DashboardClient({

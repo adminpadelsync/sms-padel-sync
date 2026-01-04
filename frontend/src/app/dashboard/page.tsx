@@ -98,9 +98,7 @@ export default async function Dashboard() {
             initialPlayers={players || []}
             initialMatches={matches || []}
             userEmail={user?.email || ''}
-            isSuperuser={userClub.is_superuser}
             userClubId={userClub.club_id}
-            clubs={clubs}
         />
     )
 }
