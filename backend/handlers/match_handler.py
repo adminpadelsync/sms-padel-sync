@@ -146,19 +146,29 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
         return
 
     # No auto-scope - check if player is manually in groups
-    groups_res = supabase.table("group_memberships").select(
-        "group_id, player_groups(name)"
-    ).eq("player_id", player["player_id"]).execute()
+    # SCOPE TO ACTIVE CLUB to prevent leakage
+    player_id = player["player_id"]
+    club_id = player.get("club_id")
     
-    if groups_res.data:
+    # Step 1: Get the IDs of groups the player is in
+    membership_res = supabase.table("group_memberships").select("group_id").eq("player_id", player_id).execute()
+    member_group_ids = [m["group_id"] for m in (membership_res.data or [])]
+    
+    if member_group_ids:
+        # Step 2: Get the names of those groups that belong to the ACTIVE CLUB
+        groups_res = supabase.table("player_groups").select("group_id, name").in_("group_id", member_group_ids).eq("club_id", club_id).execute()
+        groups_data = groups_res.data or []
+    else:
+        groups_data = []
+
+    
+    if groups_data:
         # Player is in groups - ask group selection FIRST with time confirmation
-        groups_data = groups_res.data
-        
         # Format list - start at 2 since 1 is Everyone
         groups_list = ""
         group_options = {}
         for idx, item in enumerate(groups_data, 2):
-            group_name = item.get("player_groups", {}).get("name", "Unknown Group")
+            group_name = item.get("name", "Unknown Group")
             groups_list += f"{idx}) {group_name}\n"
             group_options[str(idx)] = {
                 "group_id": item["group_id"],
@@ -489,21 +499,26 @@ def _create_match(
             from matchmaker import find_and_invite_players
             count = find_and_invite_players(match_id, skip_filters=skip_filters)
             
-            # Use appropriate confirmation message
-            # If friendly_time wasn't passed, calculate it
-            if not friendly_time:
-                friendly_time = format_sms_datetime(parse_iso_datetime(scheduled_time_iso))
+            if count == -2:
+                # Quiet hours - inform the user
+                from logic_utils import get_quiet_hours_info
+                _, end_hour = get_quiet_hours_info(player["club_id"])
+                resume_time = f"{end_hour % 12 or 12}{'am' if end_hour < 12 else 'pm'}"
                 
-            if skip_filters and group_name:
+                send_sms(from_number, msg.MSG_MATCH_REQUESTED_QUIET_HOURS.format(
+                    club_name=get_club_name(),
+                    resume_time=resume_time
+                ), club_id=player["club_id"])
+            elif skip_filters and group_name:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_GROUP.format(
                     club_name=get_club_name(), 
                     time=friendly_time, 
-                    count=count,
+                    count=max(0, count),
                     group_name=group_name
                 ))
             else:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
-                    club_name=get_club_name(), time=friendly_time, count=count
+                    club_name=get_club_name(), time=friendly_time, count=max(0, count)
                 ), club_id=player["club_id"])
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL, club_id=player.get("club_id"))

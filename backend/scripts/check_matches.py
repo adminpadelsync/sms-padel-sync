@@ -24,9 +24,10 @@ clubs_result = supabase.table("clubs").select("club_id, name, active").execute()
 for c in clubs_result.data:
     print(f"  {c['club_id']}: {c['name']} (active={c.get('active', True)})")
 
-# Query players count
+# Query players count via club_members
 print("\n\n=== PLAYERS ===")
-players_result = supabase.table("players").select("player_id, name, club_id").limit(5).execute()
-print(f"Found {len(players_result.data)} players (showing first 5)")
-for p in players_result.data:
-    print(f"  {p['name']} - Club: {p.get('club_id', 'N/A')}")
+players_result = supabase.table("club_members").select("club_id, players(player_id, name)").limit(10).execute()
+print(f"Found {len(players_result.data)} player memberships (showing first 10)")
+for m in players_result.data:
+    p = m['players']
+    print(f"  {p['name']} - Club ID: {m.get('club_id', 'N/A')}")

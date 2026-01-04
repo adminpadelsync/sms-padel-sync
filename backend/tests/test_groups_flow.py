@@ -28,18 +28,26 @@ def test_groups_flow():
     clear_user_state(TEST_PHONE)
     
     # Get or create player for this club
-    player_res = supabase.table("players").select("*").eq("phone_number", TEST_PHONE).eq("club_id", club_id).execute()
-    if not player_res.data:
+    player_res = supabase.table("players").select("*").eq("phone_number", TEST_PHONE).execute()
+    player = None
+    
+    if player_res.data:
+        player = player_res.data[0]
+        # Check if already a member
+        member_res = supabase.table("club_members").select("*").eq("club_id", club_id).eq("player_id", player["player_id"]).execute()
+        if not member_res.data:
+            supabase.table("club_members").insert({"club_id": club_id, "player_id": player["player_id"]}).execute()
+    else:
         # Create a test player
         player_res = supabase.table("players").insert({
             "phone_number": TEST_PHONE,
             "name": "Test Player",
-            "club_id": club_id,
             "declared_skill_level": "3.5",
             "gender": "M"
         }).execute()
+        player = player_res.data[0]
+        supabase.table("club_members").insert({"club_id": club_id, "player_id": player["player_id"]}).execute()
     
-    player = player_res.data[0]
     player_id = player["player_id"]
     
     # Cleanup memberships for this player

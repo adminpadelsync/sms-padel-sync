@@ -13,18 +13,21 @@ supabase = create_client(url, key)
 club_id = "55691410-89de-4f14-8249-972d5fea088d"  # Replay Club
 
 print("All players in club:")
-all_players = supabase.table("players").select("*").eq("club_id", club_id).execute()
-for p in all_players.data:
+# Fetch players via club_members junction table
+all_members = supabase.table("club_members").select("players(*)").eq("club_id", club_id).execute()
+for m in all_members.data:
+    p = m['players']
     print(f"  - {p['name']} ({p['phone_number']})")
 
 print("\n\nTrying ilike search for 'Adam'...")
-result1 = supabase.table("players").select("*").eq("club_id", club_id).ilike("name", "%Adam%").execute()
+# Joining with players and filtering
+result1 = supabase.table("club_members").select("players(*)").eq("club_id", club_id).filter("players.name", "ilike", "%Adam%").execute()
 print(f"Found {len(result1.data)} results:")
-for p in result1.data:
-    print(f"  - {p['name']}")
+for m in result1.data:
+    print(f"  - {m['players']['name']}")
 
 print("\n\nTrying ilike search for 'adam' (lowercase)...")
-result2 = supabase.table("players").select("*").eq("club_id", club_id).ilike("name", "%adam%").execute()
+result2 = supabase.table("club_members").select("players(*)").eq("club_id", club_id).filter("players.name", "ilike", "%adam%").execute()
 print(f"Found {len(result2.data)} results:")
-for p in result2.data:
-    print(f"  - {p['name']}")
+for m in result2.data:
+    print(f"  - {m['players']['name']}")

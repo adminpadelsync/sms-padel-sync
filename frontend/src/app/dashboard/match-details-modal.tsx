@@ -62,7 +62,8 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
             setCorrectedWinner(match.winner_team)
 
             if (match.score_text) {
-                const sets = match.score_text.split(',').map(s => {
+                // Split by comma or space to handle different formats
+                const sets = match.score_text.split(/[,\s]+/).filter(s => s.includes('-')).map(s => {
                     const parts = s.trim().split('-')
                     return [parts[0] || '', parts[1] || '']
                 })
@@ -321,7 +322,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                                 ? players.map(p => p.name).join(' / ')
                                                 : `Team ${teamNum}`
 
-                                            const sets = match.score_text?.split(',').map(s => s.trim().split('-')) || []
+                                            const sets = match.score_text?.split(/[,\s]+/).filter(s => s.includes('-')).map(s => s.trim().split('-')) || []
 
                                             return (
                                                 <tr key={teamNum} className={`${isWinner ? 'bg-green-50' : 'bg-white'}`}>

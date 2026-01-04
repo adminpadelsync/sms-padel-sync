@@ -574,7 +574,7 @@ export function PlayersClient({
                                                                         {ratingHistory[player.player_id].map((entry) => (
                                                                             <tr key={entry.history_id} className="hover:bg-gray-50 transition-colors">
                                                                                 <td className="px-4 py-2 text-xs text-gray-600 whitespace-nowrap">
-                                                                                    {new Date(entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                                    {new Date(entry.matches?.scheduled_time || entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                                                                 </td>
                                                                                 <td className="px-4 py-2 text-xs">
                                                                                     <span
@@ -599,8 +599,8 @@ export function PlayersClient({
                                                                                 <td className="px-4 py-2 text-xs text-gray-500 font-mono">
                                                                                     {entry.new_elo_rating}
                                                                                 </td>
-                                                                                <td className="px-4 py-2 text-xs text-gray-500 italic truncate max-w-[200px]" title={entry.notes}>
-                                                                                    {entry.notes || '—'}
+                                                                                <td className="px-4 py-2 text-xs text-gray-500 italic truncate max-w-[200px]" title={entry.notes || entry.matches?.score_text}>
+                                                                                    {entry.notes || entry.matches?.score_text || '—'}
                                                                                 </td>
                                                                             </tr>
                                                                         ))}

@@ -8,7 +8,7 @@ export async function GET() {
         // Fetch all players (including inactive for testing purposes)
         const { data: players, error } = await supabase
             .from('players')
-            .select('player_id, name, phone_number, declared_skill_level, gender, club_id')
+            .select('player_id, name, phone_number, declared_skill_level, gender')
             .order('name')
 
         if (error) {

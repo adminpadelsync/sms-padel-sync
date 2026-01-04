@@ -22,7 +22,7 @@ sms_whitelist = set(num.strip() for num in sms_whitelist_raw.split(",") if num.s
 _reply_from_context: ContextVar[str] = ContextVar('reply_from', default=None)
 _club_name_context: ContextVar[str] = ContextVar('club_name', default=None)
 _dry_run_context: ContextVar[bool] = ContextVar('dry_run', default=False)
-_dry_run_responses: ContextVar[List[str]] = ContextVar('dry_run_responses', default=[])
+_dry_run_responses: ContextVar[List[dict]] = ContextVar('dry_run_responses', default=[])
 
 
 def set_reply_from(phone_number: str):
@@ -57,7 +57,7 @@ def get_dry_run() -> bool:
     return _dry_run_context.get()
 
 
-def get_dry_run_responses() -> List[str]:
+def get_dry_run_responses() -> List[dict]:
     """Get all messages captured during dry run."""
     return _dry_run_responses.get()
 
@@ -160,7 +160,7 @@ def send_sms(to_number: str, body: str, reply_from: str = None, club_id: str = N
     if get_dry_run():
         print(f"[DRY RUN] Capturing SMS to {to_number}: {body[:50]}...")
         current_responses = _dry_run_responses.get()
-        current_responses.append(body)
+        current_responses.append({"to": to_number, "body": body})
         _dry_run_responses.set(current_responses)
         return True
 

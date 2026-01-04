@@ -23,7 +23,7 @@ from logic_utils import parse_iso_datetime
 import re
 from logic.reasoner import reason_message, ReasonerResult
 
-def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_run: bool = False, history: List[Dict[str, str]] = None, golden_samples: List[Dict[str, Any]] = None):
+def handle_incoming_sms(from_number: str, body: str, to_number: str = None, club_id: str = None, dry_run: bool = False, history: List[Dict[str, str]] = None, golden_samples: List[Dict[str, Any]] = None):
     """
     Handle incoming SMS messages.
     
@@ -31,6 +31,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
         from_number: The sender's phone number
         body: The message content
         to_number: The Twilio number that received the SMS (determines which club)
+        club_id: Explicit club ID (overrides to_number lookup, useful for Training Jig)
         dry_run: If True, capture responses instead of sending
         history: Previous message history for the reasoner
         golden_samples: Few-shot examples for the reasoner
@@ -51,13 +52,24 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
             set_reply_from(to_number)
     
         # 0. Look up context (Group first, then Club)
-        club_id = None
         club_name = "the club"
         group_id = None
         group_name = None
         booking_system = "Playtomic"
 
-        if to_number:
+        # Explicit club_id takes precedence (from Training Jig)
+        if club_id:
+            club_res = supabase.table("clubs").select("name, booking_system, phone_number").eq("club_id", club_id).execute()
+            if club_res.data:
+                club_name = club_res.data[0]["name"]
+                booking_system = club_res.data[0].get("booking_system") or "Playtomic"
+                # If to_number was not provided, use the club's number
+                if not to_number:
+                    to_number = club_res.data[0].get("phone_number")
+                    if to_number:
+                        set_reply_from(to_number)
+
+        elif to_number:
             # Check if it's a dedicated group number
             group_res = supabase.table("player_groups").select("group_id, club_id, name").eq("phone_number", to_number).execute()
             if group_res.data:
@@ -74,7 +86,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
                 
                 print(f"[SMS] Dedicated Group Number detected: {group_name} ({club_name})")
             else:
-                # Fallback to standard club number lookup
+                # Standard club number lookup
                 club_res = supabase.table("clubs").select("club_id, name, booking_system").eq("phone_number", to_number).execute()
                 if club_res.data:
                     club_id = club_res.data[0]["club_id"]
@@ -92,12 +104,16 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
                         send_sms(from_number, "Sorry, this number is not configured for any club.", club_id=club_id)
                         return
         else:
-            # No to_number provided - use first club
+            # No to_number or club_id - use first club
             fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
             if fallback.data:
                 club_id = fallback.data[0]["club_id"]
                 club_name = fallback.data[0].get("name", "the club")
                 booking_system = fallback.data[0].get("booking_system") or "Playtomic"
+        
+        # Ensure club_id is string
+        if club_id:
+            club_id = str(club_id)
         
         # Map booking system to readable name
         booking_system_display = {
@@ -583,8 +599,10 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, dry_
                         send_sms(from_number, msg.MSG_NO_PUBLIC_GROUPS.format(club_name=club_name), club_id=club_id)
                         return
                     
-                    # 2. Get current player memberships
-                    memberships = supabase.table("group_memberships").select("group_id").eq("player_id", player["player_id"]).execute().data or []
+                    # 2. Get current player memberships FOR THIS CLUB
+                    memberships = supabase.table("group_memberships").select(
+                        "group_id, player_groups!inner(club_id)"
+                    ).eq("player_id", player["player_id"]).eq("player_groups.club_id", club_id).execute().data or []
                     member_group_ids = {m["group_id"] for m in memberships}
                     
                     # 3. Categorize and sort groups

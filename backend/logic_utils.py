@@ -24,20 +24,17 @@ def get_club_timezone(club_id: str) -> str:
     return "America/New_York"
 
 
-def is_quiet_hours(club_id: str) -> bool:
+def get_quiet_hours_info(club_id: str) -> tuple[bool, int]:
     """
-    Check if current time is within quiet hours for a specific club.
-    Default quiet hours are 9:00 PM to 8:00 AM in the club's local timezone.
+    Returns (is_quiet, end_hour) for a specific club.
+    Default quiet hours are 9:00 PM to 8:00 AM.
     """
     settings = get_club_settings(club_id)
     timezone_str = get_club_timezone(club_id)
     
-    # Get hours (0-23 format)
-    # Default: 9 PM (21) to 8 AM (8)
     quiet_start = settings.get("quiet_hours_start", 21)
     quiet_end = settings.get("quiet_hours_end", 8)
     
-    # Get current time in club's timezone
     try:
         tz = pytz.timezone(timezone_str)
     except Exception:
@@ -46,19 +43,21 @@ def is_quiet_hours(club_id: str) -> bool:
     now = datetime.now(tz)
     current_hour = now.hour
     
-    # Handle overnight quiet hours (e.g. 21 to 8)
+    is_quiet = False
     if quiet_start > quiet_end:
-        # e.g. 21 (9pm) to 8 (8am)
-        # Quiet if hour >= 21 OR hour < 8
         if current_hour >= quiet_start or current_hour < quiet_end:
-            return True
+            is_quiet = True
     else:
-        # e.g. 2 to 5 (not likely but possible)
-        # Quiet if hour >= 2 AND hour < 5
         if quiet_start <= current_hour < quiet_end:
-            return True
+            is_quiet = True
             
-    return False
+    return is_quiet, quiet_end
+
+
+def is_quiet_hours(club_id: str) -> bool:
+    """Check if current time is within quiet hours for a specific club."""
+    is_quiet, _ = get_quiet_hours_info(club_id)
+    return is_quiet
 
 
 def get_booking_url(club: dict) -> str:

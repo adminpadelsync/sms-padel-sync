@@ -250,7 +250,11 @@ async def get_player_rating_history(player_id: str):
     """Get the rating history for a specific player."""
 
     try:
-        result = supabase.table("player_rating_history").select("*").eq("player_id", player_id).order("created_at", desc=True).execute()
+        # Join with matches to get the actual match date and scores
+        result = supabase.table("player_rating_history")\
+            .select("*, matches(scheduled_time, score_text)")\
+            .eq("player_id", player_id)\
+            .order("created_at", desc=True).execute()
         return {"history": result.data or []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

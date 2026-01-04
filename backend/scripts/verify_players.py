@@ -26,9 +26,9 @@ def verify_data():
         
     club_id = replay_club.data[0]['club_id']
     
-    # Fetch all players for this club (limit 1000 to be safe, though 200 is expected)
-    response = supabase.table("players").select("gender, declared_skill_level").eq("club_id", club_id).execute()
-    players = response.data
+    # Fetch all players for this club via club_members
+    response = supabase.table("club_members").select("players(gender, declared_skill_level)").eq("club_id", club_id).execute()
+    players = [m['players'] for m in response.data] if response.data else []
     
     total = len(players)
     if total == 0:

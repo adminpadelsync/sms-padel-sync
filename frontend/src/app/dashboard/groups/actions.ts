@@ -213,18 +213,27 @@ export async function getClubPlayers(clubId: string) {
     const supabase = await createClient()
 
     const { data, error } = await supabase
-        .from('players')
-        .select('player_id, name, phone_number, declared_skill_level, adjusted_skill_level, active_status')
+        .from('club_members')
+        .select(`
+            players (
+                player_id, 
+                name, 
+                phone_number, 
+                declared_skill_level, 
+                adjusted_skill_level, 
+                active_status
+            )
+        `)
         .eq('club_id', clubId)
-        .eq('active_status', true)
-        .order('name')
+        .filter('players.active_status', 'eq', true)
+        .order('players(name)')
 
     if (error) {
         console.error('Error fetching players:', error)
         return []
     }
 
-    return data || []
+    return (data || []).map((m: any) => m.players)
 }
 
 export async function getSuggestedNumbers(groupId: string) {

@@ -37,7 +37,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     # Proactive invites should be blocked during quiet hours
     if is_quiet_hours(club_id):
         print(f"[QUIET HOURS] Skipping proactive invites for club {club_id}")
-        return 0
+        return -2  # Special code for quiet hours
     
     # Check if match is still pending/active
     if match["status"] not in ["pending", "voting"]:
@@ -107,18 +107,26 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     now = get_now_utc()
     
     candidates = []
+    print(f"[DEBUG] Processing {len(candidates_res.data)} member candidates...")
     for p in candidates_res.data:
+        p_id = p["player_id"]
+        p_name = p.get("name", "Unknown")
+        
         # Filter by group if set
         if group_member_ids is not None:
-            if p["player_id"] not in group_member_ids:
+            if p_id not in group_member_ids:
                 continue
 
+        print(f"[DEBUG] Checking candidate {p_name} ({p_id})")
+
         # Exclude players already in match
-        if p["player_id"] in players_in_match:
+        if p_id in players_in_match:
+            print(f"[DEBUG]   Excluded: Already in match")
             continue
         
         # Exclude already invited
-        if p["player_id"] in already_invited:
+        if p_id in already_invited:
+            print(f"[DEBUG]   Excluded: Already invited")
             continue
         
         # Check if player is muted
@@ -127,7 +135,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             try:
                 muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
                 if muted_dt > now:
-                    print(f"Skipping {p['name']} - muted until {muted_until}")
+                    print(f"Skipping {p_name} - muted until {muted_until}")
                     continue
             except:
                 pass
@@ -137,17 +145,20 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             # Check skill range
             player_level = p.get("adjusted_skill_level") or p.get("declared_skill_level") or 3.5
             if player_level < level_min or player_level > level_max:
+                print(f"[DEBUG]   Excluded: Level {player_level} out of range")
                 continue
             
             # Check gender preference
             if gender_preference and gender_preference != "mixed":
                 player_gender = (p.get("gender") or "").lower()
                 if gender_preference == "male" and player_gender != "male":
+                    print(f"[DEBUG]   Excluded: Gender {player_gender} mismatch")
                     continue
                 if gender_preference == "female" and player_gender != "female":
+                    print(f"[DEBUG]   Excluded: Gender {player_gender} mismatch")
                     continue
         
-        # Note: availability_preferences check removed - was blocking players without this set
+        print(f"[DEBUG]   Accepted: {p_name}")
         candidates.append(p)
     
     # 3. Rank Candidates using Scoring Engine
@@ -410,6 +421,7 @@ def process_pending_matches():
     total_invites = 0
     for match in matches.data:
         match_id = match["match_id"]
+        club_id = match.get("club_id")
         
         # Check if there are any active (sent) invites
         active_invites = supabase.table("match_invites").select("invite_id").eq("match_id", match_id).eq("status", "sent").execute()
@@ -421,5 +433,28 @@ def process_pending_matches():
             total_invites += invites
             if invites > 0:
                 print(f"Sent {invites} catch-up invites for match {match_id}")
+                
+                # Notify originator that we've started the process (as requested by user)
+                originator_id = match.get("originator_id")
+                if originator_id:
+                    orig_res = supabase.table("players").select("phone_number").eq("player_id", originator_id).execute()
+                    if orig_res.data:
+                        # Get club name
+                        club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+                        c_name = club_res.data[0]["name"] if club_res.data else "the club"
+                        
+                        # Get match time
+                        m_res = supabase.table("matches").select("scheduled_time").eq("match_id", match_id).execute()
+                        try:
+                            st = parse_iso_datetime(m_res.data[0]["scheduled_time"])
+                            time_str = format_sms_datetime(st)
+                        except:
+                            time_str = "your requested time"
+
+                        notify_msg = msg.MSG_QUIET_HOURS_RESUMED.format(
+                            club_name=c_name,
+                            time=time_str
+                        )
+                        send_sms(orig_res.data[0]["phone_number"], notify_msg, club_id=club_id)
                 
     return total_invites

@@ -128,19 +128,47 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         print(f"Match {match_id} doesn't have 4 players, skipping feedback")
         return 0
     
+    from twilio_client import get_dry_run
+    is_dry_run = get_dry_run()
+    
     # Check if we already sent requests for this match
-    existing = supabase.table("feedback_requests").select("player_id").eq(
-        "match_id", match_id
-    ).execute()
-    existing_player_ids = {r["player_id"] for r in existing.data}
+    existing_player_ids = set()
+    if not is_dry_run or not str(match_id).startswith("SIM_MATCH"):
+        try:
+            existing = supabase.table("feedback_requests").select("player_id").eq(
+                "match_id", match_id
+            ).execute()
+            existing_player_ids = {r["player_id"] for r in existing.data}
+        except Exception as e:
+             # If match_id is malformed (not UUID), it will fail here.
+             # For SIM_MATCH ids, we already guarded above, but for real ids it might be a bug.
+             print(f"[ERROR] Failed to check existing feedback for {match_id}: {e}")
     
     # Get player details
-    result = supabase.table("players").select(
-        "player_id, name, phone_number"
-    ).in_("player_id", all_players).execute()
+    real_player_ids = [pid for pid in all_players if len(str(pid)) == 36] # Crude UUID check
     
-    player_map = {p["player_id"]: p for p in result.data}
-    
+    player_map = {}
+    if real_player_ids:
+        try:
+            p_result = supabase.table("players").select(
+                "player_id, name, phone_number"
+            ).in_("player_id", real_player_ids).execute()
+            player_map = {p["player_id"]: p for p in p_result.data}
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch players for feedback: {e}")
+
+    # Add mock players for any missing IDs if dry run
+    for pid in all_players:
+        if pid not in player_map:
+            if is_dry_run:
+                player_map[pid] = {
+                    "player_id": pid,
+                    "name": f"Simulated Player ({pid[:5]})",
+                    "phone_number": "+10000000000"
+                }
+            else:
+                print(f"[WARNING] Player {pid} not found for feedback")
+
     sent_count = 0
     r = get_redis_client()
     
@@ -157,21 +185,24 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
             continue
 
         try:
-            if player_id in existing_player_ids:
-                if force:
-                    supabase.table("feedback_requests").update({
-                        "initial_sent_at": get_now_utc().isoformat(),
-                        "reminder_sent_at": None,
-                        "response_received_at": None
-                    }).eq("match_id", match_id).eq("player_id", player_id).execute()
+            if not is_dry_run:
+                if player_id in existing_player_ids:
+                    if force:
+                        supabase.table("feedback_requests").update({
+                            "initial_sent_at": get_now_utc().isoformat(),
+                            "reminder_sent_at": None,
+                            "response_received_at": None
+                        }).eq("match_id", match_id).eq("player_id", player_id).execute()
+                    else:
+                        continue
                 else:
-                    continue
+                    supabase.table("feedback_requests").insert({
+                        "match_id": match_id,
+                        "player_id": player_id,
+                        "initial_sent_at": get_now_utc().isoformat()
+                    }).execute()
             else:
-                supabase.table("feedback_requests").insert({
-                    "match_id": match_id,
-                    "player_id": player_id,
-                    "initial_sent_at": get_now_utc().isoformat()
-                }).execute()
+                print(f"[DRY RUN] Skipping feedback_requests DB write for {player_id}")
         except Exception as e:
             print(f"Skipping feedback for {player_id} in {match_id}: likely duplicate process ({e})")
             continue
@@ -214,7 +245,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
         else:
             print(f"Failed to send SMS to {player['phone_number']}, rolling back DB record")
             try:
-                if not force:
+                if not force and not is_dry_run:
                     supabase.table("feedback_requests").delete().eq("match_id", match_id).eq("player_id", player_id).execute()
             except Exception as e:
                 print(f"Error rolling back feedback request: {e}")
@@ -320,12 +351,15 @@ def run_feedback_scheduler():
     }
 
 
-def trigger_feedback_for_match(match_id: str, force: bool = False):
+def trigger_feedback_for_match(match_id: str, force: bool = False, match_obj: Optional[dict] = None):
     """Manually trigger feedback requests for a specific match."""
-    result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
-    if not result.data:
-        return {"error": "Match not found"}
+    if match_obj:
+        match = match_obj
+    else:
+        result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+        if not result.data:
+            return {"error": "Match not found"}
+        match = result.data[0]
     
-    match = result.data[0]
     sent = send_feedback_requests_for_match(match, is_manual_trigger=True, force=force)
     return {"match_id": match_id, "sms_sent": sent}

@@ -77,31 +77,36 @@ def populate_test_players(club_id: str, count: int = 20):
         responsiveness = random.randint(40, 100)
         reputation = random.randint(60, 100)
         
-        player = {
+        # Prepare player record (no club_id)
+        player_insert = {
             "phone_number": generate_phone_number(),
             "name": name,
             "gender": gender,
             "declared_skill_level": level,
             "adjusted_skill_level": level,
-            "club_id": club_id,
             "active_status": True,
-            
-            # New fields
             "pro_verified": pro_verified,
             "pro_verified_at": datetime.utcnow().isoformat() if pro_verified else None,
             "responsiveness_score": responsiveness,
             "reputation_score": reputation,
             "total_invites_received": random.randint(5, 50),
             "total_invites_accepted": random.randint(1, 20),
-            
-            # Availability
             **avail_data
         }
         
         try:
-            supabase.table("players").insert(player).execute()
-            created_count += 1
-            print(f"Created {name} ({level}, {gender}) - {avail_profile}")
+            # 1. Insert Player
+            res = supabase.table("players").insert(player_insert).execute()
+            if res.data:
+                player_id = res.data[0]["player_id"]
+                # 2. Link to Club
+                supabase.table("club_members").insert({
+                    "player_id": player_id,
+                    "club_id": club_id
+                }).execute()
+                
+                created_count += 1
+                print(f"Created {name} ({level}, {gender}) - {avail_profile}")
         except Exception as e:
             print(f"Failed to create {name}: {e}")
             

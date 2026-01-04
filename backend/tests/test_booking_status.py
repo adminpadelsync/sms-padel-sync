@@ -20,12 +20,12 @@ def test_booking_flow():
     club = club_res.data[0]
     club_id = club["club_id"]
     
-    player_res = supabase.table("players").select("*").eq("club_id", club_id).limit(2).execute()
+    player_res = supabase.table("club_members").select("players(*)").eq("club_id", club_id).limit(2).execute()
     if not player_res.data:
         print(f"Error: No players found for club {club_id}")
         return
-    player1 = player_res.data[0]
-    player2 = player_res.data[1]
+    player1 = player_res.data[0]['players']
+    player2 = player_res.data[1]['players']
     
     # 2. Test Match Initiation with originator_id
     print(f"Initiating match outreach with originator {player1['name']}...")

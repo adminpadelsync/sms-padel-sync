@@ -23,7 +23,7 @@ export default async function PlayersPage() {
                 *,
                 clubs(name),
                 group_memberships(
-                    player_groups(group_id, name)
+                    player_groups(group_id, name, club_id)
                 )
             )
         `)
@@ -37,7 +37,7 @@ export default async function PlayersPage() {
             club_id: m.club_id, // Ensure club_id is present for the client-side filter
             groups: player.group_memberships
                 ?.map((gm: any) => gm.player_groups)
-                .filter((g: any) => g !== null)
+                .filter((g: any) => g !== null && g.club_id === m.club_id) // Filter by club_id
                 .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
         }
     }) || []
