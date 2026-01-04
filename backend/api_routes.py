@@ -218,6 +218,126 @@ async def update_club(club_id: str, updates: ClubUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/clubs/{club_id}")
+async def delete_club(club_id: str):
+    """
+    Delete a club and all its associated data.
+    This includes releasing Twilio numbers for the club and all its groups,
+    and deleting courts, matches, invites, feedback, and groups.
+    """
+    print(f"[DELETE_CLUB] Starting deletion for club_id: {club_id}")
+    logs = []
+    
+    def add_log(step, status, message):
+        logs.append({"step": step, "status": status, "message": message, "timestamp": datetime.now().isoformat()})
+        print(f"[{status.upper()}] {step}: {message}")
+
+    try:
+        # 0. Release Twilio Numbers
+        # 0a. Release Club Number
+        step = "Release Club Twilio Number"
+        try:
+            success, msg = twilio_manager.release_club_number(club_id)
+            if success:
+                add_log(step, "success", msg)
+            else:
+                # If "No active number found", we treat as success/info rather than failure
+                if "No active number found" in msg:
+                    add_log(step, "success", "No active number was provisioned to this club.")
+                else:
+                    add_log(step, "warning", msg)
+        except Exception as e:
+            add_log(step, "error", f"Failed to release: {str(e)}")
+
+        # 0b. Release Group Numbers
+        step = "Release Group Twilio Numbers"
+        try:
+            groups_res = supabase.table("player_groups").select("group_id, name").eq("club_id", club_id).execute()
+            groups = groups_res.data or []
+            if not groups:
+                add_log(step, "success", "No player groups found for this club.")
+            else:
+                for group in groups:
+                    g_step = f"Release Number for Group: {group.get('name', group['group_id'])}"
+                    g_success, g_msg = twilio_manager.release_group_number(group["group_id"])
+                    add_log(g_step, "success" if g_success else "warning", g_msg)
+                add_log(step, "success", f"Processed {len(groups)} group numbers.")
+        except Exception as e:
+            add_log(step, "error", f"Failed to process group numbers: {str(e)}")
+
+        # 1. Get matches associated with this club
+        step = "Fetch Matches"
+        matches_res = supabase.table("matches").select("match_id").eq("club_id", club_id).execute()
+        match_ids = [m["match_id"] for m in (matches_res.data or [])]
+        add_log(step, "success", f"Found {len(match_ids)} matches associated with this club.")
+
+        if match_ids:
+            # 2. Delete match feedback
+            step = "Delete Match Feedback"
+            supabase.table("match_feedback").delete().in_("match_id", match_ids).execute()
+            add_log(step, "success", "Deleted all match feedback.")
+            
+            # 3. Delete match invites
+            step = "Delete Match Invites"
+            supabase.table("match_invites").delete().in_("match_id", match_ids).execute()
+            add_log(step, "success", "Deleted all match invites.")
+
+            # 4. Delete feedback requests
+            step = "Delete Feedback Requests"
+            supabase.table("feedback_requests").delete().in_("match_id", match_ids).execute()
+            add_log(step, "success", "Deleted all feedback requests.")
+            
+            # 5. Delete rating history associated with these matches
+            step = "Delete Rating History"
+            supabase.table("player_rating_history").delete().in_("match_id", match_ids).execute()
+            add_log(step, "success", "Deleted associated rating history.")
+
+            # 6. Delete matches
+            step = "Delete Matches"
+            supabase.table("matches").delete().eq("club_id", club_id).execute()
+            add_log(step, "success", "Deleted all match records.")
+
+        # 6. Delete player groups (group_memberships should cascade)
+        step = "Delete Player Groups"
+        supabase.table("player_groups").delete().eq("club_id", club_id).execute()
+        add_log(step, "success", "Deleted all player groups.")
+
+        # 7. Delete courts
+        step = "Delete Courts"
+        supabase.table("courts").delete().eq("club_id", club_id).execute()
+        add_log(step, "success", "Deleted all court records.")
+
+        # 8. Delete error logs
+        step = "Delete Error Logs"
+        supabase.table("error_logs").delete().eq("club_id", club_id).execute()
+        add_log(step, "success", "Deleted all error logs for this club.")
+
+        # 9. Finally, delete the club (club_members should cascade)
+        step = "Delete Club Record"
+        result = supabase.table("clubs").delete().eq("club_id", club_id).execute()
+        
+        if not result.data:
+            add_log(step, "error", "Club record not found during final deletion phase.")
+            raise HTTPException(status_code=404, detail="Club not found")
+
+        add_log(step, "success", "Successfully removed the club record from the database.")
+        
+        return {
+            "message": "Club and all associated data deleted successfully",
+            "logs": logs
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        add_log("Critical Error", "error", err_msg)
+        print(f"[DELETE_CLUB] CRITICAL ERROR: {err_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=err_msg, headers={"X-Deletion-Logs": str(logs)})
+
+
 @router.get("/players")
 async def get_players(request: Request):
     """Get all players, optionally filtered by club."""
@@ -252,7 +372,7 @@ async def get_player_rating_history(player_id: str):
     try:
         # Join with matches to get the actual match date and scores
         result = supabase.table("player_rating_history")\
-            .select("*, matches(scheduled_time, score_text)")\
+            .select("*, matches(scheduled_time, score_text, club_id)")\
             .eq("player_id", player_id)\
             .order("created_at", desc=True).execute()
         return {"history": result.data or []}

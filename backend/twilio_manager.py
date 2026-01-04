@@ -16,6 +16,16 @@ def get_twilio_client():
         print(f"[TWILIO] Client init error: {e}", flush=True)
         return None
 
+def format_phone_number(phone):
+    """Format E.164 number to (XXX) YYY-ZZZZ for friendly names."""
+    if not phone: return ""
+    digits = "".join(filter(str.isdigit, phone))
+    if len(digits) == 11 and digits.startswith('1'):
+        return f"({digits[1:4]}) {digits[4:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return phone
+
 def get_club_area_code(club_id):
     """Get the area code from the club's main phone number."""
     res = supabase.table("clubs").select("phone_number").eq("club_id", club_id).maybe_single().execute()
@@ -47,30 +57,54 @@ def provision_group_number(group_id, phone_number):
     
     try:
         # 1. Purchase the number and configure webhooks directly
-        # If number is in a messaging service, individual webhooks might be overridden, 
-        # but it's good practice to set them as a fallback or for non-service routing.
+        # Fetch group/club names for friendly name
+        friendly_name = phone_number
+        try:
+            name_res = supabase.table("player_groups") \
+                .select("name, clubs(name)") \
+                .eq("group_id", group_id) \
+                .single().execute()
+            if name_res.data:
+                g_name = name_res.data.get("name")
+                c_name = name_res.data.get("clubs", {}).get("name")
+                friendly_name = f"{format_phone_number(phone_number)} ({c_name} - {g_name})"
+        except Exception as e:
+            print(f"[TWILIO] Name fetch error for group {group_id}: {e}")
+
         params = {
-            "phone_number": phone_number
+            "phone_number": phone_number,
+            "friendly_name": friendly_name
         }
         if webhook_url:
             params["sms_url"] = webhook_url
             params["sms_method"] = "POST"
             
         purchased = client.incoming_phone_numbers.create(**params)
+        sid = purchased.sid
         
         # 2. Add to Messaging Service (if configured)
         if messaging_service_sid:
             try:
                 client.messaging.v1.services(messaging_service_sid) \
-                    .phone_numbers.create(phone_number_sid=purchased.sid)
+                    .phone_numbers.create(phone_number_sid=sid)
             except Exception as ms_err:
                 print(f"[TWILIO] MS Error (continuing): {ms_err}")
         
         # 3. Update database
-        supabase.table("player_groups").update({
-            "phone_number": phone_number,
-            "twilio_sid": purchased.sid
-        }).eq("group_id", group_id).execute()
+        try:
+            supabase.table("player_groups").update({
+                "phone_number": phone_number,
+                "twilio_sid": sid
+            }).eq("group_id", group_id).execute()
+        except Exception as db_err:
+            print(f"[TWILIO] Group DB update failed: {db_err}. RECORDING ROLLBACK.")
+            # PROVISIONING GUARD: Release the number if we can't save it to the DB
+            try:
+                client.incoming_phone_numbers(sid).delete()
+                print(f"[TWILIO] Provisioning Guard: Released orphaned number {phone_number} due to DB failure.")
+            except Exception as release_err:
+                print(f"[TWILIO] CRITICAL: Provisioning Guard failed to release {phone_number}: {release_err}")
+            raise db_err
         
         return True, phone_number
     except Exception as e:
@@ -85,28 +119,49 @@ def provision_club_number(club_id, phone_number):
     
     try:
         # 1. Purchase the number and configure webhooks directly
+        friendly_name = phone_number
+        try:
+            name_res = supabase.table("clubs").select("name").eq("club_id", club_id).single().execute()
+            if name_res.data and name_res.data.get("name"):
+                club_name = name_res.data["name"]
+                friendly_name = f"{format_phone_number(phone_number)} ({club_name})"
+        except Exception as e:
+            print(f"[TWILIO] Name fetch error for club {club_id}: {e}")
+
         params = {
-            "phone_number": phone_number
+            "phone_number": phone_number,
+            "friendly_name": friendly_name
         }
         if webhook_url:
             params["sms_url"] = webhook_url
             params["sms_method"] = "POST"
             
         purchased = client.incoming_phone_numbers.create(**params)
+        sid = purchased.sid
         
         # 2. Add to Messaging Service (if configured)
         if messaging_service_sid:
             try:
                 client.messaging.v1.services(messaging_service_sid) \
-                    .phone_numbers.create(phone_number_sid=purchased.sid)
+                    .phone_numbers.create(phone_number_sid=sid)
             except Exception as ms_err:
                 print(f"[TWILIO] MS Error (continuing): {ms_err}")
         
         # 3. Update database
-        supabase.table("clubs").update({
-            "phone_number": phone_number,
-            "twilio_sid": purchased.sid
-        }).eq("club_id", club_id).execute()
+        try:
+            supabase.table("clubs").update({
+                "phone_number": phone_number,
+                "twilio_sid": sid
+            }).eq("club_id", club_id).execute()
+        except Exception as db_err:
+            print(f"[TWILIO] Club DB update failed: {db_err}. RECORDING ROLLBACK.")
+            # PROVISIONING GUARD: Release the number if we can't save it to the DB
+            try:
+                client.incoming_phone_numbers(sid).delete()
+                print(f"[TWILIO] Provisioning Guard: Released orphaned number {phone_number} due to DB failure.")
+            except Exception as release_err:
+                print(f"[TWILIO] CRITICAL: Provisioning Guard failed to release {phone_number}: {release_err}")
+            raise db_err
         
         return True, phone_number
     except Exception as e:
@@ -121,24 +176,48 @@ def release_club_number(club_id):
     
     try:
         # 1. Get the SID from the database
-        res = supabase.table("clubs").select("twilio_sid").eq("club_id", club_id).maybe_single().execute()
+        try:
+            res = supabase.table("clubs").select("twilio_sid").eq("club_id", club_id).maybe_single().execute()
+        except Exception as sel_err:
+            err_str = str(sel_err)
+            # Handle the specific 204 "Missing response" error (Success but no content)
+            # Distinguish from PGRST204 (Column missing)
+            if 'PGRST204' in err_str:
+                # This is a structural error (column missing), not a successful "No SID"
+                print(f"[TWILIO] ERROR: 'twilio_sid' column missing in clubs schema.")
+                raise sel_err
+            if '204' in err_str or 'Missing response' in err_str:
+                print(f"[TWILIO] Select hit 204 (Success - No Content) for club {club_id}.")
+                return False, "No active number found (204)"
+            raise sel_err
+
         if not res.data or not res.data.get("twilio_sid"):
             return False, "No active number found for this club"
         
         sid = res.data["twilio_sid"]
         
         # 2. Release in Twilio
-        client.incoming_phone_numbers(sid).delete()
+        try:
+            client.incoming_phone_numbers(sid).delete()
+        except Exception as twilio_err:
+            print(f"[TWILIO] Twilio API call failed (might already be deleted): {twilio_err}")
         
         # 3. Clear database
-        supabase.table("clubs").update({
-            "phone_number": None,
-            "twilio_sid": None
-        }).eq("club_id", club_id).execute()
+        try:
+            supabase.table("clubs").update({
+                "twilio_sid": None
+            }).eq("club_id", club_id).execute()
+        except Exception as db_err:
+            err_str = str(db_err)
+            # Check if this is just a 204 response which we can ignore
+            if '204' in err_str or 'Missing response' in err_str:
+                pass # Operation likely succeeded but returned 204
+            else:
+                print(f"[TWILIO] DB update failed for club {club_id}: {db_err}")
         
-        return True, "Number released successfully"
+        return True, "Number release handled"
     except Exception as e:
-        print(f"[TWILIO] Release error: {e}")
+        print(f"[TWILIO] Release error for club {club_id}: {e}")
         return False, str(e)
 
 def release_group_number(group_id):
@@ -149,22 +228,38 @@ def release_group_number(group_id):
     
     try:
         # 1. Get the SID from the database
-        res = supabase.table("player_groups").select("twilio_sid").eq("group_id", group_id).maybe_single().execute()
+        try:
+            res = supabase.table("player_groups").select("twilio_sid").eq("group_id", group_id).maybe_single().execute()
+        except Exception as sel_err:
+            err_str = str(sel_err)
+            if '204' in err_str or 'Missing response' in err_str:
+                return False, "No active number found (204)"
+            raise sel_err
+
         if not res.data or not res.data.get("twilio_sid"):
             return False, "No active number found for this group"
         
         sid = res.data["twilio_sid"]
         
         # 2. Release in Twilio
-        client.incoming_phone_numbers(sid).delete()
+        try:
+            client.incoming_phone_numbers(sid).delete()
+        except Exception as twilio_err:
+            print(f"[TWILIO] Twilio API call failed (might already be deleted): {twilio_err}")
         
         # 3. Clear database
-        supabase.table("player_groups").update({
-            "phone_number": None,
-            "twilio_sid": None
-        }).eq("group_id", group_id).execute()
+        try:
+            supabase.table("player_groups").update({
+                "twilio_sid": None
+            }).eq("group_id", group_id).execute()
+        except Exception as db_err:
+            err_str = str(db_err)
+            if '204' in err_str or 'Missing response' in err_str:
+                pass
+            else:
+                print(f"[TWILIO] DB update failed for group {group_id}: {db_err}")
         
-        return True, "Number released successfully"
+        return True, "Number release handled"
     except Exception as e:
-        print(f"[TWILIO] Release error: {e}")
+        print(f"[TWILIO] Release error for group {group_id}: {e}")
         return False, str(e)

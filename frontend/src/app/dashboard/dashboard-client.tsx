@@ -108,14 +108,6 @@ export function DashboardClient({
                     </div>
                     <div className="flex items-center gap-4">
                         {isSuperuser && (
-                            <a
-                                href="/dashboard/clubs/new"
-                                className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-800 border border-green-600 rounded-md hover:bg-green-50 transition-colors"
-                            >
-                                ➕ Create Club
-                            </a>
-                        )}
-                        {isSuperuser && (
                             <>
                                 <button
                                     onClick={() => setSwitchClubModalOpen(true)}

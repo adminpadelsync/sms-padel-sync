@@ -571,39 +571,42 @@ export function PlayersClient({
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="divide-y divide-gray-100">
-                                                                        {ratingHistory[player.player_id].map((entry) => (
-                                                                            <tr key={entry.history_id} className="hover:bg-gray-50 transition-colors">
-                                                                                <td className="px-4 py-2 text-xs text-gray-600 whitespace-nowrap">
-                                                                                    {new Date(entry.matches?.scheduled_time || entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                                </td>
-                                                                                <td className="px-4 py-2 text-xs">
-                                                                                    <span
-                                                                                        onClick={() => entry.match_id && openMatchDetails(entry.match_id)}
-                                                                                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-tighter ${entry.match_id ? 'cursor-pointer hover:ring-1 hover:ring-offset-1 ring-blue-200' : ''} ${entry.change_type === 'match_result' ? 'bg-blue-50 text-blue-700' :
-                                                                                            entry.change_type === 'pro_verification' ? 'bg-green-50 text-green-700' :
-                                                                                                entry.change_type === 'assessment' ? 'bg-purple-50 text-purple-700' :
-                                                                                                    'bg-gray-50 text-gray-700'
-                                                                                            }`}>
-                                                                                        {entry.change_type.replace('_', ' ')}
-                                                                                        {entry.match_id && <span className="ml-1 opacity-50">🔍</span>}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="px-4 py-2 text-xs font-mono font-bold text-indigo-600">
-                                                                                    {entry.new_sync_rating.toFixed(2)}
-                                                                                    {entry.old_sync_rating && (
-                                                                                        <span className="ml-1 text-[10px] font-normal text-gray-400">
-                                                                                            (from {entry.old_sync_rating.toFixed(2)})
+                                                                        {ratingHistory[player.player_id].map((entry) => {
+                                                                            const isAway = entry.match_id && entry.matches?.club_id !== selectedClubId;
+                                                                            return (
+                                                                                <tr key={entry.history_id} className="hover:bg-gray-50 transition-colors">
+                                                                                    <td className="px-4 py-2 text-xs text-gray-600 whitespace-nowrap">
+                                                                                        {new Date(entry.matches?.scheduled_time || entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs">
+                                                                                        <span
+                                                                                            onClick={() => !isAway && entry.match_id && openMatchDetails(entry.match_id)}
+                                                                                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-tighter ${entry.match_id && !isAway ? 'cursor-pointer hover:ring-1 hover:ring-offset-1 ring-blue-200' : ''} ${entry.change_type === 'match_result' ? (isAway ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700') :
+                                                                                                entry.change_type === 'pro_verification' ? 'bg-green-50 text-green-700' :
+                                                                                                    entry.change_type === 'assessment' ? 'bg-purple-50 text-purple-700' :
+                                                                                                        'bg-gray-50 text-gray-700'
+                                                                                                }`}>
+                                                                                            {isAway ? 'Away Match' : entry.change_type.replace('_', ' ')}
+                                                                                            {entry.match_id && !isAway && <span className="ml-1 opacity-50">🔍</span>}
                                                                                         </span>
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="px-4 py-2 text-xs text-gray-500 font-mono">
-                                                                                    {entry.new_elo_rating}
-                                                                                </td>
-                                                                                <td className="px-4 py-2 text-xs text-gray-500 italic truncate max-w-[200px]" title={entry.notes || entry.matches?.score_text}>
-                                                                                    {entry.notes || entry.matches?.score_text || '—'}
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs font-mono font-bold text-indigo-600">
+                                                                                        {entry.new_sync_rating.toFixed(2)}
+                                                                                        {entry.old_sync_rating && (
+                                                                                            <span className="ml-1 text-[10px] font-normal text-gray-400">
+                                                                                                (from {entry.old_sync_rating.toFixed(2)})
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs text-gray-500 font-mono">
+                                                                                        {entry.new_elo_rating}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs text-gray-500 italic truncate max-w-[200px]" title={entry.notes || entry.matches?.score_text}>
+                                                                                        {isAway ? '—' : (entry.notes || entry.matches?.score_text || '—')}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
                                                                     </tbody>
                                                                 </table>
                                                             </div>

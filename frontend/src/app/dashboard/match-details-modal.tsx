@@ -309,7 +309,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                     <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-bold tracking-wider">
                                         <tr>
                                             <th className="px-4 py-2 font-bold">Team</th>
-                                            {match.score_text.split(',').map((_, i) => (
+                                            {match.score_text?.split(/[,\s]+/).filter(s => s.includes('-')).map((_, i) => (
                                                 <th key={i} className="px-3 py-2 text-center w-12 border-l border-gray-100">S{i + 1}</th>
                                             ))}
                                         </tr>

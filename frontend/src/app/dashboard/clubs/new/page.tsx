@@ -121,10 +121,10 @@ export default function NewClubPage() {
                 {/* Header */}
                 <div className="mb-8">
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => router.push('/dashboard/admin')}
                         className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center"
                     >
-                        ← Back to Dashboard
+                        ← Back to Admin
                     </button>
                     <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Provision New Club</h1>
                     <p className="mt-2 text-lg text-gray-600">
@@ -424,7 +424,7 @@ export default function NewClubPage() {
                         <div className="pt-6 flex justify-end gap-4 border-t border-gray-100">
                             <button
                                 type="button"
-                                onClick={() => router.back()}
+                                onClick={() => router.push('/dashboard/admin')}
                                 className="px-6 py-3 border border-gray-300 rounded-xl shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                             >
                                 Cancel
