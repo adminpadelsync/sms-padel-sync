@@ -238,13 +238,25 @@ def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
     if match["status"] == "voting":
         options = match.get("voting_options", [])
         opt_str = ""
+        club_id = match.get("club_id")
         for i, opt in enumerate(options):
             dt = parse_iso_datetime(opt)
-            time_str = dt.strftime("%H:%M")
-            opt_str += f"{chr(65+i)}) {time_str}\n"
+            # Use format_sms_datetime for consistent localized formatting
+            f_dt = format_sms_datetime(dt, club_id=club_id)
+            # Extract just the time part for voting options if possible, or use full string
+            opt_str += f"{chr(65+i)}) {f_dt}\n"
         
+        # Get day of week from first option
+        day_str = parse_iso_datetime(options[0]).strftime('%A')
+        if club_id:
+            try:
+                tz = pytz.timezone(get_club_timezone(club_id))
+                day_str = parse_iso_datetime(options[0]).astimezone(tz).strftime('%A')
+            except:
+                pass
+
         return (
-            f"🎾 {club_name}: {requester['name']} wants to play on {parse_iso_datetime(options[0]).strftime('%A')}.\n"
+            f"🎾 {club_name}: {requester['name']} wants to play on {day_str}.\n"
             f"Options:\n{opt_str}"
             f"Reply with letter(s) (e.g. 'A' or 'AB') to vote."
         )

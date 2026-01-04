@@ -104,7 +104,7 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
         try:
             scheduled_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
             parsed_dt = scheduled_time
-            human_readable = format_sms_datetime(parsed_dt)
+            human_readable = format_sms_datetime(parsed_dt, club_id=player.get("club_id"))
             iso_format = scheduled_time.isoformat()
         except ValueError:
             pass
@@ -141,7 +141,7 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             target_group_id=auto_group_id,
             skip_filters=True,
             group_name=group_name,
-            friendly_time=format_sms_datetime(parsed_dt)
+            friendly_time=format_sms_datetime(parsed_dt, club_id=player.get("club_id"))
         )
         return
 
