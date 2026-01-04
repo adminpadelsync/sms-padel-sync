@@ -73,7 +73,7 @@ def get_matches_needing_result_nudge():
     
     return matches_to_process
 
-def send_result_nudge_for_match(match: dict):
+def send_result_nudge_for_match(match: dict, is_manual: bool = False):
     """
     Send a nudge SMS to the match originator.
     """
@@ -84,7 +84,7 @@ def send_result_nudge_for_match(match: dict):
     if not originator_id:
         return 0
         
-    if is_quiet_hours(club_id):
+    if not is_manual and is_quiet_hours(club_id):
         return 0
         
     # Get originator phone
@@ -151,6 +151,16 @@ def send_result_nudge_for_match(match: dict):
         print(f"Sent result nudge #{new_count} to {player['name']} for match {match_id}")
         return 1
     return 0
+
+def trigger_result_nudge_for_match(match_id: str):
+    """Manually trigger a result nudge for a specific match."""
+    result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    if not result.data:
+        return {"error": "Match not found"}
+    
+    match = result.data[0]
+    sent = send_result_nudge_for_match(match, is_manual=True)
+    return {"match_id": match_id, "sms_sent": sent}
 
 def run_result_nudge_scheduler():
     """Main entry for cron."""

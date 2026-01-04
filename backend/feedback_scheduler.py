@@ -131,19 +131,20 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
     from twilio_client import get_dry_run
     is_dry_run = get_dry_run()
     
-    # Check if we already sent requests for this match
-    existing_player_ids = set()
+    # Check if we already sent requests OR received responses for this match
+    existing_requests = []
     if not is_dry_run or not str(match_id).startswith("SIM_MATCH"):
         try:
-            existing = supabase.table("feedback_requests").select("player_id").eq(
+            existing_res = supabase.table("feedback_requests").select("player_id, response_received_at").eq(
                 "match_id", match_id
             ).execute()
-            existing_player_ids = {r["player_id"] for r in existing.data}
+            existing_requests = existing_res.data or []
         except Exception as e:
-             # If match_id is malformed (not UUID), it will fail here.
-             # For SIM_MATCH ids, we already guarded above, but for real ids it might be a bug.
              print(f"[ERROR] Failed to check existing feedback for {match_id}: {e}")
     
+    responded_player_ids = {r["player_id"] for r in existing_requests if r.get("response_received_at")}
+    invited_player_ids = {r["player_id"] for r in existing_requests}
+
     # Get player details
     real_player_ids = [pid for pid in all_players if len(str(pid)) == 36] # Crude UUID check
     
@@ -173,7 +174,13 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
     r = get_redis_client()
     
     for player_id in all_players:
-        if player_id in existing_player_ids and not force:
+        # SKIP if player already responded
+        if player_id in responded_player_ids:
+            print(f"Skipping feedback for {player_id} - response already received.")
+            continue
+            
+        # SKIP if already invited and not forcing
+        if player_id in invited_player_ids and not force:
             continue
             
         player = player_map.get(player_id)
@@ -186,7 +193,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
 
         try:
             if not is_dry_run:
-                if player_id in existing_player_ids:
+                if player_id in invited_player_ids:
                     if force:
                         supabase.table("feedback_requests").update({
                             "initial_sent_at": get_now_utc().isoformat(),
