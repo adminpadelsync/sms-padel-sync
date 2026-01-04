@@ -221,12 +221,7 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
                 club_name = club_res.data[0]["name"]
         
         match_dt = parse_iso_datetime(match["scheduled_time"])
-        # Format: "Tuesday, Dec 23 @ 7pm"
-        # Ensure we display in club's local time
-        club_tz_str = get_club_timezone(club_id)
-        tz = pytz.timezone(club_tz_str)
-        local_dt = match_dt.astimezone(tz)
-        time_str = local_dt.strftime("%A, %b %-d @ %-I:%M %p").replace(":00", "")
+        time_str = format_sms_datetime(match_dt, club_id=club_id)
         
         message = msg.MSG_FEEDBACK_REQUEST.format(
             club_name=club_name,
@@ -305,8 +300,7 @@ def send_reminder_for_request(request: dict):
             club_name = club_res.data[0]["name"]
     
     match_time = parse_iso_datetime(match["scheduled_time"])
-    # Format: "Tuesday, Dec 23 @ 7pm"
-    time_str = match_time.strftime("%A, %b %-d @ %-I:%M %p").replace(":00", "")
+    time_str = format_sms_datetime(match_time, club_id=match.get("club_id"))
 
     message = f"""🎾 {club_name}: Reminder - We'd love your feedback on your match on {time_str}!
 
