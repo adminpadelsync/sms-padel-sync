@@ -195,7 +195,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                         supabase.table("group_memberships").insert(new_memberships).execute()
                 
                 clear_user_state(from_number)
-                send_sms(from_number, f"Welcome back to {get_club_name()}! I've updated your profile. All set! 🎾")
+                send_sms(from_number, msg.MSG_PROFILE_UPDATE_DONE.format(club_name=get_club_name()))
                 return
 
             # NEW PLAYER - Create record

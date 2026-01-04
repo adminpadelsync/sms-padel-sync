@@ -35,7 +35,8 @@ F) Weekend evenings
 G) Anytime
 
 Reply with letters for all that apply (example: ACD)."""
-MSG_PROFILE_SETUP_DONE = "You're all set with {club_name}! We'll text you when matches are available. Text 'PLAY' anytime to request a game."
+MSG_PROFILE_SETUP_DONE = "You're all set with {club_name}! If you're looking for a match, just tell me when you'd like to play (e.g., 'play tomorrow at 6pm'). You can also text 'COMMANDS' anytime to see all that I can do. 🎾"
+MSG_PROFILE_UPDATE_DONE = "Welcome back to {club_name}! I've updated your profile. If you're looking for a match, just tell me when you'd like to play. Text 'COMMANDS' anytime to see all available commands. 🎾"
 MSG_PROFILE_ERROR = "Something went wrong saving your profile. Please try again later."
 MSG_SYSTEM_ERROR = "System Error: No clubs configured. Please contact admin."
 
