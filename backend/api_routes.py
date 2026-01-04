@@ -953,9 +953,6 @@ async def bulk_delete_matches(request: BulkMatchDeleteRequest):
     except Exception as e:
         print(f"ERROR: Bulk delete failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Bulk delete failed: {str(e)}")
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/matches/{match_id}/feedback")
 async def get_match_feedback(match_id: str):

@@ -118,6 +118,10 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
     elif current_state == msg.STATE_WAITING_AVAILABILITY:
         body_upper = body.upper().strip()
         
+        name = state_data.get("name")
+        gender = state_data.get("gender")
+        level = float(state_data.get("level")) if state_data.get("level") else 0.0
+        
         # Default all to False
         avail_updates = {
             "avail_weekday_morning": False,
