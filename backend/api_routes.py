@@ -44,6 +44,8 @@ class MatchUpdateRequest(BaseModel):
     court_booked: Optional[bool] = None
     booked_court_text: Optional[str] = None
     notify_players: Optional[bool] = False
+    team_1_players: Optional[List[str]] = None
+    team_2_players: Optional[List[str]] = None
 
 class AddPlayerRequest(BaseModel):
     player_id: str
@@ -701,6 +703,10 @@ async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):
             updates['court_booked'] = request.court_booked
         if request.booked_court_text is not None:
             updates['booked_court_text'] = request.booked_court_text
+        if request.team_1_players is not None:
+            updates['team_1_players'] = request.team_1_players
+        if request.team_2_players is not None:
+            updates['team_2_players'] = request.team_2_players
         
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -808,10 +814,25 @@ async def trigger_score_recalculation():
 
 @router.post("/matches/{match_id}/feedback")
 async def trigger_match_feedback(match_id: str, force: bool = False):
-    """Manually trigger feedback SMS for a specific match (for testing)."""
+    """Manually trigger feedback SMS for a specific match (for testing/admin)."""
     try:
         from feedback_scheduler import trigger_feedback_for_match
         result = trigger_feedback_for_match(match_id, force=force)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/matches/{match_id}/result-nudge")
+async def trigger_result_nudge(match_id: str):
+    """Manually trigger a result request SMS for a specific match."""
+    try:
+        from result_nudge_scheduler import trigger_result_nudge_for_match
+        result = trigger_result_nudge_for_match(match_id)
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])
         return result
