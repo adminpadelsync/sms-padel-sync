@@ -445,11 +445,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, club
                     if confirmed:
                         response += "✅ CONFIRMED:\n"
                         for m in confirmed:
-                            try:
-                                dt = parse_iso_datetime(m['scheduled_time'])
-                                time_str = dt.strftime("%a, %b %d at %I:%M %p")
-                            except:
-                                time_str = m['scheduled_time']
+                            time_str = format_sms_datetime(parse_iso_datetime(m['scheduled_time']), club_id=club_id)
                             response += f"• {time_str}\n"
                             
                             # Add player names
@@ -465,11 +461,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, club
                     if pending_as_requester:
                         response += "⏳ YOUR PENDING REQUESTS:\n"
                         for m in pending_as_requester:
-                            try:
-                                dt = parse_iso_datetime(m['scheduled_time'])
-                                time_str = dt.strftime("%a, %b %d at %I:%M %p")
-                            except:
-                                time_str = m['scheduled_time']
+                            time_str = format_sms_datetime(parse_iso_datetime(m['scheduled_time']), club_id=club_id)
                             all_pids = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
                             count = len(all_pids)
                             response += f"• {time_str} ({count}/4 confirmed)\n"
@@ -486,11 +478,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, club
                     if pending_invites:
                         response += "📩 PENDING INVITES (reply with #):\n"
                         for i, m in enumerate(pending_invites, 1):
-                            try:
-                                dt = parse_iso_datetime(m['scheduled_time'])
-                                time_str = dt.strftime("%a, %b %d at %I:%M %p")
-                            except:
-                                time_str = m['scheduled_time']
+                            time_str = format_sms_datetime(parse_iso_datetime(m['scheduled_time']), club_id=club_id)
                             all_pids = (m.get("team_1_players") or []) + (m.get("team_2_players") or [])
                             count = len(all_pids)
                             response += f"{i}. {time_str} ({count}/4)\n"
@@ -563,8 +551,7 @@ def handle_incoming_sms(from_number: str, body: str, to_number: str = None, club
                 
                 m = confirmed_matches[0]
                 try:
-                    dt = parse_iso_datetime(m['scheduled_time'])
-                    time_str = dt.strftime("%A, %b %d at %I:%M %p")
+                    time_str = format_sms_datetime(parse_iso_datetime(m['scheduled_time']), club_id=club_id)
                 except:
                     time_str = m['scheduled_time']
                 

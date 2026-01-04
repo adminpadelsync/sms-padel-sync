@@ -251,11 +251,7 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
     match = match_result.data[0]
     
     # Format date for SMS
-    try:
-        dt = parse_iso_datetime(match['scheduled_time'])
-        formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
-    except:
-        formatted_time = match['scheduled_time']
+    formatted_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=match['club_id'])
     
     # Get already confirmed players
     confirmed_player_ids = (match.get('team_1_players') or []) + (match.get('team_2_players') or [])
@@ -419,11 +415,7 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
             phone = player.get('phone_number')
             
             # Format match time for message
-            try:
-                dt = parse_iso_datetime(match['scheduled_time'])
-                formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
-            except:
-                formatted_time = match['scheduled_time']
+            formatted_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=match['club_id'])
             
             if phone:
                 club_name = _get_club_name(match['club_id'])
