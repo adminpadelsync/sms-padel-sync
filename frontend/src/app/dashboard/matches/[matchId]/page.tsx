@@ -701,7 +701,7 @@ export default function MatchDetailPage() {
                             </div>
                         ) : match?.score_text ? (() => {
                             const scoreText = match.score_text
-                            const sets = scoreText.split(',').map(s => s.trim().split('-'))
+                            const sets = scoreText.split(/[,|\s]+/).filter(s => s.includes('-')).map(s => s.trim().split('-'))
                             return (
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-100">

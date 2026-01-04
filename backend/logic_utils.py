@@ -199,3 +199,24 @@ def format_sms_datetime(dt: datetime, club_id: str = None) -> str:
     time_str = time_str.replace(':00', '')
     
     return f"{day_str} @ {time_str}"
+
+def normalize_score(score_str: str) -> str:
+    """
+    Standardize match scores into a comma-separated format: '6-4, 6-2'.
+    Handles common formats from AI: '6-4 6-2', '6/4 6/2', '6-4, 6-2'.
+    """
+    if not score_str:
+        return ""
+    
+    # Replace slashes with dashes
+    score = score_str.replace('/', '-')
+    
+    # Split by common separators (comma, or space if preceded by digit and followed by digit)
+    # Using regex to find sets which look like "D-D"
+    import re
+    sets = re.findall(r'\d+-\d+', score)
+    
+    if sets:
+        return ", ".join(sets)
+    
+    return score_str # Fallback to original if we can't parse it

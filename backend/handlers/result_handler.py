@@ -4,7 +4,7 @@ import sms_constants as msg
 from logic.elo_service import update_match_elo
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-from logic_utils import get_now_utc
+from logic_utils import get_now_utc, normalize_score
 from logic.reasoner import resolve_names_with_ai
 
 def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any]):
@@ -193,7 +193,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     # 6. Update Match and Apply Elo
     try:
         supabase.table("matches").update({
-            "score_text": score,
+            "score_text": normalize_score(score),
             "winner_team": winner_team,
             "status": "completed",
             "team_1_players": team_1_players,

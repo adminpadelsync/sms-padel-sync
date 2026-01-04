@@ -6,8 +6,11 @@ import uuid
 import time
 from unittest.mock import MagicMock, patch
 
-# Add backend to path
-sys.path.append(os.path.join(os.getcwd(), 'backend'))
+# Add backend to path - detect automatically based on script location
+script_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(script_dir) # tests is a subfolder of backend
+if backend_dir not in sys.path:
+    sys.path.append(backend_dir)
 
 # --- 1. MOCKING INFRASTRUCTURE ---
 # Mock modules that require external connections or specific environments
@@ -68,6 +71,7 @@ class ScenarioTester:
             supabase.table("match_invites").delete().in_("match_id", match_ids).execute()
             supabase.table("feedback_requests").delete().in_("match_id", match_ids).execute()
             supabase.table("match_feedback").delete().in_("match_id", match_ids).execute()
+            supabase.table("player_rating_history").delete().in_("match_id", match_ids).execute()
             supabase.table("matches").delete().in_("match_id", match_ids).execute()
         
         # 2. Delete groups
