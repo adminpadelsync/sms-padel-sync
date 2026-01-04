@@ -108,13 +108,7 @@ def send_result_nudge_for_match(match: dict, is_manual: bool = False):
     if scheduled_iso:
         try:
             dt_utc = parse_iso_datetime(scheduled_iso)
-            # Ensure UTC aware
-            if not dt_utc.tzinfo:
-                dt_utc = dt_utc.replace(tzinfo=pytz.UTC)
-            
-            tz = pytz.timezone(timezone_str)
-            dt_local = dt_utc.astimezone(tz)
-            match_time_str = format_sms_datetime(dt_local)
+            match_time_str = format_sms_datetime(dt_utc, club_id=club_id)
         except Exception as e:
             print(f"Error formatting nudge time: {e}")
 

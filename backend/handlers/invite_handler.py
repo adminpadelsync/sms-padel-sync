@@ -204,7 +204,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 player_list = "\n".join(player_list_items) if player_list_items else "  - You!"
                 
                 # Format time logic
-                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']))
+                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']), club_id=updated_match['club_id'])
 
                 response_msg = (
                     f"✅ {get_club_name()}: You're in! ({new_player_count}/4 confirmed)\n"
@@ -253,7 +253,7 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 club_name = club.get("name", "the club")
                 
                 # Format the date/time nicely
-                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']))
+                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']), club_id=updated_match['club_id'])
                 
                 # Get all player names for the confirmation message
                 player_names = []

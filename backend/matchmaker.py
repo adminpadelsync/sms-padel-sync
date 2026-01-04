@@ -252,7 +252,7 @@ def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
         # Format time nicely
         try:
             scheduled_dt = parse_iso_datetime(match['scheduled_time'])
-            time_str = scheduled_dt.strftime("%a, %b %d at %I:%M %p")
+            time_str = format_sms_datetime(scheduled_dt, club_id=match.get("club_id"))
         except:
             time_str = match['scheduled_time']
         
@@ -415,7 +415,7 @@ def _check_match_deadpool(match_id: str):
         # Format time
         try:
             scheduled_dt = parse_iso_datetime(match['scheduled_time'])
-            time_str = scheduled_dt.strftime("%a at %I:%M %p")
+            time_str = format_sms_datetime(scheduled_dt, club_id=club_id)
         except:
             time_str = "your requested time"
 

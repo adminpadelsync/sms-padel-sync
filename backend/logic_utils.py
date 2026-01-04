@@ -163,13 +163,23 @@ def parse_iso_datetime(dt_str: str) -> datetime:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
 
-def format_sms_datetime(dt: datetime) -> str:
+def format_sms_datetime(dt: datetime, club_id: str = None) -> str:
     """
     Format a datetime for user-friendly SMS output.
     Example: 'Fri, Dec 26th @ 4pm'
+    If club_id is provided, localizes the datetime to the club's timezone.
     """
     if not dt:
         return "the scheduled time"
+    
+    # Localize if club_id is provided and dt is aware
+    if club_id and dt.tzinfo:
+        timezone_str = get_club_timezone(club_id)
+        try:
+            local_tz = pytz.timezone(timezone_str)
+            dt = dt.astimezone(local_tz)
+        except Exception as e:
+            print(f"Error localizing for SMS: {e}")
         
     day = dt.day
     if 11 <= day <= 13:

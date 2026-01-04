@@ -209,7 +209,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
     gender_preference = player_gender if player_gender in ["male", "female"] else "mixed"
     
     # Format for display
-    friendly_time = format_sms_datetime(parse_iso_datetime(iso_format))
+    friendly_time = format_sms_datetime(parse_iso_datetime(iso_format), club_id=player.get("club_id"))
     confirm_msg = msg.MSG_CONFIRM_DATE_WITH_PREFS.format(
         club_name=get_club_name(),
         time=friendly_time,
@@ -285,7 +285,7 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         
         confirm_msg = msg.MSG_CONFIRM_DATE_WITH_PREFS.format(
             club_name=get_club_name(),
-            time=scheduled_time_human,
+            time=format_sms_datetime(parse_iso_datetime(scheduled_time_iso), club_id=player.get("club_id")),
             level=player_level,
             range=range_display,
             gender=gender_display
@@ -389,7 +389,8 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
             gender_preference=None,  # No gender filter
             target_group_id=target_group_id,
             skip_filters=True,
-            group_name=group_name
+            group_name=group_name,
+            friendly_time=format_sms_datetime(parse_iso_datetime(scheduled_time_iso), club_id=player.get("club_id"))
         )
         return
     
@@ -664,7 +665,7 @@ def notify_players_of_booking(match_id: str, court_text: str):
     all_pids = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
     
     # Format time
-    friendly_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']))
+    friendly_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=club_id)
     
     # Get club name
     club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
