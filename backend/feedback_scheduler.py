@@ -12,7 +12,10 @@ Configurable per club:
 
 from datetime import datetime, timedelta
 from database import supabase
-from logic_utils import get_club_settings, is_quiet_hours, get_club_timezone, parse_iso_datetime, get_now_utc
+from logic_utils import (
+    get_club_settings, is_quiet_hours, get_club_timezone, 
+    parse_iso_datetime, get_now_utc, format_sms_datetime
+)
 import sms_constants as msg
 from redis_client import get_redis_client
 import json
