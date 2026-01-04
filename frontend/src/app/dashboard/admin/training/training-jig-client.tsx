@@ -5,13 +5,11 @@ import {
     Send,
     CheckCircle2,
     XCircle,
-    User,
     BrainCircuit,
     History,
     Save,
     RotateCcw,
     AlertCircle,
-    ChevronRight,
     MessageSquare,
     Users,
     Zap,
@@ -25,10 +23,6 @@ interface Player {
     declared_skill_level: number
 }
 
-interface Club {
-    club_id: string
-    name: string
-}
 
 interface Message {
     role: 'user' | 'assistant'
@@ -36,7 +30,7 @@ interface Message {
     timestamp: Date
     intent?: string
     confidence?: number
-    entities?: any
+    entities?: Record<string, unknown>
     reasoning?: string
     isCorrect?: boolean
     correction?: {
@@ -48,12 +42,14 @@ interface Message {
 interface GoldenSample {
     name: string
     initial_state: string
-    steps: any[]
+    steps: Record<string, unknown>[]
 }
 
-export default function TrainingJigClient() {
-    const [clubs, setClubs] = useState<Club[]>([])
-    const [selectedClubId, setSelectedClubId] = useState<string>('')
+interface TrainingJigClientProps {
+    userClubId: string | null
+}
+
+export default function TrainingJigClient({ userClubId }: TrainingJigClientProps) {
     const [players, setPlayers] = useState<Player[]>([])
     const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([])
     const [activePlayerId, setActivePlayerId] = useState<string | null>(null)
@@ -70,13 +66,12 @@ export default function TrainingJigClient() {
     const [correctedResponse, setCorrectedResponse] = useState('')
 
     useEffect(() => {
-        fetchClubs()
         fetchGoldenSamples()
     }, [])
 
     useEffect(() => {
-        if (selectedClubId) {
-            fetchPlayers(selectedClubId)
+        if (userClubId) {
+            fetchPlayers(userClubId)
         } else {
             setPlayers([])
         }
@@ -84,27 +79,12 @@ export default function TrainingJigClient() {
         setConversations({})
         setSelectedPlayerIds([])
         setActivePlayerId(null)
-    }, [selectedClubId])
+    }, [userClubId])
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [conversations, activePlayerId])
 
-    const fetchClubs = async () => {
-        try {
-            const response = await fetch('/api/clubs')
-            if (response.ok) {
-                const data = await response.json()
-                const activeClubs = data.clubs || []
-                setClubs(activeClubs)
-                if (activeClubs.length > 0 && !selectedClubId) {
-                    setSelectedClubId(activeClubs[0].club_id)
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching clubs:', error)
-        }
-    }
 
     const fetchPlayers = async (clubId: string) => {
         try {
@@ -163,7 +143,7 @@ export default function TrainingJigClient() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     player_id: activePlayerId,
-                    club_id: selectedClubId,
+                    club_id: userClubId,
                     message: msgText,
                     history: history,
                     golden_samples: goldenSamples.slice(0, 3)
@@ -175,7 +155,7 @@ export default function TrainingJigClient() {
             if (data.responses) {
                 const assistantMsg: Message = {
                     role: 'assistant',
-                    text: data.responses.map((r: any) => r.body).join('\n'),
+                    text: data.responses.map((r: { body: string }) => r.body).join('\n'),
                     timestamp: new Date(),
                     intent: data.intent,
                     confidence: data.confidence,
@@ -242,13 +222,13 @@ export default function TrainingJigClient() {
                     event_type: type,
                     match_id: "SIM_MATCH_123",
                     player_ids: selectedPlayerIds,
-                    club_id: selectedClubId
+                    club_id: userClubId
                 })
             })
             const data = await res.json()
             if (data.responses) {
                 const newConversations = { ...conversations }
-                data.responses.forEach((r: any) => {
+                data.responses.forEach((r: { to: string; body: string }) => {
                     const p = players.find(pl => pl.phone_number === r.to)
                     if (p && selectedPlayerIds.includes(p.player_id)) {
                         newConversations[p.player_id] = [
@@ -344,16 +324,10 @@ export default function TrainingJigClient() {
 
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 mr-4">
-                        <span className="text-xs font-bold text-slate-500 uppercase">Club</span>
-                        <select
-                            value={selectedClubId}
-                            onChange={(e) => setSelectedClubId(e.target.value)}
-                            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-indigo-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                            {clubs.map(c => (
-                                <option key={c.club_id} value={c.club_id}>{c.name}</option>
-                            ))}
-                        </select>
+                        <span className="text-xs font-bold text-slate-500 uppercase">Context Club ID:</span>
+                        <span className="text-xs font-mono text-indigo-300 bg-slate-800 px-2 py-1 rounded">
+                            {userClubId || 'None'}
+                        </span>
                     </div>
 
                     <button
@@ -411,14 +385,14 @@ export default function TrainingJigClient() {
                                 disabled={!activePlayerId || loading}
                                 className="w-full text-left p-2 rounded-lg hover:bg-slate-800 text-xs text-slate-400 transition-colors border border-slate-800/50"
                             >
-                                Send: "Play Friday @ 6pm"
+                                Send: &quot;Play Friday @ 6pm&quot;
                             </button>
                             <button
                                 onClick={() => sendMessage("Yes, count me in!")}
                                 disabled={!activePlayerId || loading}
                                 className="w-full text-left p-2 rounded-lg hover:bg-slate-800 text-xs text-slate-400 transition-colors border border-slate-800/50"
                             >
-                                Send: "Yes, count me in!"
+                                Send: &quot;Yes, count me in!&quot;
                             </button>
                             <hr className="border-slate-800 my-2" />
                             <button
@@ -511,7 +485,7 @@ export default function TrainingJigClient() {
                                                         CORRECTION
                                                     </div>
                                                     <p><span className="text-rose-400/70">Should be:</span> {msg.correction.intent}</p>
-                                                    <p className="mt-1 font-medium italic text-slate-300">"{msg.correction.text}"</p>
+                                                    <p className="mt-1 font-medium italic text-slate-300">&quot;{msg.correction.text}&quot;</p>
                                                 </div>
                                             )}
                                         </div>

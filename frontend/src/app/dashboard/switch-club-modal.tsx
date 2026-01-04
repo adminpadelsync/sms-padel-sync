@@ -18,7 +18,6 @@ export function SwitchClubModal({ isOpen, onClose, clubs, currentClubId }: Switc
     const handleSwitch = () => {
         setIsSwitching(true)
         // Set persistence
-        localStorage.setItem('selectedClubId', selectedId)
         document.cookie = `operating_club_id=${selectedId}; path=/; max-age=31536000`
 
         // Force full reload to ensure server context is updated

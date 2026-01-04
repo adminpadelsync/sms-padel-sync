@@ -230,6 +230,12 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                     "status": "confirmed", 
                     "confirmed_at": get_now_utc().isoformat()
                 }).eq("match_id", match_id).execute()
+
+                # Mark all other invites for this match as expired so they don't show up in dashboard/refills
+                supabase.table("match_invites").update({"status": "expired"})\
+                    .eq("match_id", match_id)\
+                    .in_("status", ["sent", "pending_sms"])\
+                    .execute()
                 
                 # Fetch updated match for player list and time
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]

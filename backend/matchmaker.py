@@ -11,7 +11,7 @@ BATCH_SIZE = 6  # Number of invites to send at a time
 INVITE_TIMEOUT_MINUTES = 15  # Time before invite expires
 
 
-def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False):
+def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False, target_player_ids: list[str] = None):
     """
     Finds compatible players for a match and sends SMS invites in batches.
     
@@ -20,6 +20,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
         batch_number: Which batch this is (for tracking)
         max_invites: Override for number of invites (used for replacements)
         skip_filters: If True, skip level/gender filtering (used for group invites)
+        target_player_ids: If provided, only invite these specific players (Admin UI path)
     
     Returns:
         Number of invites sent
@@ -34,10 +35,11 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     match = match_res.data[0]
     club_id = match.get("club_id")
 
-    # Proactive invites should be blocked during quiet hours
-    if is_quiet_hours(club_id):
-        print(f"[QUIET HOURS] Skipping proactive invites for club {club_id}")
-        return -2  # Special code for quiet hours
+    # Quiet hours check
+    is_quiet = is_quiet_hours(club_id)
+    if is_quiet:
+        print(f"[QUIET HOURS] Deferring invites for club {club_id} (pending_sms mode)")
+        # We continue to create the records, but they will have status 'pending_sms'
     
     # Check if match is still pending/active
     if match["status"] not in ["pending", "voting"]:
@@ -79,7 +81,12 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
     member_ids = [m["player_id"] for m in (members_res.data or [])]
     
-    candidates_res = supabase.table("players").select("*").in_("player_id", member_ids).eq("active_status", True).execute()
+    if target_player_ids:
+        # Use specific players provided by Admin
+        candidates_res = supabase.table("players").select("*").in_("player_id", target_player_ids).execute()
+    else:
+        # Standard filter logic
+        candidates_res = supabase.table("players").select("*").in_("player_id", member_ids).eq("active_status", True).execute()
     
     # Filter by Group if applicable
     target_group_id = match.get("target_group_id")
@@ -198,55 +205,62 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     for p in sorted_candidates[:invite_limit]:
         # Create Invite with expiration and SCORES
+        # If quiet hours, status is 'pending_sms'
+        invite_status = "pending_sms" if is_quiet else "sent"
+        
         invite_data = {
             "match_id": match_id,
             "player_id": p["player_id"],
-            "status": "sent",
+            "status": invite_status,
             "sent_at": get_now_utc().isoformat(),
-            "expires_at": expires_at,
+            "expires_at": expires_at if not skip_filters else None,
             "batch_number": batch_number,
             "invite_score": p.get("_invite_score"),
             "score_breakdown": p.get("_score_breakdown")
         }
         supabase.table("match_invites").insert(invite_data).execute()
         
-        # Send SMS
-        if match["status"] == "voting":
-            options = match.get("voting_options", [])
-            opt_str = ""
-            for i, opt in enumerate(options):
-                dt = parse_iso_datetime(opt)
-                time_str = dt.strftime("%H:%M")
-                opt_str += f"{chr(65+i)}) {time_str}\n"
+        if not is_quiet:
+            sms_msg = _build_invite_sms(match, requester, club_name)
+            send_sms(p["phone_number"], sms_msg, club_id=club_id)
             
-            sms_msg = (
-                f"🎾 {club_name}: {requester['name']} wants to play on {parse_iso_datetime(options[0]).strftime('%A')}.\n"
-                f"Options:\n{opt_str}"
-                f"Reply with letter(s) (e.g. 'A' or 'AB') to vote."
-            )
-        else:
-            # Format time nicely
-            try:
-                scheduled_dt = parse_iso_datetime(match['scheduled_time'])
-                time_str = scheduled_dt.strftime("%a, %b %d at %I:%M %p")
-            except:
-                time_str = match['scheduled_time']
-            
-            sms_msg = (
-                f"🎾 {club_name}: {requester['name']} ({requester['declared_skill_level']}) wants to play "
-                f"{time_str}.\n"
-                f"Reply YES to join, NO to decline, or MUTE to pause invites today."
-            )
-        
-        send_sms(p["phone_number"], sms_msg, club_id=club_id)
-        
-        # CLEAR STATE so they don't get stuck in old feedback loops
-        clear_user_state(p["phone_number"])
+            # CLEAR STATE so they don't get stuck in old feedback loops
+            clear_user_state(p["phone_number"])
         
         invite_count += 1
-        print(f"Invited {p['name']} ({p['phone_number']}) - Score: {p.get('_invite_score')}")
+        print(f"{'Created' if is_quiet else 'Invited'} {p['name']} ({p['phone_number']}) - Status: {invite_status}")
     
     return invite_count
+
+
+def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
+    """Helper to build the SMS invite body."""
+    if match["status"] == "voting":
+        options = match.get("voting_options", [])
+        opt_str = ""
+        for i, opt in enumerate(options):
+            dt = parse_iso_datetime(opt)
+            time_str = dt.strftime("%H:%M")
+            opt_str += f"{chr(65+i)}) {time_str}\n"
+        
+        return (
+            f"🎾 {club_name}: {requester['name']} wants to play on {parse_iso_datetime(options[0]).strftime('%A')}.\n"
+            f"Options:\n{opt_str}"
+            f"Reply with letter(s) (e.g. 'A' or 'AB') to vote."
+        )
+    else:
+        # Format time nicely
+        try:
+            scheduled_dt = parse_iso_datetime(match['scheduled_time'])
+            time_str = scheduled_dt.strftime("%a, %b %d at %I:%M %p")
+        except:
+            time_str = match['scheduled_time']
+        
+        return (
+            f"🎾 {club_name}: {requester['name']} ({requester['declared_skill_level']}) wants to play "
+            f"{time_str}.\n"
+            f"Reply YES to join, NO to decline, or MUTE to pause invites today."
+        )
 
 
 def invite_replacement_player(match_id: str, count: int = 1):
@@ -269,54 +283,72 @@ def invite_replacement_player(match_id: str, count: int = 1):
     return sent
 
 
-def process_expired_invites():
+def process_batch_refills():
     """
-    Process invites that have timed out (15 minutes).
+    Find invites that have timed out (15 minutes) but haven't triggered a refill yet.
+    Triggers the next batch while keeping existing ones valid.
     Called by cron job every 5 minutes.
     """
-    print("Processing expired invites...")
+    print("Processing batch refills...")
     
     now = get_now_utc().isoformat()
     
-    # Find expired sent invites
-    # Use explicit UTC comparison if possible, or ensure 'now' is interpreted correctly
-    expired = supabase.table("match_invites").select("invite_id, match_id, player_id").eq("status", "sent").filter("expires_at", "lt", now).execute()
+    # Find sent invites that have passed their expires_at and haven't been refilled
+    # We only refill if refilled_at is NULL
+    stale_invites = supabase.table("match_invites").select("invite_id, match_id, player_id, batch_number")\
+        .eq("status", "sent")\
+        .filter("expires_at", "lt", now)\
+        .is_("refilled_at", "null")\
+        .execute()
     
-    if not expired.data:
-        print("No expired invites found.")
+    if not stale_invites.data:
+        print("No stale invites needing refill found.")
         return 0
     
-    print(f"Found {len(expired.data)} expired invites.")
+    print(f"Found {len(stale_invites.data)} stale invites.")
     
-    # Group by match
+    # Group by match and find the latest batch number per match
     matches_to_refill = {}
-    for inv in expired.data:
+    invites_to_mark_refilled = []
+    
+    for inv in stale_invites.data:
         match_id = inv["match_id"]
+        # Skip if quiet hours for this match's club
+        match_res = supabase.table("matches").select("club_id").eq("match_id", match_id).execute()
+        if match_res.data:
+            club_id = match_res.data[0].get("club_id")
+            if is_quiet_hours(club_id):
+                continue
+        
         if match_id not in matches_to_refill:
             matches_to_refill[match_id] = 0
+            
         matches_to_refill[match_id] += 1
-        
-        # Mark as expired
-        supabase.table("match_invites").update({"status": "expired"}).eq("invite_id", inv["invite_id"]).execute()
+        invites_to_mark_refilled.append(inv["invite_id"])
     
-    # Send replacement invites for each affected match
+    if not matches_to_refill:
+        return 0
+
+    # Mark these invites as refilled so they don't trigger again
+    if invites_to_mark_refilled:
+        supabase.table("match_invites").update({"refilled_at": get_now_utc().isoformat()})\
+            .in_("invite_id", invites_to_mark_refilled).execute()
+    
+    # Send refill invites for each affected match
     total_new_invites = 0
-    for match_id, expired_count in matches_to_refill.items():
+    for match_id, stale_count in matches_to_refill.items():
         # Check if match is still pending
         match_res = supabase.table("matches").select("status").eq("match_id", match_id).execute()
         if match_res.data and match_res.data[0]["status"] in ["pending", "voting"]:
-            # Get current batch number
-            latest_invite = supabase.table("match_invites").select("batch_number").eq("match_id", match_id).order("sent_at", desc=True).limit(1).execute()
-            batch_number = 1
-            if latest_invite.data:
-                batch_number = latest_invite.data[0].get("batch_number", 1) + 1
+            # Trigger next batch
+            latest_inv = supabase.table("match_invites").select("batch_number").eq("match_id", match_id).order("sent_at", desc=True).limit(1).execute()
+            next_batch = (latest_inv.data[0]["batch_number"] + 1) if latest_inv.data else 1
             
-            new_invites = find_and_invite_players(match_id, batch_number=batch_number, max_invites=expired_count)
+            new_invites = find_and_invite_players(match_id, batch_number=next_batch, max_invites=stale_count)
             total_new_invites += new_invites
-            print(f"Sent {new_invites} replacement invites for match {match_id}")
+            print(f"Triggered batch {next_batch} for match {match_id} ({new_invites} new invites)")
             
-            # If we couldn't find enough replacements, check for deadpool
-            if new_invites < expired_count:
+            if new_invites < stale_count:
                 _check_match_deadpool(match_id)
     
     return total_new_invites
@@ -407,54 +439,86 @@ def _check_match_deadpool(match_id: str):
 
 def process_pending_matches():
     """
-    Find matches that are pending/voting but have no active invites
-    (likely due to quiet hours or initial creation) and send invites.
+    1. Finds matches that are pending/voting but have NO invites at all and starts them.
+    2. Finds 'pending_sms' invites and dispatches them if quiet hours are over.
     """
-    print("Processing pending matches for invites...")
+    print("Processing pending invitations and quiet-hour catch-ups...")
     
-    # Find matches in pending/voting status
+    # --- Part 1: Dispatch pending_sms invites ---
+    # Find all pending_sms invites
+    pending_invites = supabase.table("match_invites").select("*, players(phone_number, name)").eq("status", "pending_sms").execute()
+    
+    total_dispatched = 0
+    if pending_invites.data:
+        # Group by match to avoid repeated match/requester lookups
+        matches_cache = {}
+        for inv in pending_invites.data:
+            match_id = inv["match_id"]
+            
+            # Fetch match/club details if not in cache
+            if match_id not in matches_cache:
+                m_res = supabase.table("matches").select("*, clubs(name)").eq("match_id", match_id).execute()
+                if not m_res.data: continue
+                m_data = m_res.data[0]
+                club_id = m_data.get("club_id")
+                
+                # Check quiet hours
+                if is_quiet_hours(club_id):
+                    continue
+                
+                # Get requester
+                req_id = m_data["team_1_players"][0]
+                req_res = supabase.table("players").select("*").eq("player_id", req_id).execute()
+                if not req_res.data: continue
+                
+                matches_cache[match_id] = {
+                    "match": m_data,
+                    "requester": req_res.data[0],
+                    "club_name": m_data.get("clubs", {}).get("name") or "the club"
+                }
+
+            # If we reach here, we can dispatch
+            m_info = matches_cache[match_id]
+            p_data = inv.get("players")
+            if not p_data: continue
+
+            # Build and send SMS
+            sms_msg = _build_invite_sms(m_info["match"], m_info["requester"], m_info["club_name"])
+            if send_sms(p_data["phone_number"], sms_msg, club_id=m_info["match"].get("club_id")):
+                # Update status to 'sent' and refresh expires_at
+                # Use club settings for timeout
+                invite_timeout = INVITE_TIMEOUT_MINUTES
+                club_res = supabase.table("clubs").select("settings").eq("club_id", m_info["match"].get("club_id")).execute()
+                if club_res.data:
+                    invite_timeout = (club_res.data[0].get("settings") or {}).get("invite_timeout_minutes", INVITE_TIMEOUT_MINUTES)
+                
+                new_expires_at = (get_now_utc() + timedelta(minutes=invite_timeout)).isoformat()
+                
+                supabase.table("match_invites").update({
+                    "status": "sent",
+                    "sent_at": get_now_utc().isoformat(),
+                    "expires_at": new_expires_at
+                }).eq("invite_id", inv["invite_id"]).execute()
+                
+                clear_user_state(p_data["phone_number"])
+                total_dispatched += 1
+                
+                # Notify originator once per match if this is the first dispatch
+                # (Can implement a flag in match or just check if it's the first invite in this batch)
+
+    # --- Part 2: Start matches with NO invites ---
     matches = supabase.table("matches").select("match_id, status").in_("status", ["pending", "voting"]).execute()
     
-    if not matches.data:
-        return 0
-        
-    total_invites = 0
-    for match in matches.data:
-        match_id = match["match_id"]
-        club_id = match.get("club_id")
-        
-        # Check if there are any active (sent) invites
-        active_invites = supabase.table("match_invites").select("invite_id").eq("match_id", match_id).eq("status", "sent").execute()
-        
-        if not active_invites.data:
-            # If no active invites, try to invite players
-            # We use batch 1 since it's likely the first attempt or restart
-            invites = find_and_invite_players(match_id, batch_number=1)
-            total_invites += invites
-            if invites > 0:
-                print(f"Sent {invites} catch-up invites for match {match_id}")
-                
-                # Notify originator that we've started the process (as requested by user)
-                originator_id = match.get("originator_id")
-                if originator_id:
-                    orig_res = supabase.table("players").select("phone_number").eq("player_id", originator_id).execute()
-                    if orig_res.data:
-                        # Get club name
-                        club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
-                        c_name = club_res.data[0]["name"] if club_res.data else "the club"
-                        
-                        # Get match time
-                        m_res = supabase.table("matches").select("scheduled_time").eq("match_id", match_id).execute()
-                        try:
-                            st = parse_iso_datetime(m_res.data[0]["scheduled_time"])
-                            time_str = format_sms_datetime(st)
-                        except:
-                            time_str = "your requested time"
+    total_new_starts = 0
+    if matches.data:
+        for match in matches.data:
+            match_id = match["match_id"]
+            # Check if there are any invites at all
+            all_inv_res = supabase.table("match_invites").select("invite_id").eq("match_id", match_id).execute()
+            if not all_inv_res.data:
+                # No invites, try to start
+                invites = find_and_invite_players(match_id, batch_number=1)
+                total_new_starts += (1 if invites > 0 else 0)
 
-                        notify_msg = msg.MSG_QUIET_HOURS_RESUMED.format(
-                            club_name=c_name,
-                            time=time_str
-                        )
-                        send_sms(orig_res.data[0]["phone_number"], notify_msg, club_id=club_id)
-                
-    return total_invites
+    print(f"Catch-up complete: {total_dispatched} SMS dispatched, {total_new_starts} new matches started.")
+    return total_dispatched + total_new_starts

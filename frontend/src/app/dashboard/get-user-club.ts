@@ -55,9 +55,23 @@ export async function getUserClub(): Promise<UserClub | null> {
         const operatingClubId = cookieStore.get('operating_club_id')?.value
         if (operatingClubId) {
             finalClubId = operatingClubId
-            // Note: We aren't fetching the name for the cookie-overridden club here, 
-            // but it shouldn't block main functionality as ID is primary.
-            // Client components usually have the list of clubs to look up name.
+            // Fetch the name for the overridden club
+            const { data: overriddenClub } = await supabase
+                .from('clubs')
+                .select('name, timezone')
+                .eq('club_id', operatingClubId)
+                .single()
+
+            if (overriddenClub) {
+                finalClubName = overriddenClub.name
+                return {
+                    club_id: finalClubId,
+                    club_name: finalClubName,
+                    club_timezone: overriddenClub.timezone || null,
+                    is_superuser: data.is_superuser,
+                    role: data.role
+                }
+            }
         }
     }
 

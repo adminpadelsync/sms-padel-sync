@@ -41,11 +41,9 @@ interface PlayerDetail {
 
 interface MatchesClientProps {
     initialMatches: Match[]
-    isSuperuser: boolean
     userClubId: string | null
-    clubs: { club_id: string; name: string; timezone?: string }[]
     userId: string
-    userClubTimezone: string | null
+    userClubTimezone?: string
 }
 
 // Format date with day of week in a specific timezone: "Mon, Dec 16, 4:00 PM"
@@ -75,60 +73,34 @@ function formatPhoneNumber(phone: string): string {
 
 export function MatchesClient({
     initialMatches,
-    isSuperuser,
     userClubId,
-    clubs,
     userId,
     userClubTimezone
 }: MatchesClientProps) {
-    const [mounted, setMounted] = useState(false)
-    const [selectedClubId, setSelectedClubId] = useState<string>(() => {
-        if (isSuperuser) {
-            return userClubId || clubs[0]?.club_id || ''
-        }
-        return userClubId || ''
-    })
     const [showOlderMatches, setShowOlderMatches] = useState(false)
     const [localMatches, setLocalMatches] = useState<Match[]>(initialMatches)
     const [markingBookedId, setMarkingBookedId] = useState<string | null>(null)
+    const [resendingId, setResendingId] = useState<string | null>(null)
 
     // Update local matches if initialMatches changes
     useEffect(() => {
         setLocalMatches(initialMatches)
     }, [initialMatches])
 
-    // After mount, check localStorage for saved club selection
-    const [resendingId, setResendingId] = useState<string | null>(null)
-
-    // ... (keep existing localStorage effect)
-    useEffect(() => {
-        setMounted(true)
-        if (isSuperuser && typeof window !== 'undefined') {
-            const stored = localStorage.getItem('selectedClubId')
-            if (stored && clubs.find(c => c.club_id === stored)) {
-                setSelectedClubId(stored)
-            }
-        }
-    }, [isSuperuser, clubs])
-
-    // Filter matches ...
-    let filteredMatches = isSuperuser && mounted
-        ? localMatches.filter(m => m.club_id === selectedClubId)
-        : isSuperuser
-            ? localMatches.filter(m => m.club_id === (userClubId || clubs[0]?.club_id))
-            : localMatches
+    // Filter matches
+    let filteredMatches = localMatches.filter((m: Match) => m.club_id === userClubId)
 
     if (!showOlderMatches) {
         const yesterday = new Date()
         yesterday.setDate(yesterday.getDate() - 1)
         yesterday.setHours(0, 0, 0, 0)
 
-        filteredMatches = filteredMatches.filter(m =>
+        filteredMatches = filteredMatches.filter((m: Match) =>
             new Date(m.scheduled_time) >= yesterday
         )
     }
 
-    filteredMatches = filteredMatches.sort((a, b) =>
+    filteredMatches = filteredMatches.sort((a: Match, b: Match) =>
         new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime()
     )
 
@@ -159,8 +131,7 @@ export function MatchesClient({
         e.stopPropagation()
         if (!userClubId) return
 
-        // 1. Check if match is confirmed
-        const match = localMatches.find(m => m.match_id === matchId)
+        const match = localMatches.find((m: Match) => m.match_id === matchId)
         if (match && match.status !== 'confirmed') {
             const proceed = window.confirm(
                 "Warning: This match is not confirmed yet (needs 4 players). " +
@@ -169,7 +140,6 @@ export function MatchesClient({
             if (!proceed) return
         }
 
-        // Prompt for court details
         const matchTime = match ? formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined) : 'this match'
         const courtText = window.prompt(
             `Marking match on ${matchTime} as booked.\n\n` +
@@ -177,7 +147,6 @@ export function MatchesClient({
             ""
         )
 
-        // If user cancels the prompt, don't proceed
         if (courtText === null) return
 
         setMarkingBookedId(matchId)
@@ -196,43 +165,40 @@ export function MatchesClient({
                 throw new Error(errorData.detail || 'Failed to mark as booked')
             }
 
-            // Update local state
-            setLocalMatches(prev => prev.map(m =>
+            setLocalMatches((prev: Match[]) => prev.map((m: Match) =>
                 m.match_id === matchId ? {
                     ...m,
                     court_booked: true,
                     booked_court_text: courtText || m.booked_court_text
                 } : m
             ))
-        } catch (err: any) {
-            console.error(err)
-            alert(`Error: ${err.message || 'Could not mark match as booked'}. \n\nTip: Make sure you have applied the SQL migration in Supabase!`)
+        } catch (err) {
+            const error = err as Error
+            console.error(error)
+            alert(`Error: ${error.message || 'Could not mark match as booked'}.`)
         } finally {
             setMarkingBookedId(null)
         }
     }
 
-    // Matches that need booking: confirmed/pending, future, not booked
     const now = new Date()
-    const bookingNeededMatches = filteredMatches.filter(m =>
+    const bookingNeededMatches = filteredMatches.filter((m: Match) =>
         !m.court_booked &&
         (m.status === 'confirmed' || m.status === 'pending') &&
         new Date(m.scheduled_time) > now
-    ).sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
+    ).sort((a: Match, b: Match) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
 
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Header */}
                 <div className="mb-8 flex justify-between items-center">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Matches</h1>
                         <p className="mt-1 text-sm text-gray-500">Manage and view all matches</p>
                     </div>
-                    <CreateMatchButton clubId={selectedClubId} />
+                    <CreateMatchButton clubId={userClubId || ''} />
                 </div>
 
-                {/* Court Booking To-Do List (Only for unbooked future matches) */}
                 {bookingNeededMatches.length > 0 && (
                     <div className="mb-8">
                         <div className="flex items-center gap-2 mb-4">
@@ -267,7 +233,6 @@ export function MatchesClient({
                                     </div>
 
                                     <div className="space-y-3">
-                                        {/* Originator Callout */}
                                         {match.originator && (
                                             <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
                                                 <p className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">Originator</p>
@@ -278,7 +243,6 @@ export function MatchesClient({
                                             </div>
                                         )}
 
-                                        {/* Player List */}
                                         <div className="grid grid-cols-2 gap-2">
                                             {[...(match.team_1_details || []), ...(match.team_2_details || [])].map((p, i) => (
                                                 <div key={i} className="text-[11px] p-2 bg-gray-50 rounded border border-gray-100">
@@ -297,7 +261,6 @@ export function MatchesClient({
                     </div>
                 )}
 
-                {/* Matches Table */}
                 <div className="bg-white shadow-sm rounded-lg border border-gray-200">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                         <label className="flex items-center gap-2 text-sm text-gray-600">
@@ -325,7 +288,6 @@ export function MatchesClient({
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredMatches && filteredMatches.length > 0 ? (
                                     filteredMatches.map((match) => {
-                                        // Parse scores
                                         const sets = match.score_text
                                             ? match.score_text.split(',').map(s => {
                                                 const parts = s.trim().split('-')
@@ -333,16 +295,10 @@ export function MatchesClient({
                                             })
                                             : []
 
-                                        // Pad to 3 sets for alignment if needed, or just use what we have
-                                        // The design shows S1, S2, S3 columns always? 
-                                        // Let's stick to dynamic sets for now, but usually it's 2 or 3.
-
                                         const winner = match.winner_team
 
-                                        // Helper to render the scorecard
                                         const renderScorecard = () => (
                                             <div className="border border-gray-200 rounded-lg overflow-hidden text-sm bg-white w-full max-w-md">
-                                                {/* Header */}
                                                 <div className="flex border-b border-gray-100 bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                                     <div className="flex-1 px-3 py-1">Team</div>
                                                     {sets.length > 0 ? sets.map((_, i) => (
@@ -352,7 +308,6 @@ export function MatchesClient({
                                                     )}
                                                 </div>
 
-                                                {/* Team Rows */}
                                                 {[1, 2].map((teamNum) => {
                                                     const isWinner = winner === teamNum
                                                     const players = teamNum === 1 ? match.team_1_details : match.team_2_details
@@ -361,9 +316,8 @@ export function MatchesClient({
                                                     return (
                                                         <div
                                                             key={teamNum}
-                                                            className={`flex items-center border-b last:border-0 border-gray-50 ${isWinner ? 'bg-[#F0FDF4]' : 'bg-white'}`}
+                                                            className={`flex items-center border-b last:border-0 border-gray-50 ${isWinner ? 'bg-green-50' : 'bg-white'}`}
                                                         >
-                                                            {/* Players */}
                                                             <div className="flex-1 px-3 py-2 min-w-0">
                                                                 <div className="flex flex-col gap-0.5">
                                                                     {players && players.length > 0 ? players.map(p => (
@@ -378,7 +332,6 @@ export function MatchesClient({
                                                                 </div>
                                                             </div>
 
-                                                            {/* Winner Checkmark */}
                                                             {isWinner && (
                                                                 <div className="pr-2">
                                                                     <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -387,9 +340,8 @@ export function MatchesClient({
                                                                 </div>
                                                             )}
 
-                                                            {/* Scores */}
                                                             {sets.length > 0 ? sets.map((set, i) => {
-                                                                const score = set[teamNum - 1] // 0 or 1 index
+                                                                const score = set[teamNum - 1]
                                                                 const otherScore = set[teamNum === 1 ? 1 : 0]
                                                                 const setWon = parseInt(score) > parseInt(otherScore)
 
@@ -442,10 +394,8 @@ export function MatchesClient({
                                                     </div>
                                                 </td>
 
-                                                {/* Replaced merged columns with Mini Scorecard */}
                                                 <td className="px-6 py-4 align-top w-1/3 min-w-[300px]" colSpan={2}>
                                                     {match.score_text ? renderScorecard() : (
-                                                        // Fallback for matches without scores: Just list players
                                                         <div className="space-y-1">
                                                             <div className="text-xs text-gray-900">
                                                                 {match.team_1_details?.map(p => p.name).join(' / ') || 'Team 1'}

@@ -138,112 +138,14 @@ def initiate_match_outreach(
     match = match_result.data[0]
     match_id = match['match_id']
     
-    # 2. Create invites ONLY for the players who need to be invited (not initial players)
-    invites = []
-    for pid in player_ids:
-        invites.append({
-            "match_id": match_id,
-            "player_id": pid,
-            "status": "sent",
-            "sent_at": get_now_utc().isoformat()
-        })
-        
-    if invites:
-        supabase.table("match_invites").insert(invites).execute()
-        
-    # 3. Fetch player details to get phone numbers for sending SMS
-    if player_ids:
-        # We need to fetch the players to get their phone numbers
-        # Supabase client doesn't support 'in' with a list easily in all versions, 
-        # but we can try .in_("player_id", player_ids) or loop if needed.
-        # Assuming .in_() works as per Supabase-py docs or using a loop for safety.
-        # Let's try to fetch all at once.
-        players_result = supabase.table("players").select("player_id, phone_number, name").in_("player_id", player_ids).execute()
-        players_to_notify = players_result.data
-        
-        from twilio_client import send_sms
-        
-        # Format date for SMS
-        try:
-            dt = parse_iso_datetime(scheduled_time)
-            formatted_time = dt.strftime("%a, %b %d at %I:%M %p")
-        except:
-            formatted_time = scheduled_time
-            
-        # Optimization: Batch fetch all pending invites for these players
-        all_pending_invites = {}
-        try:
-            pending_res = supabase.table("match_invites").select(
-                "match_id, player_id, sent_at"
-            ).in_("player_id", [p['player_id'] for p in players_to_notify])\
-             .eq("status", "sent")\
-             .neq("match_id", match_id)\
-             .order("sent_at", desc=True).execute()
-             
-            if pending_res.data:
-                # Group by player_id
-                for invite in pending_res.data:
-                    pid = invite['player_id']
-                    if pid not in all_pending_invites:
-                        all_pending_invites[pid] = []
-                    all_pending_invites[pid].append(invite)
-
-            # Prefetch match details for these pending invites if any exist
-            pending_match_ids = set()
-            for key in all_pending_invites:
-                for inv in all_pending_invites[key]:
-                    pending_match_ids.add(inv["match_id"])
-            
-            pending_matches_map = {}
-            if pending_match_ids:
-                 m_res = supabase.table("matches").select("match_id, scheduled_time, team_1_players, team_2_players").in_("match_id", list(pending_match_ids)).execute()
-                 if m_res.data:
-                     pending_matches_map = {m["match_id"]: m for m in m_res.data}
-
-        except Exception as e:
-            print(f"Error pre-fetching pending invites: {e}")
-            # Continue without pending details if optimization fails
-
-        success_count = 0
-        for p in players_to_notify:
-            phone = p.get('phone_number')
-            player_id = p.get('player_id')
-            name = p.get('name')
-            if phone:
-                # Use pre-fetched invites
-                other_invites = all_pending_invites.get(player_id, [])
-                
-                club_name = _get_club_name(club_id)
-                
-                # Construct message with new invite as primary
-                body = (
-                    f"🎾 {club_name}: NEW MATCH INVITE!\n"
-                    f"{formatted_time}\n"
-                    f"Reply YES to join, NO to decline."
-                )
-                
-                # Add other pending invites if any
-                if other_invites:
-                    body += f"\n\nYou also have {len(other_invites)} other pending invite(s):\n"
-                    for idx, inv in enumerate(other_invites, 2):  # Start at 2 since new invite is implicitly #1
-                        m = pending_matches_map.get(inv["match_id"])
-                        if m:
-                            try:
-                                other_dt = parse_iso_datetime(m['scheduled_time'])
-                                other_time = other_dt.strftime("%a, %b %d at %I:%M %p")
-                            except:
-                                other_time = m['scheduled_time']
-                            count = len(m.get("team_1_players") or []) + len(m.get("team_2_players") or [])
-                            body += f"{idx}. {other_time} ({count}/4)\n"
-                    body += "\nReply 2Y/3Y to join, 2N/3N to decline."
-                
-                if send_sms(phone, body, club_id=club_id):
-                    success_count += 1
-                    print(f"Sent invite to {name} ({phone})")
-                else:
-                    print(f"Failed to send invite to {name} ({phone})")
-        
-        print(f"Sent SMS to {success_count}/{len(players_to_notify)} players for match {match_id}")
+    # 2. Trigger outreach via matchmaker (respects quiet hours)
+    from matchmaker import find_and_invite_players
+    find_and_invite_players(
+        match_id=match_id, 
+        target_player_ids=player_ids, 
+        batch_number=1, 
+        skip_filters=True # Use specific players selected by Admin
+    )
 
     print(f"Match created with {len(initial_player_ids)} initial players already committed")
     

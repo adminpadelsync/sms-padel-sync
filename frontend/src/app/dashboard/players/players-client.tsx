@@ -1,11 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { PlayerActions, PlayerModal } from '../player-management'
+import { PlayerActions } from '../player-management'
 import { CreatePlayerButton } from '../create-player-button'
 import { MatchWizard } from '../create-match-wizard'
-import { SwitchClubModal } from '../switch-club-modal'
 import { AddToGroupModal } from '../groups/add-to-group-modal'
 import { GroupModal } from '../groups/group-modal'
 import { VerificationModal } from '../verification-modal'
@@ -41,6 +39,43 @@ interface Player {
     }[]
 }
 
+interface RatingHistoryEntry {
+    history_id: string
+    player_id: string
+    old_sync_rating: number
+    new_sync_rating: number
+    old_elo_rating: number
+    new_elo_rating: number
+    change_type: string
+    match_id?: string
+    notes?: string
+    created_at: string
+    matches?: {
+        match_id: string
+        scheduled_time: string
+        club_id: string
+        score_text?: string
+    }
+}
+
+interface FeedbackSummary {
+    avg_rating: number
+    play_again_pct: number
+    total_reviews: number
+}
+
+interface Match {
+    match_id: string
+    scheduled_time: string
+    status: string
+    team_1_players: string[]
+    team_2_players: string[]
+    club_id: string
+    player_names?: string[]
+    score_text?: string
+    winner_team?: number
+}
+
 // Format phone number as (XXX) XXX-XXXX
 function formatPhoneNumber(phone: string): string {
     const digits = phone.replace(/\D/g, '')
@@ -55,38 +90,16 @@ function formatPhoneNumber(phone: string): string {
 
 interface PlayersClientProps {
     initialPlayers: Player[]
-    isSuperuser: boolean
     userClubId: string | null
-    clubs: { club_id: string; name: string }[]
 }
 
 export function PlayersClient({
     initialPlayers,
-    isSuperuser,
-    userClubId,
-    clubs
+    userClubId
 }: PlayersClientProps) {
-    const router = useRouter()
-    const [mounted, setMounted] = useState(false)
-    const [selectedClubId, setSelectedClubId] = useState<string>(() => {
-        if (isSuperuser) {
-            return userClubId || clubs[0]?.club_id || ''
-        }
-        return userClubId || ''
-    })
-    const [switchClubModalOpen, setSwitchClubModalOpen] = useState(false)
     const [verificationModalOpen, setVerificationModalOpen] = useState(false)
     const [playerToVerify, setPlayerToVerify] = useState<Player | null>(null)
 
-    useEffect(() => {
-        setMounted(true)
-        if (isSuperuser && typeof window !== 'undefined') {
-            const stored = localStorage.getItem('selectedClubId')
-            if (stored && clubs.find(c => c.club_id === stored)) {
-                setSelectedClubId(stored)
-            }
-        }
-    }, [isSuperuser, clubs])
     // Player filter state
     const [targetLevel, setTargetLevel] = useState<number | null>(null)
     const [levelRange, setLevelRange] = useState<number>(0.5)
@@ -94,7 +107,7 @@ export function PlayersClient({
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1)
-    const [itemsPerPage, setItemsPerPage] = useState(10)
+    const [itemsPerPage] = useState(25)
 
     // Search and Selection state
     const [searchQuery, setSearchQuery] = useState('')
@@ -103,10 +116,10 @@ export function PlayersClient({
     const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false)
     const [addToGroupModalOpen, setAddToGroupModalOpen] = useState(false)
     const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null)
-    const [ratingHistory, setRatingHistory] = useState<Record<string, any[]>>({})
+    const [ratingHistory, setRatingHistory] = useState<Record<string, RatingHistoryEntry[]>>({})
     const [loadingHistory, setLoadingHistory] = useState<string | null>(null)
-    const [feedbackSummaries, setFeedbackSummaries] = useState<Record<string, any>>({})
-    const [selectedMatch, setSelectedMatch] = useState<any | null>(null)
+    const [feedbackSummaries, setFeedbackSummaries] = useState<Record<string, FeedbackSummary>>({})
+    const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
     const [isMatchDetailsOpen, setIsMatchDetailsOpen] = useState(false)
 
     const fetchRatingHistory = async (playerId: string) => {
@@ -155,16 +168,8 @@ export function PlayersClient({
         }
     }
 
-    useEffect(() => {
-        setMounted(true)
-    }, [])
-
     // Filter data by selected club
-    let filteredPlayers = isSuperuser && mounted
-        ? initialPlayers.filter(p => p.club_id === selectedClubId)
-        : isSuperuser
-            ? initialPlayers.filter(p => p.club_id === userClubId)
-            : initialPlayers
+    let filteredPlayers = initialPlayers.filter(p => p.club_id === userClubId)
 
     // Apply skill level filter
     if (targetLevel !== null) {
@@ -198,11 +203,10 @@ export function PlayersClient({
     // Sort by name (alphabetically)
     filteredPlayers = filteredPlayers.sort((a, b) => a.name.localeCompare(b.name))
 
-    // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1)
         setSelectedPlayerIds(new Set())
-    }, [targetLevel, genderFilter, selectedClubId, searchQuery])
+    }, [targetLevel, genderFilter, userClubId, searchQuery])
 
     // Calculate pagination
     const totalPages = Math.ceil(filteredPlayers.length / itemsPerPage)
@@ -238,26 +242,8 @@ export function PlayersClient({
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <h2 className="text-xl font-bold text-gray-900">Players</h2>
-                        {isSuperuser && (
-                            <>
-                                <button
-                                    onClick={() => setSwitchClubModalOpen(true)}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
-                                >
-                                    <span>🏢</span>
-                                    <span>{clubs.find(c => c.club_id === selectedClubId)?.name || 'Select Club'}</span>
-                                    <span className="text-gray-500">(Switch)</span>
-                                </button>
-                                <SwitchClubModal
-                                    isOpen={switchClubModalOpen}
-                                    onClose={() => setSwitchClubModalOpen(false)}
-                                    clubs={clubs}
-                                    currentClubId={selectedClubId}
-                                />
-                            </>
-                        )}
                     </div>
-                    <CreatePlayerButton clubId={selectedClubId} />
+                    <CreatePlayerButton clubId={userClubId || ''} />
                 </div>
 
                 {/* Filter Controls */}
@@ -572,7 +558,7 @@ export function PlayersClient({
                                                                     </thead>
                                                                     <tbody className="divide-y divide-gray-100">
                                                                         {ratingHistory[player.player_id].map((entry) => {
-                                                                            const isAway = entry.match_id && entry.matches?.club_id !== selectedClubId;
+                                                                            const isAway = entry.match_id && entry.matches?.club_id !== userClubId;
                                                                             return (
                                                                                 <tr key={entry.history_id} className="hover:bg-gray-50 transition-colors">
                                                                                     <td className="px-4 py-2 text-xs text-gray-600 whitespace-nowrap">
@@ -680,20 +666,20 @@ export function PlayersClient({
                 onClose={() => setCreateGroupModalOpen(false)}
                 initialMemberIds={Array.from(selectedPlayerIds)}
                 mode="create"
-                clubId={selectedClubId}
+                clubId={userClubId || ''}
             />
 
             <AddToGroupModal
                 isOpen={addToGroupModalOpen}
                 onClose={() => setAddToGroupModalOpen(false)}
                 playerIds={Array.from(selectedPlayerIds)}
-                clubId={selectedClubId}
+                clubId={userClubId || ''}
             />
 
             <MatchWizard
                 isOpen={isMatchWizardOpen}
                 onClose={() => setIsMatchWizardOpen(false)}
-                clubId={selectedClubId || ''}
+                clubId={userClubId || ''}
                 initialSelectedPlayers={initialPlayers.filter(p => selectedPlayerIds.has(p.player_id))}
             />
 

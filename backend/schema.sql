@@ -134,9 +134,11 @@ CREATE TABLE IF NOT EXISTS match_invites (
   invite_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   match_id UUID NOT NULL REFERENCES matches(match_id),
   player_id UUID NOT NULL REFERENCES players(player_id),
-  status TEXT CHECK (status IN ('sent', 'accepted', 'declined', 'expired', 'maybe', 'removed')),
+  status TEXT CHECK (status IN ('sent', 'accepted', 'declined', 'expired', 'maybe', 'removed', 'pending_sms')),
   sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   responded_at TIMESTAMP WITH TIME ZONE,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  refilled_at TIMESTAMP WITH TIME ZONE,
   
   -- ML tracking fields
   invite_score INTEGER CHECK (invite_score BETWEEN 0 AND 100),

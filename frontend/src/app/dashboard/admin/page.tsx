@@ -67,8 +67,9 @@ export default function AdminPage() {
             if (!res.ok) throw new Error(data.detail || 'Failed to recalculate')
 
             setResult({ success: true, message: data.message })
-        } catch (err: any) {
-            setResult({ success: false, message: err.message || 'An error occurred' })
+        } catch (err) {
+            const error = err as Error
+            setResult({ success: false, message: error.message || 'An error occurred' })
         } finally {
             setIsLoading(false)
         }
@@ -96,8 +97,9 @@ export default function AdminPage() {
             setDeleteConfirmationName('')
             setShowLogModal(true) // Show logs on success
             fetchClubs() // Refresh list
-        } catch (err: any) {
-            setResult({ success: false, message: err.message || 'An error occurred' })
+        } catch (err) {
+            const error = err as Error
+            setResult({ success: false, message: error.message || 'An error occurred' })
             setShowLogModal(true) // Show logs even on failure to see progress
         } finally {
             setIsLoading(false)
@@ -228,7 +230,7 @@ export default function AdminPage() {
                         <div>
                             <h2 className="text-lg font-semibold text-gray-900">Scoring Engine Control</h2>
                             <p className="text-gray-500 mt-1 max-w-md">
-                                Manually trigger the score recalculation job. This will update "Responsiveness" and "Reputation" scores for all players based on their invite history.
+                                Manually trigger the score recalculation job. This will update &quot;Responsiveness&quot; and &quot;Reputation&quot; scores for all players based on their invite history.
                             </p>
                         </div>
                         <div className="bg-indigo-50 p-2 rounded-lg">
@@ -335,7 +337,7 @@ export default function AdminPage() {
                         <div>
                             <h2 className="text-lg font-semibold text-gray-900">AI Reasoner Training Jig</h2>
                             <p className="text-gray-500 mt-1 max-w-md">
-                                Coach the AI by simulating conversations. Mark responses as correct or incorrect to build the "Golden Dataset" and improve reasoning.
+                                Coach the AI by simulating conversations. Mark responses as correct or incorrect to build the &quot;Golden Dataset&quot; and improve reasoning.
                             </p>
                         </div>
                         <div className="bg-indigo-50 p-2 rounded-lg">
@@ -417,7 +419,7 @@ export default function AdminPage() {
                         </div>
 
                         <p className="text-gray-700 mb-4">
-                            You are about to delete <span className="font-bold text-gray-900">"{clubToDelete.name}"</span>.
+                            You are about to delete <span className="font-bold text-gray-900">&quot;{clubToDelete.name}&quot;</span>.
                             This will permanently remove all associated courts, matches, and groups.
                         </p>
 

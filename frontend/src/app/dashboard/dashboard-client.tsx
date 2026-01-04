@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { SwitchClubModal } from './switch-club-modal'
 import { AnalyticsDashboard } from './analytics/analytics-dashboard'
 
 interface Player {
@@ -31,34 +29,13 @@ export function DashboardClient({
     initialPlayers,
     initialMatches,
     userEmail,
-    isSuperuser,
-    userClubId,
-    clubs
+    userClubId
 }: DashboardClientProps) {
-    const router = useRouter()
-    const [mounted, setMounted] = useState(false)
-    const [selectedClubId, setSelectedClubId] = useState<string>(() => {
-        if (isSuperuser) {
-            return userClubId || clubs[0]?.club_id || ''
-        }
-        return userClubId || ''
-    })
-    const [switchClubModalOpen, setSwitchClubModalOpen] = useState(false)
     const [openInvites, setOpenInvites] = useState(0)
 
-    useEffect(() => {
-        setMounted(true)
-        if (isSuperuser && typeof window !== 'undefined') {
-            const stored = localStorage.getItem('selectedClubId')
-            if (stored && clubs.find(c => c.club_id === stored)) {
-                setSelectedClubId(stored)
-            }
-        }
-    }, [isSuperuser, clubs])
-
     // Filter data by selected club
-    const clubPlayers = initialPlayers.filter(p => p.club_id === selectedClubId)
-    const clubMatches = initialMatches.filter(m => m.club_id === selectedClubId)
+    const clubPlayers = initialPlayers.filter(p => p.club_id === userClubId)
+    const clubMatches = initialMatches.filter(m => m.club_id === userClubId)
 
     // Calculate summary stats
     const activePlayersCount = clubPlayers.filter(p => p.active_status).length
@@ -92,10 +69,8 @@ export function DashboardClient({
             }
         }
 
-        if (mounted) {
-            fetchOpenInvites()
-        }
-    }, [clubMatches, mounted])
+        fetchOpenInvites()
+    }, [clubMatches])
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -107,24 +82,6 @@ export function DashboardClient({
                         <p className="mt-1 text-sm text-gray-500">Welcome back, {userEmail}</p>
                     </div>
                     <div className="flex items-center gap-4">
-                        {isSuperuser && (
-                            <>
-                                <button
-                                    onClick={() => setSwitchClubModalOpen(true)}
-                                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
-                                >
-                                    <span>🏢</span>
-                                    <span>{clubs.find(c => c.club_id === selectedClubId)?.name || 'Select Club'}</span>
-                                    <span className="text-xs text-gray-500 ml-1">(Switch)</span>
-                                </button>
-                                <SwitchClubModal
-                                    isOpen={switchClubModalOpen}
-                                    onClose={() => setSwitchClubModalOpen(false)}
-                                    clubs={clubs}
-                                    currentClubId={selectedClubId}
-                                />
-                            </>
-                        )}
                     </div>
                 </div>
 
@@ -198,7 +155,7 @@ export function DashboardClient({
                 {/* Analytics Dashboard */}
                 <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-6">Analytics Overview</h2>
-                    <AnalyticsDashboard clubId={selectedClubId} />
+                    <AnalyticsDashboard clubId={userClubId || ''} />
                 </div>
             </div>
         </div>
