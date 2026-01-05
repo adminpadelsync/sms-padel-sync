@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { CreateMatchButton } from '../create-match-button'
 import { formatLocalizedTime } from '@/utils/time-utils'
 import {
@@ -78,6 +79,7 @@ function formatPhoneNumber(phone: string): string {
 }
 
 export function MatchesClient({ initialMatches, userClubId, userId, userClubTimezone }: MatchesClientProps) {
+    const router = useRouter()
     const [matches, setMatches] = useState<Match[]>(initialMatches)
     const [filterStatus, setFilterStatus] = useState<string>('all')
     const [searchQuery, setSearchQuery] = useState('')
@@ -332,8 +334,12 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                         const isSelected = selectedMatchIds.has(match.match_id)
 
                                         return (
-                                            <tr key={match.match_id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-indigo-50/30' : ''}`}>
-                                                <td className="px-6 py-4">
+                                            <tr
+                                                key={match.match_id}
+                                                onClick={() => router.push(`/dashboard/matches/${match.match_id}`)}
+                                                className={`hover:bg-gray-50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/30' : ''}`}
+                                            >
+                                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                                     <input
                                                         type="checkbox"
                                                         checked={isSelected}
@@ -346,7 +352,6 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                                         <span className="text-sm font-semibold text-gray-900">
                                                             {formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined)}
                                                         </span>
-                                                        <span className="text-[10px] text-gray-400 font-mono mt-0.5">{match.match_id.slice(0, 8)}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -367,7 +372,7 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                     {match.score_text || <span className="text-gray-300 italic">No score yet</span>}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-end gap-2">
                                                         <a
                                                             href={`/dashboard/matches/${match.match_id}`}

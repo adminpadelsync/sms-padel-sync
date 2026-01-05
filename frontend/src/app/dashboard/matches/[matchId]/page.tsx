@@ -121,7 +121,9 @@ export default function MatchDetailPage() {
     const [editTeam2Players, setEditTeam2Players] = useState<string[]>([])
 
     // For collapsible demographic section
-    const [demoCollapsed, setDemoCollapsed] = useState<boolean | null>(null) // null means auto-determine
+    const [demoCollapsed, setDemoCollapsed] = useState<boolean>(false)
+    const [resultsCollapsed, setResultsCollapsed] = useState<boolean>(true)
+    const [feedbackCollapsed, setFeedbackCollapsed] = useState<boolean>(true)
 
     // Nudge/Resend states
     const [resendingResult, setResendingResult] = useState(false)
@@ -134,10 +136,18 @@ export default function MatchDetailPage() {
 
     // Effect to handle default collapse state
     useEffect(() => {
-        if (match && demoCollapsed === null) {
-            setDemoCollapsed(isPast)
+        if (match) {
+            if (isPast) {
+                setDemoCollapsed(true)
+                setResultsCollapsed(false)
+                setFeedbackCollapsed(false)
+            } else {
+                setDemoCollapsed(false)
+                setResultsCollapsed(true)
+                setFeedbackCollapsed(true)
+            }
         }
-    }, [match, isPast, demoCollapsed])
+    }, [match, isPast])
 
     // Effect to sync result editing state
     useEffect(() => {
@@ -565,633 +575,502 @@ export default function MatchDetailPage() {
                     </div>
                 </div>
 
-                {/* 1. Match Results Section (Priority) */}
-                <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transform transition-all">
-                    <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50/50 to-white flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2 font-bold text-gray-900 uppercase tracking-wider">
-                            <Trophy className="w-5 h-5 text-amber-500" />
-                            Match Results
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {!match.score_text && (
+                {/* Dynamic Section Ordering */}
+                <div className="flex flex-col gap-8">
+                    {(() => {
+                        const ResultsSection = (
+                            <div key="results" className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
                                 <button
-                                    onClick={handleResendResult}
-                                    disabled={resendingResult}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 font-bold transition-all disabled:opacity-50"
+                                    onClick={() => setResultsCollapsed(!resultsCollapsed)}
+                                    className="w-full px-8 py-6 flex justify-between items-center bg-gray-50/50 hover:bg-gray-50 transition-colors group"
                                 >
-                                    <Send className="w-3.5 h-3.5" />
-                                    {resendingResult ? 'Sending...' : 'Resend Result Request'}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => setIsEditingResults(!isEditingResults)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 font-bold transition-all"
-                            >
-                                <Edit2 className="w-3.5 h-3.5" />
-                                {isEditingResults ? 'Cancel Edit' : (match.score_text ? 'Edit Results' : 'Add Results')}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="p-0"> {/* Removed padding for full-width table */}
-                        {isEditingResults ? (
-                            <div className="p-8 space-y-8 animate-in fade-in slide-in-from-top-4 duration-300">
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-100">
-                                        <thead>
-                                            <tr className="bg-gray-50/50">
-                                                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Team</th>
-                                                {[1, 2, 3].map(i => (
-                                                    <th key={i} className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest w-24">
-                                                        S{i}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {[1, 2].map((teamNum) => {
-                                                const teamPlayerIds = teamNum === 1 ? editTeam1Players : editTeam2Players
-                                                const teamPlayers = teamPlayerIds.map(id => allPlayers.find(p => p.player_id === id)).filter(Boolean)
-                                                const calculatedWinner = calculateWinnerFromScores(setScores)
-                                                const isWinner = calculatedWinner === teamNum
-
-                                                return (
-                                                    <tr key={teamNum} className={`${isWinner ? 'bg-green-50/50' : ''} transition-colors`}>
-                                                        <td className="px-6 py-6">
-                                                            <div className="space-y-3">
-                                                                {teamPlayers.map((p: any) => (
-                                                                    <div key={p.player_id} className="flex items-center gap-4">
-                                                                        <button
-                                                                            onClick={() => handleSwapPlayer(p.player_id)}
-                                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg hover:bg-indigo-100 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap"
-                                                                            title={`Move to Team ${teamNum === 1 ? 2 : 1}`}
-                                                                        >
-                                                                            <ArrowRightLeft className="w-3 h-3" />
-                                                                            Switch Team
-                                                                        </button>
-                                                                        <div className={`text-sm font-bold transition-colors ${isWinner ? 'text-green-800' : 'text-gray-900'}`}>
-                                                                            {p.name}
-                                                                            <span className="ml-2 text-[10px] text-gray-400 font-medium whitespace-nowrap">
-                                                                                ({p.declared_skill_level?.toFixed(2) || '?.??'})
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                                {teamPlayers.length < 2 && (
-                                                                    <div className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">
-                                                                        Need {2 - teamPlayers.length} more player{2 - teamPlayers.length > 1 ? 's' : ''}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        {[0, 1, 2].map((setIdx) => {
-                                                            const score = setScores[setIdx][teamNum - 1]
-                                                            const otherScore = setScores[setIdx][teamNum === 1 ? 1 : 0]
-                                                            const setWon = parseInt(score) > parseInt(otherScore)
-
-                                                            return (
-                                                                <td key={setIdx} className="px-4 py-6">
-                                                                    <div className="flex flex-col items-center gap-1">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={score}
-                                                                            onChange={(e) => {
-                                                                                const newScores = [...setScores]
-                                                                                newScores[setIdx][teamNum - 1] = e.target.value
-                                                                                setSetScores(newScores)
-                                                                            }}
-                                                                            className={`w-16 h-12 bg-white text-center text-xl font-black border-2 rounded-xl focus:ring-4 focus:outline-none transition-all ${setWon
-                                                                                ? 'border-green-500 ring-green-100 text-green-700'
-                                                                                : 'border-gray-100 focus:border-indigo-500 focus:ring-indigo-100 text-gray-900'
-                                                                                }`}
-                                                                            placeholder="0"
-                                                                        />
-                                                                        {setWon && (
-                                                                            <div className="h-1 w-8 bg-green-500 rounded-full" />
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            )
-                                                        })}
-                                                    </tr>
-                                                )
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div className="flex flex-col items-center gap-4 pt-4 border-t border-gray-100">
-                                    {calculateWinnerFromScores(setScores) ? (
-                                        <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-bold animate-in zoom-in duration-300">
-                                            <Trophy className="w-4 h-4" />
-                                            Team {calculateWinnerFromScores(setScores)} Projected Winner
-                                        </div>
-                                    ) : (
-                                        <div className="text-sm font-medium text-gray-400">
-                                            Enter scores to determine winner
-                                        </div>
-                                    )}
-                                    <button
-                                        onClick={handleSaveResults}
-                                        disabled={actionLoading || editTeam1Players.length !== 2 || editTeam2Players.length !== 2}
-                                        className="w-full max-w-md py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg hover:shadow-indigo-200/50 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        {actionLoading ? 'Saving...' : <><CheckCircle2 className="w-5 h-5" /> Save Match Results</>}
-                                    </button>
-                                    {(editTeam1Players.length !== 2 || editTeam2Players.length !== 2) && (
-                                        <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">
-                                            Each team must have exactly 2 players
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        ) : match?.score_text ? (() => {
-                            const scoreText = match.score_text
-                            const sets = scoreText.split(/[,|\s]+/).filter(s => s.includes('-')).map(s => s.trim().split('-'))
-                            return (
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-100">
-                                        <thead>
-                                            <tr className="bg-gray-50/50">
-                                                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Team</th>
-                                                {sets.map((_, i) => (
-                                                    <th key={i} className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest w-16">
-                                                        S{i + 1}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {[1, 2].map((teamNum) => {
-                                                const isWinner = match.winner_team === teamNum
-                                                const teamPlayers = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
-
-                                                return (
-                                                    <tr key={teamNum} className={`${isWinner ? 'bg-green-50/50' : ''} transition-colors`}>
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="space-y-1">
-                                                                    {teamPlayers?.map((p: any) => (
-                                                                        <div key={p.player_id} className={`text-sm font-bold transition-colors ${isWinner ? 'text-green-800' : 'text-gray-900'}`}>
-                                                                            {p.name}
-                                                                            <span className="ml-2 text-[10px] text-gray-400 font-medium">
-                                                                                ({p.declared_skill_level?.toFixed(2) || '?.??'})
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                                {isWinner && (
-                                                                    <div className="bg-green-500 text-white rounded-full p-0.5 shadow-sm ml-2">
-                                                                        <CheckCircle2 className="w-4 h-4" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        {sets.map((setValues, i) => {
-                                                            const score = setValues[teamNum - 1]
-                                                            const otherScore = setValues[teamNum === 1 ? 1 : 0]
-                                                            const setWon = Number(score) > Number(otherScore)
-
-                                                            return (
-                                                                <td key={i} className="px-4 py-4 text-center">
-                                                                    <div className={`text-xl font-black ${setWon
-                                                                        ? 'text-green-600 relative inline-block'
-                                                                        : 'text-gray-300'
-                                                                        }`}>
-                                                                        {score}
-                                                                        {setWon && <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-green-500 rounded-full" />}
-                                                                    </div>
-                                                                </td>
-                                                            )
-                                                        })}
-                                                    </tr>
-                                                )
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )
-                        })() : (
-                            <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200 mx-8 my-8">
-                                <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">No results recorded yet</h3>
-                                <p className="text-gray-500 mb-6">Match is confirmed, but scores have not been reported.</p>
-                                <div className="flex justify-center gap-3">
-                                    <button
-                                        onClick={handleResendResult}
-                                        className="flex items-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 shadow-lg hover:shadow-amber-200 transition-all disabled:opacity-50"
-                                    >
-                                        <Send className="w-5 h-5" />
-                                        Resend Result Request
-                                    </button>
-                                    <button
-                                        onClick={() => setIsEditingResults(true)}
-                                        className="flex items-center gap-2 px-6 py-3 bg-white text-indigo-600 border border-indigo-200 rounded-xl font-bold hover:bg-indigo-50 shadow-sm transition-all"
-                                    >
-                                        <Edit2 className="w-5 h-5" />
-                                        Manually Enter Result
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 2. Feedback Section */}
-                <div className="mb-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-2 text-sm font-bold text-gray-900 uppercase tracking-wider">
-                            <MessageSquare className="w-5 h-5 text-indigo-500" />
-                            Match Feedback
-                        </div>
-                        {feedback.length < 4 && (
-                            <button
-                                onClick={handleResendFeedback}
-                                disabled={resendingFeedback}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 font-bold transition-all disabled:opacity-50 text-xs shadow-sm hover:shadow-md"
-                            >
-                                <Send className="w-3.5 h-3.5" />
-                                {resendingFeedback ? 'Resending...' : 'Resend Feedback Request'}
-                            </button>
-                        )}
-                    </div>
-
-                    {feedback.length > 0 ? (
-                        <div className="space-y-6 animate-in fade-in duration-500">
-                            {/* Summary Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {allPlayers.map(player => {
-                                    const received = feedback.filter(f => f.rated_player_id === player.player_id)
-                                    const avgScore = received.length > 0
-                                        ? (received.reduce((acc, curr) => acc + curr.rating, 0) / received.length).toFixed(1)
-                                        : 'N/A'
-
-                                    return (
-                                        <div key={player.player_id} className="p-5 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col h-full hover:shadow-lg transition-all border-b-4 border-b-indigo-500/10">
-                                            <div className="flex items-center gap-3 mb-4 border-b border-gray-50 pb-4">
-                                                <div className="h-10 w-10 text-lg flex items-center justify-center bg-indigo-50 rounded-xl text-indigo-600 font-black">
-                                                    {player.name.charAt(0)}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="font-bold text-gray-900 truncate" title={player.name}>{player.name}</p>
-                                                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest leading-none">Rec: {received.length}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="mb-4">
-                                                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Impact Score</p>
-                                                <div className={`text-4xl font-black tracking-tighter ${avgScore === 'N/A' ? 'text-gray-200' :
-                                                    Number(avgScore) >= 8 ? 'text-green-600' :
-                                                        Number(avgScore) >= 6 ? 'text-amber-500' : 'text-red-500'
-                                                    }`}>
-                                                    {avgScore}<span className="text-base text-gray-300 font-bold ml-0.5">/10</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2 mt-auto">
-                                                {received.map(f => (
-                                                    <div key={f.feedback_id} className="flex items-center gap-2 text-xs bg-gray-50/50 p-2 rounded-xl border border-gray-50 hover:bg-gray-50 transition-colors">
-                                                        <span className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg font-black text-[10px] text-white shadow-sm ${f.rating >= 8 ? 'bg-green-500' : f.rating >= 6 ? 'bg-amber-500' : 'bg-red-500'
-                                                            }`}>
-                                                            {f.rating}
-                                                        </span>
-                                                        <span className="text-gray-500 font-medium truncate">
-                                                            from {f.rater?.name.split(' ')[0] || 'Unknown'}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                                {received.length === 0 && (
-                                                    <div className="py-2 px-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-                                                        <AlertCircle className="w-3.5 h-3.5 text-gray-300" />
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">No ratings yet</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-
-                            {/* Matrix */}
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                                <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/30 flex justify-between items-center">
-                                    <div>
-                                        <h2 className="text-lg font-bold text-gray-900">Feedback Matrix</h2>
-                                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Giver (Cols) → Receiver (Rows)</p>
-                                    </div>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-100 text-center">
-                                        <thead>
-                                            <tr>
-                                                <th className="px-6 py-4 bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-100">Receiver</th>
-                                                {allPlayers.map(p => (
-                                                    <th key={p.player_id} className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest min-w-[120px]">
-                                                        By {p.name.split(' ')[0]}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {allPlayers.map((rowPlayer) => (
-                                                <tr key={rowPlayer.player_id} className="group hover:bg-gray-50/50 transition-colors">
-                                                    <td className="px-6 py-5 whitespace-nowrap text-left border-r border-gray-100 font-bold text-gray-900 text-sm">
-                                                        {rowPlayer.name}
-                                                    </td>
-                                                    {allPlayers.map((colPlayer) => {
-                                                        const fb = feedback.find(f =>
-                                                            f.player_id === colPlayer.player_id &&
-                                                            f.rated_player_id === rowPlayer.player_id
-                                                        )
-                                                        const isSelf = rowPlayer.player_id === colPlayer.player_id
-
-                                                        if (isSelf) {
-                                                            return (
-                                                                <td key={colPlayer.player_id} className="p-3">
-                                                                    <div className="w-12 h-12 mx-auto rounded-xl bg-gray-100 flex items-center justify-center opacity-30">
-                                                                        <Users className="w-5 h-5 text-gray-400" />
-                                                                    </div>
-                                                                </td>
-                                                            )
-                                                        }
-
-                                                        return (
-                                                            <td key={colPlayer.player_id} className="p-3">
-                                                                {fb ? (
-                                                                    <div className={`w-12 h-12 mx-auto flex items-center justify-center rounded-2xl text-xl font-black shadow-sm transition-all group-hover:scale-110 ${fb.rating >= 8 ? 'bg-green-50 text-green-600 border border-green-200' :
-                                                                        fb.rating >= 6 ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                                                                            'bg-red-50 text-red-600 border border-red-200'
-                                                                        }`}>
-                                                                        {fb.rating}
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="w-12 h-12 mx-auto flex items-center justify-center text-gray-200">
-                                                                        <span className="text-xl font-black tracking-widest">—</span>
-                                                                    </div>
-                                                                )}
-                                                            </td>
-                                                        )
-                                                    })}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
-                            <MessageSquare className="w-16 h-16 text-gray-100 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">No feedback received yet</h3>
-                            <p className="text-gray-500 mb-2 max-w-xs mx-auto">Feedback requests are usually sent a few hours after the match ends.</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* 3. Collapsible Demographic Info (Booking & Invites) */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                    <button
-                        onClick={() => setDemoCollapsed(!demoCollapsed)}
-                        className="w-full px-6 py-5 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors group"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm transition-transform group-hover:scale-110">
-                                <Clock className="w-5 h-5 text-indigo-500" />
-                            </div>
-                            <div className="text-left">
-                                <h2 className="text-lg font-bold text-gray-900 leading-none mb-1">Match Info & Invites</h2>
-                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-                                    {isPast ? 'Archives • Started ' + formattedTime.split(',')[0] : 'Current • Coordination & Booking'}
-                                </p>
-                            </div>
-                        </div>
-                        {demoCollapsed ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
-                        ) : (
-                            <ChevronUp className="w-5 h-5 text-gray-400" />
-                        )}
-                    </button>
-
-                    {!demoCollapsed && (
-                        <div className="p-6 space-y-8 animate-in slide-in-from-top-4 duration-300">
-                            {/* Court Booking */}
-                            <div className={`p-6 rounded-2xl border-2 transition-all ${match.court_booked ? 'bg-green-50/30 border-green-100' : 'bg-red-50/30 border-red-100'
-                                }`}>
-                                <div className="flex justify-between items-center mb-6">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-3 rounded-2xl ${match.court_booked ? 'bg-green-500 text-white' : 'bg-red-500 text-white shadow-xl shadow-red-100 animate-pulse'}`}>
-                                            <Calendar className="w-6 h-6" />
+                                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                                            <Trophy className="w-5 h-5 text-amber-500" />
                                         </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-gray-900">{match.court_booked ? 'Court Secured' : 'Action Required'}</h3>
-                                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{match.court_booked ? 'Booking confirmed' : 'No court details found'}</p>
+                                        <div className="text-left">
+                                            <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Match Results</h2>
+                                            <p className="text-xs text-gray-400 font-medium">Record and manage scores</p>
                                         </div>
                                     </div>
-                                    {!isPast && (
-                                        <button
-                                            onClick={() => setIsEditingBooking(!isEditingBooking)}
-                                            className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50 font-bold text-sm shadow-sm transition-all"
-                                        >
-                                            {isEditingBooking ? 'Cancel' : 'Edit Booking Detail'}
-                                        </button>
-                                    )}
-                                </div>
-
-                                {isEditingBooking ? (
-                                    <div className="space-y-6 animate-in fade-in duration-300">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                                            <div className="space-y-4">
-                                                <div className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:border-indigo-500 transition-colors" onClick={() => setEditCourtBooked(!editCourtBooked)}>
-                                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${editCourtBooked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-200'}`}>
-                                                        {editCourtBooked && <CheckCircle2 className="w-4 h-4 text-white" />}
-                                                    </div>
-                                                    <span className="text-sm font-bold text-gray-700 uppercase tracking-widest">Mark as officially booked</span>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Court Name / Location</label>
-                                                    <input
-                                                        type="text"
-                                                        value={editCourtText}
-                                                        onChange={(e) => setEditCourtText(e.target.value)}
-                                                        placeholder="e.g. Court 7, Stadium Court..."
-                                                        className="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm focus:ring-2 focus:ring-indigo-500 font-bold"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-4">
-                                                <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100 cursor-pointer" onClick={() => setNotifyPlayersOnUpdate(!notifyPlayersOnUpdate)}>
-                                                    <div className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${notifyPlayersOnUpdate ? 'bg-amber-500 border-amber-500' : 'bg-white border-amber-200'}`}>
-                                                        {notifyPlayersOnUpdate && <CheckCircle2 className="w-4 h-4 text-white" />}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-black text-amber-800 uppercase tracking-widest leading-none mb-1">Broadcast Update?</p>
-                                                        <p className="text-xs text-amber-700 font-bold">Resend confirmation SMS to all 4 players.</p>
-                                                    </div>
-                                                </div>
+                                    <div className="flex items-center gap-4">
+                                        {(isPast || match.status === 'completed') && (
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                {!match.score_text && (
+                                                    <button
+                                                        onClick={handleResendResult}
+                                                        disabled={resendingResult}
+                                                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 font-bold transition-all disabled:opacity-50 text-xs"
+                                                    >
+                                                        <Send className="w-3.5 h-3.5" />
+                                                        {resendingResult ? 'Sending...' : 'Request Score'}
+                                                    </button>
+                                                )}
                                                 <button
-                                                    onClick={handleSaveBooking}
-                                                    disabled={actionLoading}
-                                                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all disabled:opacity-50"
+                                                    onClick={() => setIsEditingResults(!isEditingResults)}
+                                                    className="flex items-center gap-1.5 px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50 font-bold transition-all text-xs"
                                                 >
-                                                    {actionLoading ? 'Updating...' : 'Save & Confirm Details'}
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                    {isEditingResults ? 'Cancel' : (match.score_text ? 'Edit Score' : 'Add Score')}
                                                 </button>
                                             </div>
+                                        )}
+                                        <div className={`p-2 rounded-lg transition-colors ${resultsCollapsed ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-500'}`}>
+                                            {resultsCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
                                         </div>
                                     </div>
-                                ) : match.court_booked && match.booked_court_text && (
-                                    <div className="bg-white p-6 rounded-2xl border border-green-200 shadow-sm flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">
-                                            <Trophy className="w-6 h-6 text-green-500" />
+                                </button>
+
+                                {!resultsCollapsed && (
+                                    <div className="p-0 animate-in slide-in-from-top-4 duration-300">
+                                        {isEditingResults ? (
+                                            <div className="p-8 space-y-8 bg-gradient-to-b from-white to-gray-50/30">
+                                                <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+                                                    <table className="min-w-full divide-y divide-gray-100">
+                                                        <thead>
+                                                            <tr className="bg-gray-50/50">
+                                                                <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-50">Teams</th>
+                                                                {[1, 2, 3].map(i => (
+                                                                    <th key={i} className="px-4 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest w-24">
+                                                                        Set {i}
+                                                                    </th>
+                                                                ))}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50">
+                                                            {[1, 2].map((teamNum) => {
+                                                                const teamPlayerIds = teamNum === 1 ? editTeam1Players : editTeam2Players
+                                                                const teamPlayers = teamPlayerIds.map(id => allPlayers.find(p => p.player_id === id)).filter(Boolean)
+                                                                const calculatedWinner = calculateWinnerFromScores(setScores)
+                                                                const isWinner = calculatedWinner === teamNum
+
+                                                                return (
+                                                                    <tr key={teamNum} className={`${isWinner ? 'bg-green-50/30' : ''} transition-colors group`}>
+                                                                        <td className="px-8 py-6 border-r border-gray-50">
+                                                                            <div className="space-y-4">
+                                                                                {teamPlayers.map((p: any) => (
+                                                                                    <div key={p.player_id} className="flex items-center gap-4 group/row">
+                                                                                        <button
+                                                                                            onClick={() => handleSwapPlayer(p.player_id)}
+                                                                                            className="px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg opacity-0 group-hover/row:opacity-100 hover:bg-indigo-100 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap"
+                                                                                            title={`Move to Team ${teamNum === 1 ? 2 : 1}`}
+                                                                                        >
+                                                                                            <ArrowRightLeft className="w-3 h-3 inline mr-1" />
+                                                                                            Switch
+                                                                                        </button>
+                                                                                        <div className={`text-sm font-bold transition-colors ${isWinner ? 'text-green-800' : 'text-gray-900'}`}>
+                                                                                            {p.name}
+                                                                                            <span className="ml-2 text-[10px] text-gray-400 font-medium opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                                                                                ({p.declared_skill_level?.toFixed(2) || '?.??'})
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                                {teamPlayers.length < 2 && (
+                                                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-amber-500 uppercase tracking-tighter bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100 inline-flex">
+                                                                                        <AlertCircle className="w-3 h-3" />
+                                                                                        Need {2 - teamPlayers.length} more player{2 - teamPlayers.length > 1 ? 's' : ''}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        {[0, 1, 2].map((setIdx) => {
+                                                                            const score = setScores[setIdx][teamNum - 1]
+                                                                            const otherScore = setScores[setIdx][teamNum === 1 ? 1 : 0]
+                                                                            const setWon = parseInt(score) > parseInt(otherScore)
+
+                                                                            return (
+                                                                                <td key={setIdx} className="px-4 py-6">
+                                                                                    <div className="flex flex-col items-center gap-2">
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={score}
+                                                                                            onChange={(e) => {
+                                                                                                const newScores = [...setScores]
+                                                                                                newScores[setIdx][teamNum - 1] = e.target.value
+                                                                                                setSetScores(newScores)
+                                                                                            }}
+                                                                                            className={`w-16 h-14 bg-white text-center text-2xl font-black border-2 rounded-2xl focus:ring-8 focus:outline-none transition-all shadow-sm ${setWon
+                                                                                                ? 'border-green-500 ring-green-100 text-green-700 shadow-green-100/50'
+                                                                                                : 'border-gray-50 focus:border-indigo-500 focus:ring-indigo-50 text-gray-900'
+                                                                                                }`}
+                                                                                            placeholder="0"
+                                                                                        />
+                                                                                        {setWon && <div className="h-1.5 w-10 bg-green-500 rounded-full animate-in zoom-in duration-300" />}
+                                                                                    </div>
+                                                                                </td>
+                                                                            )
+                                                                        })}
+                                                                    </tr>
+                                                                )
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                <div className="flex flex-col items-center gap-6 pt-6 border-t border-gray-100">
+                                                    {calculateWinnerFromScores(setScores) ? (
+                                                        <div className="flex items-center gap-3 px-6 py-3 bg-green-100 text-green-800 rounded-2xl text-base font-black uppercase tracking-widest shadow-lg shadow-green-100 animate-in zoom-in duration-300">
+                                                            <Trophy className="w-5 h-5" />
+                                                            Team {calculateWinnerFromScores(setScores)} Won Match
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                            <div className="w-8 h-px bg-gray-100" />
+                                                            Enter scores to determine winner
+                                                            <div className="w-8 h-px bg-gray-100" />
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        onClick={handleSaveResults}
+                                                        disabled={actionLoading || editTeam1Players.length !== 2 || editTeam2Players.length !== 2}
+                                                        className="w-full max-w-md py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 shadow-xl hover:shadow-indigo-200/50 disabled:opacity-50 transition-all flex items-center justify-center gap-3 hover:-translate-y-1 active:translate-y-0"
+                                                    >
+                                                        {actionLoading ? <RefreshCw className="w-6 h-6 animate-spin" /> : <><CheckCircle2 className="w-6 h-6" /> Save Match Results</>}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : match?.score_text ? (
+                                            <div className="overflow-x-auto bg-gradient-to-b from-white to-gray-50/20 p-8">
+                                                <div className="rounded-3xl border border-gray-100 bg-white shadow-xl overflow-hidden max-w-3xl mx-auto">
+                                                    <table className="min-w-full text-center">
+                                                        <thead>
+                                                            <tr className="bg-gray-50/50">
+                                                                <th className="px-8 py-5 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-50">Teams</th>
+                                                                {match.score_text.split(',').map((_, i) => (
+                                                                    <th key={i} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                                        Set {i + 1}
+                                                                    </th>
+                                                                ))}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50">
+                                                            {[1, 2].map(teamNum => {
+                                                                const isWinner = match.winner_team === teamNum
+                                                                const players = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
+                                                                const sets = match.score_text!.split(',').map(s => s.trim().split('-'))
+
+                                                                return (
+                                                                    <tr key={teamNum} className={`${isWinner ? 'bg-indigo-50/20' : ''} transition-colors`}>
+                                                                        <td className="px-8 py-6 text-left border-r border-gray-50">
+                                                                            <div className="flex flex-col gap-1">
+                                                                                {players?.map((p: any) => (
+                                                                                    <p key={p.player_id} className={`text-base font-black tracking-tight ${isWinner ? 'text-indigo-900' : 'text-gray-900'}`}>{p.name}</p>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        {sets.map((s, i) => (
+                                                                            <td key={i} className={`px-6 py-6 text-4xl font-black transition-all ${isWinner ? 'text-indigo-600 scale-110' : 'text-gray-200'}`}>
+                                                                                {s[teamNum - 1]}
+                                                                            </td>
+                                                                        ))}
+                                                                    </tr>
+                                                                )
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-16 bg-gray-50/50 m-6 rounded-2xl border-2 border-dashed border-gray-100">
+                                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                                    <History className="w-8 h-8 text-gray-200" />
+                                                </div>
+                                                <p className="text-gray-400 font-black uppercase tracking-widest text-[10px]">Awaiting match results</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )
+
+                        const FeedbackSection = (
+                            <div key="feedback" className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                                <button
+                                    onClick={() => setFeedbackCollapsed(!feedbackCollapsed)}
+                                    className="w-full px-8 py-6 flex justify-between items-center bg-gray-50/50 hover:bg-gray-50 transition-colors group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                                            <MessageSquare className="w-5 h-5 text-indigo-500" />
                                         </div>
-                                        <div>
-                                            <div className="text-[10px] font-black text-green-400 uppercase tracking-widest">Designated Spot</div>
-                                            <div className="text-2xl font-black text-green-700 leading-none">{match.booked_court_text}</div>
+                                        <div className="text-left">
+                                            <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Player Feedback</h2>
+                                            <p className="text-xs text-gray-400 font-medium">Anonymous ratings & reviews</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        {(isPast || match.status === 'completed') && feedback.length < 4 && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleResendFeedback() }}
+                                                disabled={resendingFeedback}
+                                                className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50 font-bold transition-all disabled:opacity-50 text-xs"
+                                            >
+                                                {resendingFeedback ? 'Resending...' : 'Resend Requests'}
+                                            </button>
+                                        )}
+                                        <div className={`p-2 rounded-lg transition-colors ${feedbackCollapsed ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-500'}`}>
+                                            {feedbackCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                                        </div>
+                                    </div>
+                                </button>
+
+                                {!feedbackCollapsed && (
+                                    <div className="p-8 space-y-8 animate-in slide-in-from-top-4 duration-300">
+                                        {feedback.length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                                {allPlayers.map(player => {
+                                                    const received = feedback.filter(f => f.rated_player_id === player.player_id)
+                                                    const avgScore = received.length > 0
+                                                        ? (received.reduce((acc, curr) => acc + curr.rating, 0) / received.length).toFixed(1)
+                                                        : 'N/A'
+                                                    return (
+                                                        <div key={player.player_id} className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
+                                                            <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center font-bold text-xs text-gray-400 mb-4 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
+                                                                {player.name?.[0]}
+                                                            </div>
+                                                            <p className="font-black text-gray-900 truncate mb-1 text-sm uppercase tracking-tight">{player.name}</p>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <p className="text-4xl font-black text-indigo-600 tracking-tighter">{avgScore}</p>
+                                                                <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest">Avg</p>
+                                                            </div>
+                                                            <div className="mt-4 pt-4 border-t border-gray-50">
+                                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-2">
+                                                                    <div className={`w-1.5 h-1.5 rounded-full ${received.length >= 2 ? 'bg-green-500' : 'bg-amber-400'}`} />
+                                                                    {received.length} Responses
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-16 bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100">
+                                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                                    <MessageSquare className="w-8 h-8 text-gray-100" />
+                                                </div>
+                                                <p className="text-gray-400 font-black uppercase tracking-widest text-[10px]">Awaiting player feedback</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )
+
+                        const InfoSection = (
+                            <div key="info" className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                                <button
+                                    onClick={() => setDemoCollapsed(!demoCollapsed)}
+                                    className="w-full px-8 py-6 flex justify-between items-center bg-gray-50/50 hover:bg-gray-50 transition-colors group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                                            <Clock className="w-5 h-5 text-indigo-500" />
+                                        </div>
+                                        <div className="text-left">
+                                            <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Match Info & Invites</h2>
+                                            <p className="text-xs text-gray-400 font-medium">Logistics and player management</p>
+                                        </div>
+                                    </div>
+                                    <div className={`p-2 rounded-lg transition-colors ${demoCollapsed ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-500'}`}>
+                                        {demoCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                                    </div>
+                                </button>
+
+                                {!demoCollapsed && (
+                                    <div className="p-8 space-y-10 animate-in slide-in-from-top-4 duration-300">
+                                        {/* Booking Info */}
+                                        <div className={`p-8 rounded-3xl border-2 transition-all shadow-sm ${match.court_booked ? 'bg-green-50/30 border-green-100' : 'bg-red-50/30 border-red-100'}`}>
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex gap-5">
+                                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${match.court_booked ? 'bg-white text-green-500 border border-green-100' : 'bg-white text-red-500 border border-red-100'
+                                                        }`}>
+                                                        <Calendar className="w-7 h-7" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-xl font-black text-gray-900 mb-1 tracking-tight">
+                                                            {match.court_booked ? 'Court Secured' : 'Action Required'}
+                                                        </h3>
+                                                        <p className="text-gray-500 text-sm font-medium">
+                                                            {match.booked_court_text || 'No court details found. Please update match if court is booked.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {!isPast && (
+                                                    <button
+                                                        onClick={() => setIsEditingBooking(!isEditingBooking)}
+                                                        className="p-3 text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all hover:scale-110 active:scale-95"
+                                                        title="Edit Booking"
+                                                    >
+                                                        <Edit2 className="w-6 h-6" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {isEditingBooking && (
+                                                <div className="mt-8 bg-white p-6 rounded-2xl border border-indigo-100 space-y-5 shadow-xl animate-in zoom-in-95 duration-200">
+                                                    <div className="flex flex-col gap-4">
+                                                        <label className="flex items-center gap-4 cursor-pointer group p-3 hover:bg-gray-50 rounded-xl transition-colors">
+                                                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${editCourtBooked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-200'}`}>
+                                                                {editCourtBooked && <Check className="w-4 h-4 text-white" />}
+                                                            </div>
+                                                            <input type="checkbox" checked={editCourtBooked} onChange={(e) => setEditCourtBooked(e.target.checked)} className="hidden" />
+                                                            <span className="text-sm font-black text-gray-700 uppercase tracking-widest">Court is Booked</span>
+                                                        </label>
+                                                        <div className="space-y-2">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Court Details</p>
+                                                            <input
+                                                                type="text"
+                                                                value={editCourtText}
+                                                                onChange={(e) => setEditCourtText(e.target.value)}
+                                                                className="w-full px-5 py-3 bg-gray-50 border-2 border-gray-50 focus:border-indigo-500 focus:bg-white rounded-2xl font-bold text-gray-900 transition-all focus:ring-4 focus:ring-indigo-50 focus:outline-none"
+                                                                placeholder="Location, Court Name, or Notes..."
+                                                            />
+                                                        </div>
+                                                        <label className="flex items-center gap-3 cursor-pointer ml-1">
+                                                            <input type="checkbox" checked={notifyPlayersOnUpdate} onChange={(e) => setNotifyPlayersOnUpdate(e.target.checked)} className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                                                            <span className="text-xs font-bold text-gray-500">Notify players of booking via SMS</span>
+                                                        </label>
+                                                    </div>
+                                                    <div className="flex gap-3">
+                                                        <button
+                                                            onClick={() => setIsEditingBooking(false)}
+                                                            className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={handleSaveBooking}
+                                                            disabled={actionLoading}
+                                                            className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-colors"
+                                                        >
+                                                            {actionLoading ? 'Saving...' : 'Save Updates'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Invites list */}
+                                        <div className="space-y-6">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+                                                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">
+                                                        Confirmed Players <span className="text-indigo-600 ml-1">({allPlayers.length}/4)</span>
+                                                    </h3>
+                                                </div>
+                                                {!isPast && (
+                                                    <button
+                                                        onClick={() => setShowInvitePanel(!showInvitePanel)}
+                                                        className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 shadow-lg hover:shadow-indigo-100 transition-all flex items-center gap-2"
+                                                    >
+                                                        <UserPlus className="w-4 h-4" />
+                                                        Send More Invites
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {showInvitePanel && (
+                                                <div className="p-6 bg-indigo-50/50 rounded-3xl space-y-4 animate-in slide-in-from-bottom-4 duration-300 border border-indigo-100">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search players by name..."
+                                                        value={searchTerm}
+                                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                                        className="w-full px-6 py-3 bg-white border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold text-gray-900 shadow-sm focus:ring-4 focus:ring-indigo-100 focus:outline-none transition-all"
+                                                    />
+                                                    {searchResults.length > 0 ? (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                            {searchResults.map(p => (
+                                                                <div
+                                                                    key={p.player_id}
+                                                                    onClick={() => togglePlayerSelection(p.player_id)}
+                                                                    className={`group p-4 rounded-2xl cursor-pointer bg-white border-2 transition-all ${selectedToInvite.has(p.player_id) ? 'border-indigo-500 bg-indigo-50' : 'border-white hover:border-gray-100 hover:shadow-md'}`}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs">
+                                                                                {p.name[0]}
+                                                                            </div>
+                                                                            <p className="font-bold text-gray-900">{p.name}</p>
+                                                                        </div>
+                                                                        {selectedToInvite.has(p.player_id) && <CheckCircle2 className="w-5 h-5 text-indigo-500" />}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : searchTerm.length >= 2 && (
+                                                        <p className="text-center py-4 text-sm font-medium text-gray-400">No matching players found</p>
+                                                    )}
+                                                    {selectedToInvite.size > 0 && (
+                                                        <button
+                                                            onClick={handleSendInvites}
+                                                            disabled={actionLoading}
+                                                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"
+                                                        >
+                                                            {actionLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <><Send className="w-5 h-5" /> Send {selectedToInvite.size} Invites</>}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {invites.map(invite => (
+                                                    <div key={invite.invite_id} className="group relative flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-green-200 hover:shadow-md transition-all">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm transition-colors ${invite.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                                                invite.status === 'maybe' ? 'bg-yellow-100 text-yellow-700' :
+                                                                    'bg-gray-200 text-gray-500'
+                                                                }`}>
+                                                                {invite.player?.name?.[0] || '?'}
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="font-bold text-gray-900 leading-none tracking-tight">{invite.player?.name}</p>
+                                                                    {invite.status === 'accepted' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                                                                    {invite.status === 'declined' && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                                                                </div>
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1.5 flex items-center gap-1.5">
+                                                                    <div className={`w-1.5 h-1.5 rounded-full ${invite.status === 'accepted' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                                                    {invite.status}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Send className="w-4 h-4 text-gray-200 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+
+                                                        {invite.status === 'accepted' && (
+                                                            <div onClick={(e) => { e.stopPropagation(); handleRemovePlayer(invite.player_id) }} className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                                <div className="bg-white rounded-full p-1 shadow-md border border-red-50 hover:bg-red-50 transition-colors">
+                                                                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
+                        )
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Confirmed Players List */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-2 mb-2 font-black text-gray-900 uppercase tracking-widest text-xs">
-                                        <Users className="w-4 h-4 text-green-500" />
-                                        Confirmed Players
-                                    </div>
-                                    {allPlayers.length > 0 ? (
-                                        <div className="space-y-3">
-                                            {allPlayers.map((player) => (
-                                                <div key={player.player_id} className="group relative flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-green-200 hover:shadow-md transition-all">
-                                                    <div className="flex items-center gap-4">
-                                                        <CheckCircle2 className="w-5 h-5 text-green-500" />
-                                                        <div>
-                                                            <p className="font-black text-gray-900 text-sm leading-none mb-1 uppercase tracking-tight">{player.name}</p>
-                                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Level {player.declared_skill_level}</p>
-                                                        </div>
-                                                    </div>
-                                                    {!isPast && (
-                                                        <button
-                                                            onClick={() => handleRemovePlayer(player.player_id)}
-                                                            disabled={actionLoading}
-                                                            className="p-2 text-red-100 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-0"
-                                                            title="Remove Player"
-                                                        >
-                                                            <XCircle className="w-5 h-5" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="py-12 px-6 rounded-3xl bg-gray-50 border-2 border-dashed border-gray-100 text-center">
-                                            <Users className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-relaxed">Waitlist is currently empty<br />Nobody confirmed yet</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Invites List */}
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <div className="flex items-center gap-2 font-black text-gray-900 uppercase tracking-widest text-xs">
-                                            <Send className="w-4 h-4 text-indigo-500" />
-                                            Active Invites
-                                        </div>
-                                        {!showInvitePanel && !isPast && (allPlayers.length < 4) && (
-                                            <button
-                                                onClick={() => setShowInvitePanel(true)}
-                                                className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100"
-                                            >
-                                                + New Invite
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {showInvitePanel && (
-                                        <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-100 animate-in slide-in-from-right-4 duration-300">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <h4 className="text-white font-black text-xs uppercase tracking-widest">Player Outreach</h4>
-                                                <XCircle className="w-4 h-4 text-indigo-300 cursor-pointer hover:text-white" onClick={() => setShowInvitePanel(false)} />
-                                            </div>
-                                            <input
-                                                type="text"
-                                                placeholder="Type name..."
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                className="w-full px-4 py-3 bg-indigo-500/30 border border-white/20 rounded-xl mb-4 focus:ring-2 focus:ring-white placeholder-indigo-200 text-white font-bold"
-                                                autoFocus
-                                            />
-                                            {searchResults.length > 0 && (
-                                                <div className="max-h-48 overflow-y-auto space-y-2 mb-4 scrollbar-hide">
-                                                    {searchResults.map((player) => (
-                                                        <div
-                                                            key={player.player_id}
-                                                            onClick={() => togglePlayerSelection(player.player_id)}
-                                                            className={`p-3 rounded-xl cursor-pointer transition-all flex items-center gap-3 ${selectedToInvite.has(player.player_id)
-                                                                ? 'bg-white shadow-lg scale-[1.02]'
-                                                                : 'bg-white/10 hover:bg-white/20'
-                                                                }`}
-                                                        >
-                                                            <div className={`w-4 h-4 rounded border-2 transition-colors ${selectedToInvite.has(player.player_id) ? 'bg-indigo-600 border-indigo-600' : 'border-white/30'}`}>
-                                                                {selectedToInvite.has(player.player_id) && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                                                            </div>
-                                                            <div>
-                                                                <p className={`text-sm font-black uppercase leading-none mb-1 ${selectedToInvite.has(player.player_id) ? 'text-indigo-900' : 'text-white'}`}>{player.name}</p>
-                                                                <p className={`text-[10px] font-bold uppercase tracking-widest ${selectedToInvite.has(player.player_id) ? 'text-indigo-400' : 'text-indigo-200'}`}>Lvl {player.declared_skill_level}</p>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {selectedToInvite.size > 0 && (
-                                                <button
-                                                    onClick={handleSendInvites}
-                                                    disabled={actionLoading}
-                                                    className="w-full py-4 bg-white text-indigo-600 rounded-xl font-black uppercase tracking-widest shadow-lg hover:shadow-indigo-800/40 transform hover:-translate-y-0.5 transition-all text-sm"
-                                                >
-                                                    Send {selectedToInvite.size} Invites
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-2">
-                                        {invites.length > 0 ? (
-                                            invites.map((invite) => {
-                                                const config = statusConfig[invite.status] || statusConfig.sent
-                                                return (
-                                                    <div key={invite.invite_id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100 hover:shadow-sm transition-all">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className={`p-1.5 rounded-lg ${config.bg.replace('100', '50')} ${config.text}`}>
-                                                                <Clock className="w-4 h-4" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-black text-gray-900 text-sm leading-none mb-1 uppercase tracking-tight">{invite.player?.name || 'Unknown'}</p>
-                                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                                                                    {invite.status === 'pending_sms' ? 'Queued' : 'Sent'} {new Date(invite.sent_at).toLocaleDateString()}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <div className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${config.bg} ${config.text} ${config.bg.replace('100', '200')}`}>
-                                                            {config.label}
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })
-                                        ) : (
-                                            <div className="py-12 px-6 rounded-3xl bg-gray-50 border-2 border-dashed border-gray-100 text-center">
-                                                <Send className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Zero Outbound activity</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                        return isPast ? (
+                            <>
+                                {ResultsSection}
+                                {FeedbackSection}
+                                {InfoSection}
+                            </>
+                        ) : (
+                            <>
+                                {InfoSection}
+                                {ResultsSection}
+                                {FeedbackSection}
+                            </>
+                        )
+                    })()}
                 </div>
             </div>
-        </div>
+        </div >
     )
 }

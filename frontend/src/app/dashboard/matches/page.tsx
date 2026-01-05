@@ -38,63 +38,57 @@ export default async function MatchesPage() {
         clubs = clubsData || []
     }
 
-    // 2. Fetch Players for these matches
-    const playerIds = new Set<string>()
-    matches?.forEach(m => {
-        m.team_1_players?.forEach((id: string) => playerIds.add(id))
-        m.team_2_players?.forEach((id: string) => playerIds.add(id))
-    })
+    // 2. Fetch all participations for these matches to get correct player lists
+    const matchIds = matches?.map(m => m.match_id) || []
+    const participationsMap = new Map<string, { team1: any[], team2: any[], names: string[] }>()
 
-    const playerMap = new Map<string, any>()
-    if (playerIds.size > 0) {
-        const { data: players } = await supabase
-            .from('players')
-            .select('player_id, name, phone_number, declared_skill_level')
-            .in('player_id', Array.from(playerIds))
+    // Initialize map
+    matchIds.forEach(id => participationsMap.set(id, { team1: [], team2: [], names: [] }))
 
-        players?.forEach(p => playerMap.set(p.player_id, p))
+    if (matchIds.length > 0) {
+        const { data: participations } = await supabase
+            .from('match_participations')
+            .select(`
+                match_id,
+                player_id,
+                team_index,
+                players (
+                    player_id,
+                    name,
+                    phone_number,
+                    declared_skill_level
+                )
+            `)
+            .in('match_id', matchIds)
+
+        participations?.forEach((p: any) => {
+            const matchData = participationsMap.get(p.match_id)
+            if (matchData && p.players) {
+                const player = p.players
+                matchData.names.push(player.name)
+                if (p.team_index === 1) {
+                    matchData.team1.push(player)
+                } else if (p.team_index === 2) {
+                    matchData.team2.push(player)
+                }
+            }
+        })
     }
 
-    // 3. Check for Feedback Requests (to determine "Sent" status)
-    const matchIds = matches?.map(m => m.match_id) || []
+    // 3. Check for Feedback Requests
     const feedbackRequestMatches = new Set<string>()
-
     if (matchIds.length > 0) {
         const { data: requests } = await supabase
             .from('feedback_requests')
             .select('match_id')
             .in('match_id', matchIds)
-
         requests?.forEach(r => feedbackRequestMatches.add(r.match_id))
     }
 
     // 4. Enrich Matches
     const enrichedMatches = matches?.map(m => {
-        // Get player details
-        const details1: any[] = []
-        const details2: any[] = []
-        const names: string[] = []
+        const partData = participationsMap.get(m.match_id) || { team1: [], team2: [], names: [] }
 
-        m.team_1_players?.forEach((id: string) => {
-            if (playerMap.has(id)) {
-                const p = playerMap.get(id)
-                details1.push(p)
-                names.push(p.name)
-            }
-        })
-        m.team_2_players?.forEach((id: string) => {
-            if (playerMap.has(id)) {
-                const p = playerMap.get(id)
-                details2.push(p)
-                names.push(p.name)
-            }
-        })
-
-        // Determine Feedback Status
-        // Logic: 
-        // - Received: feedback_collected is true
-        // - Sent: feedback_requests exist
-        // - N/A: neither (future or not sent yet)
         let fStatus = 'N/A'
         if (m.feedback_collected) {
             fStatus = 'Received'
@@ -104,9 +98,9 @@ export default async function MatchesPage() {
 
         return {
             ...m,
-            player_names: names,
-            team_1_details: details1,
-            team_2_details: details2,
+            player_names: partData.names,
+            team_1_details: partData.team1,
+            team_2_details: partData.team2,
             feedback_status: fStatus
         }
     }) || []
