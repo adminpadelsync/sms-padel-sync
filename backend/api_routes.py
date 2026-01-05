@@ -564,7 +564,7 @@ async def get_club_booking_status(club_id: str):
         if matches:
             match_ids = [m["match_id"] for m in matches]
             # Fetch all participations for these matches
-            parts_res = supabase.table("match_participations").select("match_id, player_id, team").in_("match_id", match_ids).execute()
+            parts_res = supabase.table("match_participations").select("match_id, player_id, team_index").in_("match_id", match_ids).execute()
             all_parts = parts_res.data or []
             
             # Gather unique player IDs
@@ -584,12 +584,12 @@ async def get_club_booking_status(club_id: str):
             for part in all_parts:
                 mid = part["match_id"]
                 pid = part["player_id"]
-                team = part.get("team")
+                team_index = part.get("team_index")
                 p_details = player_map.get(pid)
                 if p_details:
-                    if team == 1:
+                    if team_index == 1:
                         match_teams[mid]["team_1"].append(p_details)
-                    elif team == 2:
+                    elif team_index == 2:
                         match_teams[mid]["team_2"].append(p_details)
             
             # Assign back to matches list
@@ -667,7 +667,7 @@ async def get_confirmed_matches(club_id: str = None):
         if matches:
             match_ids = [m["match_id"] for m in matches]
             # Fetch participations
-            parts_res = supabase.table("match_participations").select("match_id, player_id, team").in_("match_id", match_ids).execute()
+            parts_res = supabase.table("match_participations").select("match_id, player_id, team_index").in_("match_id", match_ids).execute()
             all_parts = parts_res.data or []
             
             # Reconstruct teams for each match
@@ -676,9 +676,9 @@ async def get_confirmed_matches(club_id: str = None):
                 mid = p["match_id"]
                 pid = p["player_id"]
                 match_parts_map[mid]["all"].append(pid)
-                if p.get("team") == 1:
+                if p.get("team_index") == 1:
                     match_parts_map[mid]["team_1"].append(pid)
-                elif p.get("team") == 2:
+                elif p.get("team_index") == 2:
                     match_parts_map[mid]["team_2"].append(pid)
             
             # Filter matches (confirmed OR 4 players)

@@ -816,7 +816,7 @@ Example: MAYBE 1`
                                     .filter(p => !selectedPlayers.find(sp => sp.player_id === p.player_id))
                                     .map(player => (
                                         <option key={player.player_id} value={player.player_id}>
-                                            {player.name} - Level {player.declared_skill_level.toFixed(2)}
+                                            {player.name} - Level {(player.declared_skill_level || 0).toFixed(2)}
                                         </option>
                                     ))}
                             </select>
@@ -867,20 +867,23 @@ Example: MAYBE 1`
                         ) : (
                             <div className="space-y-2">
                                 {confirmedMatches.map(match => {
+                                    // Safe date parsing to avoid RangeError on toLocaleDateString
                                     const date = new Date(match.scheduled_time)
-                                    const dateStr = date.toLocaleDateString('en-US', {
+                                    const isValidDate = !isNaN(date.getTime())
+                                    const dateStr = isValidDate ? date.toLocaleDateString('en-US', {
                                         weekday: 'short',
                                         month: 'short',
                                         day: 'numeric',
                                         hour: 'numeric',
                                         minute: '2-digit'
-                                    })
+                                    }) : 'Invalid Date'
+
                                     return (
                                         <div key={match.match_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                             <div>
                                                 <div className="font-medium text-gray-900">{dateStr}</div>
                                                 <div className="text-sm text-gray-600">
-                                                    {match.player_names?.join(', ') || 'No players'}
+                                                    {(match.player_names || []).join(', ') || 'No players'}
                                                 </div>
                                                 {match.feedback_collected && (
                                                     <span className="text-xs text-green-600">✓ Feedback collected</span>

@@ -361,10 +361,8 @@ def update_match(match_id: str, updates: dict) -> dict:
     # 4. Return fully enriched match object
     return get_match_details(match_id)
 
-def _sync_team_participation(match_id: str, team: int, new_player_ids: List[str]):
-    """Helper to sync a team's roster in match_participations."""
     # Get current participants for this team
-    res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).eq("team", team).execute()
+    res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).eq("team_index", team).execute()
     current_ids = {row["player_id"] for row in (res.data or [])}
     new_ids = set(new_player_ids)
     
