@@ -51,6 +51,24 @@ interface TrainingJigClientProps {
     clubs?: { club_id: string; name: string }[]
 }
 
+const INTENT_DESCRIPTIONS: Record<string, string> = {
+    "START_MATCH": "Requesting to play a match",
+    "ACCEPT_INVITE": "Accepting a match invite",
+    "DECLINE_INVITE": "Declining a match invite",
+    "JOIN_GROUP": "Browsing or joining player groups",
+    "SET_AVAILABILITY": "Updating play time preferences",
+    "CHECK_STATUS": "Checking upcoming matches or status",
+    "MUTE": "Pausing match invites for today",
+    "UNMUTE": "Resuming match invites",
+    "SUBMIT_FEEDBACK": "Providing player ratings",
+    "REPORT_RESULT": "Reporting match winner and score",
+    "BOOK_COURT": "Confirming a court booking",
+    "RESET": "Restarting the conversation",
+    "GREETING": "Simple greeting or introduction",
+    "CHITCHAT": "General banter or chitchat",
+    "UNKNOWN": "Unrecognized intent"
+}
+
 export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] }: TrainingJigClientProps) {
     const [activeClubId, setActiveClubId] = useState<string | null>(userClubId)
     const [players, setPlayers] = useState<Player[]>([])
@@ -473,6 +491,10 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
                                                                 'bg-slate-700 text-slate-400'
                                                             }`}>
                                                             {msg.intent || 'UNKNOWN'}
+                                                            <span className="mx-1 opacity-50">-</span>
+                                                            <span className="opacity-80 font-normal">
+                                                                {INTENT_DESCRIPTIONS[msg.intent || 'UNKNOWN'] || 'No description available'}
+                                                            </span>
                                                         </span>
                                                         {msg.confidence !== undefined && <span className="text-[10px] text-slate-500">{(msg.confidence * 100).toFixed(0)}% confidence</span>}
                                                     </div>
@@ -554,7 +576,12 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
                             <div className="space-y-4 animate-in fade-in duration-500">
                                 <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
                                     <p className="text-xs font-medium text-indigo-300 mb-1">Detected Intent</p>
-                                    <p className="text-sm font-bold">{activeMessages[activeMessages.length - 1].intent || 'N/A'}</p>
+                                    <p className="text-sm font-bold">
+                                        {activeMessages[activeMessages.length - 1].intent || 'N/A'}
+                                        <span className="block text-[10px] font-normal text-slate-400 mt-1 italic">
+                                            {INTENT_DESCRIPTIONS[activeMessages[activeMessages.length - 1].intent || ''] || ''}
+                                        </span>
+                                    </p>
                                 </div>
 
                                 <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
@@ -617,14 +644,9 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
                                     value={correctedIntent}
                                     onChange={(e) => setCorrectedIntent(e.target.value)}
                                 >
-                                    <option value="START_MATCH">START_MATCH</option>
-                                    <option value="JOIN_GROUP">JOIN_GROUP</option>
-                                    <option value="SET_AVAILABILITY">SET_AVAILABILITY</option>
-                                    <option value="CHECK_STATUS">CHECK_STATUS</option>
-                                    <option value="REPORT_RESULT">REPORT_RESULT</option>
-                                    <option value="GREETING">GREETING</option>
-                                    <option value="CHITCHAT">CHITCHAT</option>
-                                    <option value="SUBMIT_FEEDBACK">SUBMIT_FEEDBACK</option>
+                                    {Object.entries(INTENT_DESCRIPTIONS).map(([key, desc]) => (
+                                        <option key={key} value={key}>{key} - {desc}</option>
+                                    ))}
                                 </select>
                             </div>
 

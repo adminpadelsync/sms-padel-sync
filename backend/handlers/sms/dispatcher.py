@@ -227,12 +227,16 @@ class IntentDispatcher:
                 return
 
         except Exception as e:
-            print(f"[DISPATCHER ERROR] {e}")
-            import traceback
-            traceback.print_exc()
-            
             # Use resolved cid if available, otherwise fall back to passed club_id
             error_cid = cid if 'cid' in locals() else club_id
+            
+            log_sms_error(
+                error_message=f"System error in dispatcher: {e}",
+                phone_number=from_number,
+                sms_body=body,
+                exception=e
+            )
+            
             if error_cid:
                 send_sms(from_number, "System error in dispatcher.", club_id=error_cid)
             else:

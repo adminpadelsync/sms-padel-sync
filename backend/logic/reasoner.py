@@ -6,6 +6,7 @@ import random
 import re
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
+from sms_constants import INTENT_DESCRIPTIONS
 
 load_dotenv()
 
@@ -22,6 +23,9 @@ class ReasonerResult:
 
     def __repr__(self):
         return f"ReasonerResult(intent={self.intent}, confidence={self.confidence}, entities={self.entities}, reply_text={self.reply_text})"
+
+def get_intents_prompt():
+    return "\n".join([f"- {k}: {v}" for k, v in INTENT_DESCRIPTIONS.items()])
 
 PROMPT_TEMPLATE = """
 You are the reasoning engine for an SMS-based Padel Matchmaking application.
@@ -40,21 +44,7 @@ Current User Profile: {user_profile}
 {golden_samples}
 
 ### Intents:
-- START_MATCH: Requesting to play a match (Look for "play", "match", "game").
-- ACCEPT_INVITE: Specifically accepting a match invite (Look for "yes", "count me in", "i'm in").
-- DECLINE_INVITE: Specifically declining a match invite (Look for "no", "can't make it", "not today").
-- JOIN_GROUP: Viewing, joining, or managing player group memberships (Look for "groups", "what groups am i in", "join group", number selections LIKE "1", "2").
-- SET_AVAILABILITY: Providing availability (Look for "mornings", "weekends", "anytime").
-- CHECK_STATUS: Asking for match invites or next matches (Look for "matches", "next", "status").
-- MUTE: Wanting to pause invites (Look for "mute", "pause", "stop").
-- UNMUTE: Resuming invites (Look for "unmute", "resume", "start").
-- SUBMIT_FEEDBACK: Providing numeric ratings for players (Look for sequence of numbers e.g. "1 9 8" or "10 10 10").
-- REPORT_RESULT: Reporting the outcome of a match including teams and score (Look for "won", "lost", "score was", "beat").
-- BOOK_COURT: Explicitly stating that a court has been booked (Look for "booked court", "i got court 6", "confirmed court 4").
-- RESET: Wanting to start over or clear state.
-- GREETING: Just saying hello.
-- CHITCHAT: General banter or feedback.
-- UNKNOWN: None of the above.
+{intents_list}
 
 ### Entities to extract:
 - date: e.g., "Sunday", "Tomorrow", "Dec 20".
@@ -217,7 +207,8 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         user_profile=json.dumps(user_profile or {}),
         history=history_str,
         pending_context=context_str,
-        golden_samples=samples_str
+        golden_samples=samples_str,
+        intents_list=get_intents_prompt()
     )
 
     max_retries = 3
@@ -300,4 +291,3 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
         print(f"[REASONER] Name Resolution Logic Error: {e}")
         
     return {"player_id": None, "confidence": 0.0, "reasoning": "Error occurred"}
-

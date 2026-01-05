@@ -143,3 +143,20 @@ MSG_FEEDBACK_THANKS = "Thanks for your feedback! This helps us create better mat
 MSG_FEEDBACK_INVALID = "Please reply with 3 numbers (1-10) separated by spaces, e.g., '8 7 9' or SKIP."
 MSG_FEEDBACK_SKIPPED = "No problem! We'll ask again next time."
 
+# Intent Definitions
+INTENT_DESCRIPTIONS = {
+    "START_MATCH": "Requesting to play a match (e.g. 'play tomorrow')",
+    "ACCEPT_INVITE": "Accepting a match invite (e.g. 'Yes', 'I'm in')",
+    "DECLINE_INVITE": "Declining a match invite (e.g. 'No', 'Can't make it')",
+    "JOIN_GROUP": "Browsing or joining player groups (e.g. 'groups')",
+    "SET_AVAILABILITY": "Updating play time preferences (e.g. 'mornings')",
+    "CHECK_STATUS": "Checking upcoming matches or status (e.g. 'matches')",
+    "MUTE": "Pausing match invites for today (e.g. 'mute')",
+    "UNMUTE": "Resuming match invites (e.g. 'unmute')",
+    "SUBMIT_FEEDBACK": "Providing player ratings (e.g. '8 9 7')",
+    "REPORT_RESULT": "Reporting match winner and score (e.g. 'we won 6-4')",
+    "BOOK_COURT": "Confirming a court booking (e.g. 'booked court 6')",
+    "RESET": "Restarting the conversation or clearing state",
+    "GREETING": "Simple greeting or introduction",
+    "CHITCHAT": "General banter or non-functional talk"
+}

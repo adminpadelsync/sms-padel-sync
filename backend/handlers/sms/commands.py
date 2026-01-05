@@ -10,11 +10,13 @@ from redis_client import set_user_state, clear_user_state
 from logic_utils import (
     get_club_timezone, 
     parse_iso_datetime, 
-    format_sms_datetime
+    format_sms_datetime,
+    get_now_utc
 )
 from handlers.match_handler import handle_match_request
 from handlers.result_handler import handle_result_report
 from handlers.match_handler import handle_court_booking_sms
+from error_logger import log_error
 
 def handle_matches_command(from_number: str, player: Dict, club_id: str, club_name: str):
     """Show player's matches - includes both matches they requested AND matches they were invited to"""
@@ -157,9 +159,15 @@ def handle_matches_command(from_number: str, player: Dict, club_id: str, club_na
         send_sms(from_number, response, club_id=club_id)
 
     except Exception as e:
-        print(f"[ERROR] MATCHES command failed: {e}")
-        import traceback
-        traceback.print_exc()
+        log_error(
+            error_type="sms_command",
+            error_message=f"MATCHES command failed: {e}",
+            phone_number=from_number,
+            player_id=player_id,
+            club_id=club_id,
+            handler_name="handle_matches_command",
+            exception=e
+        )
         send_sms(from_number, "Sorry, something went wrong. Please try again.", club_id=club_id)
 
 
@@ -209,7 +217,15 @@ def handle_groups_command(from_number: str, player: Dict, club_id: str, club_nam
             "club_id": str(club_id)
         })
     except Exception as e:
-        print(f"[ERROR] GROUPS command failed: {e}")
+        log_error(
+            error_type="sms_command",
+            error_message=f"GROUPS command failed: {e}",
+            phone_number=from_number,
+            player_id=player.get("player_id"),
+            club_id=club_id,
+            handler_name="handle_groups_command",
+            exception=e
+        )
         send_sms(from_number, "Sorry, I couldn't fetch groups right now.", club_id=club_id)
 
 
@@ -352,7 +368,15 @@ def handle_availability_update(from_number: str, body: str, player: Dict, club_i
         send_sms(from_number, f"Got it! Availability updated: {confirm}", club_id=club_id)
         clear_user_state(from_number)
     except Exception as e:
-        print(f"[ERROR] Failed to update availability: {e}")
+        log_error(
+            error_type="sms_command",
+            error_message=f"Failed to update availability: {e}",
+            phone_number=from_number,
+            player_id=player.get("player_id"),
+            club_id=club_id,
+            handler_name="handle_availability_update",
+            exception=e
+        )
         send_sms(from_number, "Sorry, something went wrong updating your availability.", club_id=club_id)
         clear_user_state(from_number)
 
@@ -414,7 +438,15 @@ def handle_group_browsing_response(from_number: str, body: str, player: Dict, st
             send_sms(from_number, " ✅ " + " | ".join(responses), club_id=club_id)
             clear_user_state(from_number)
         except Exception as e:
-            print(f"[ERROR] Failed to update group memberships: {e}")
+            log_error(
+                error_type="sms_command",
+                error_message=f"Failed to update group memberships: {e}",
+                phone_number=from_number,
+                player_id=player_id,
+                club_id=club_id,
+                handler_name="handle_group_browsing_response",
+                exception=e
+            )
             send_sms(from_number, "Sorry, something went wrong updating your groups.", club_id=club_id)
             clear_user_state(from_number)
     else:
