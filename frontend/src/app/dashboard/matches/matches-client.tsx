@@ -509,9 +509,17 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2.5 py-1 inline-flex text-xs leading-4 font-semibold rounded-full border ${getStatusStyles(match.status)}`}>
-                                                        {match.status.charAt(0).toUpperCase() + match.status.slice(1)}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className={`px-2.5 py-1 inline-flex text-xs leading-4 font-semibold rounded-full border ${getStatusStyles(match.status)}`}>
+                                                            {match.status.charAt(0).toUpperCase() + match.status.slice(1)}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 mt-0.5 ml-0.5">
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${match.court_booked ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                                                            <span className={`text-[10px] font-black tracking-tight ${match.court_booked ? 'text-gray-500' : 'text-red-500'}`}>
+                                                                {match.court_booked ? (match.booked_court_text || 'BOOKED').toUpperCase() : 'NEEDS COURT'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 max-w-[200px]">
                                                     <div className="flex flex-wrap gap-1.5">
