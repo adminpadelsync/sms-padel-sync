@@ -61,7 +61,7 @@ DEFAULT_LEVEL_RANGE = 0.25
 DEFAULT_GENDER = "Mixed"
 
 
-def handle_match_date_input(from_number: str, body: str, player: dict, entities: Optional[dict] = None):
+def handle_match_date_input(from_number: str, body: str, player: dict, entities: Optional[dict] = None, cid: str = None):
     """
     Handle date/time input for match request (first phase).
     Parses natural language input. If player is in groups, asks group first.
@@ -112,12 +112,11 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
     if parsed_dt is None:
         # Neither worked - if the body was just "play" or similar, ask friendly
         if body.lower().strip() in ["play", "start", "match"]:
-            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=get_club_name()), club_id=club_id)
+            send_sms(from_number, msg.MSG_REQUEST_DATE.format(club_name=get_club_name()), club_id=cid or player.get("club_id"))
             # Set state to wait for date
             set_user_state(from_number, msg.STATE_MATCH_REQUEST_DATE)
         else:
-            # Re-ask if they sent something we couldn't parse
-            send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD, club_id=club_id)
+            send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD, club_id=cid or player.get("club_id"))
         return
     
     # Date parsed successfully - check if we should auto-scope to a group
@@ -141,7 +140,8 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             target_group_id=auto_group_id,
             skip_filters=True,
             group_name=group_name,
-            friendly_time=format_sms_datetime(parsed_dt, club_id=player.get("club_id"))
+            friendly_time=format_sms_datetime(parsed_dt, club_id=player.get("club_id")),
+            cid=cid or player.get("club_id")
         )
         return
 
@@ -179,20 +179,21 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
             club_name=get_club_name(),
             time=human_readable,
             groups_list=groups_list
-        ))
+        ), club_id=cid or player.get("club_id"))
         
         # Store state for group selection
         set_user_state(from_number, msg.STATE_MATCH_GROUP_SELECTION, {
             "scheduled_time_iso": iso_format,
             "scheduled_time_human": human_readable,
-            "group_options": group_options
+            "group_options": group_options,
+            "club_id": cid or player.get("club_id") # Pass cid to state
         })
     else:
         # Player not in any groups - go directly to preferences
-        _send_preferences_confirmation(from_number, human_readable, iso_format, player)
+        _send_preferences_confirmation(from_number, human_readable, iso_format, player, cid=cid)
 
 
-def _send_preferences_confirmation(from_number: str, human_readable: str, iso_format: str, player: dict):
+def _send_preferences_confirmation(from_number: str, human_readable: str, iso_format: str, player: dict, cid: str = None):
     """
     Send confirmation message with match preferences.
     Gender defaults to player's own gender.
@@ -218,7 +219,7 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
         gender=gender_display
     )
     
-    send_sms(from_number, confirm_msg, club_id=player.get("club_id"))
+    send_sms(from_number, confirm_msg, club_id=cid or player.get("club_id"))
     
     # Store in state for confirmation step
     set_user_state(from_number, msg.STATE_MATCH_REQUEST_CONFIRM, {
@@ -226,11 +227,12 @@ def _send_preferences_confirmation(from_number: str, human_readable: str, iso_fo
         "scheduled_time_human": human_readable,
         "level_min": level_min,
         "level_max": level_max,
-        "gender_preference": gender_preference
+        "gender_preference": gender_preference,
+        "club_id": cid or player.get("club_id") # Pass cid to state
     })
 
 
-def handle_match_confirmation(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None):
+def handle_match_confirmation(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None, cid: str = None):
     """
     Handle confirmation of parsed date/time with preferences (second phase).
     Parses gender (M/F) and level range (e.g., 3.0-4.0).
@@ -245,21 +247,22 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
     level_min = float(state_data.get("level_min", 3.0))
     level_max = float(state_data.get("level_max", 4.0))
     gender_preference = state_data.get("gender_preference", "mixed")
+    state_cid = state_data.get("club_id") # Retrieve cid from state
     
     if not scheduled_time_iso:
-        send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR, club_id=player.get("club_id"))
+        send_sms(from_number, msg.MSG_MATCH_CREATION_ERROR, club_id=state_cid or player.get("club_id"))
         clear_user_state(from_number)
         return
     
     # Check for cancel
     if response_lower in ["no", "n", "cancel", "nope"]:
-        send_sms(from_number, msg.MSG_DATE_CANCELLED, club_id=player.get("club_id"))
+        send_sms(from_number, msg.MSG_DATE_CANCELLED, club_id=state_cid or player.get("club_id"))
         clear_user_state(from_number)
         return
     
     # Check for MUTE command during confirmation
     if response_lower == "mute":
-        _handle_mute(from_number, player)
+        _handle_mute(from_number, player, cid=state_cid)
         clear_user_state(from_number)
         return
     
@@ -291,13 +294,14 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
             gender=gender_display
         )
         
-        send_sms(from_number, confirm_msg, club_id=player.get("club_id"))
+        send_sms(from_number, confirm_msg, club_id=state_cid or player.get("club_id"))
         set_user_state(from_number, msg.STATE_MATCH_REQUEST_CONFIRM, {
             "scheduled_time_iso": scheduled_time_iso,
             "scheduled_time_human": scheduled_time_human,
             "level_min": level_min,
             "level_max": level_max,
-            "gender_preference": gender_preference
+            "gender_preference": gender_preference,
+            "club_id": state_cid or player.get("club_id") # Pass cid to state
         })
         return
     
@@ -312,7 +316,8 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
             player,
             level_min,
             level_max,
-            gender_preference
+            gender_preference,
+            cid=state_cid # Pass cid to _create_match
         )
         return
     
@@ -333,7 +338,7 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
 
     
     if parsed_dt is not None:
-        _send_preferences_confirmation(from_number, human_readable, iso_format, player)
+        _send_preferences_confirmation(from_number, human_readable, iso_format, player, cid=state_cid)
         return
     
     # Fallback: Try strict format
@@ -342,16 +347,16 @@ def handle_match_confirmation(from_number: str, body: str, player: dict, state_d
         human_readable = scheduled_time.strftime("%a, %b %d at %I:%M %p")
         iso_format = scheduled_time.isoformat()
         
-        _send_preferences_confirmation(from_number, human_readable, iso_format, player)
+        _send_preferences_confirmation(from_number, human_readable, iso_format, player, cid=state_cid)
         return
     except ValueError:
         pass
     
     # Still not understood
-    send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD, club_id=player.get("club_id"))
+    send_sms(from_number, msg.MSG_DATE_NOT_UNDERSTOOD, club_id=state_cid or player.get("club_id"))
 
 
-def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None):
+def handle_group_selection(from_number: str, body: str, player: dict, state_data: dict, entities: Optional[dict] = None, cid: str = None):
     """
     Handle selection of group to invite.
     - If "1" (Everyone): go to preferences confirmation
@@ -365,11 +370,12 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
     group_options = state_data.get("group_options", {})
     scheduled_time_iso = state_data.get("scheduled_time_iso")
     scheduled_time_human = state_data.get("scheduled_time_human")
+    state_cid = state_data.get("club_id") # Retrieve cid from state
     
     # Check for "Everyone" selection
     if selection == "1" or selection_lower == "everyone" or selection_lower == "all":
         # Go to preferences confirmation (full filtering flow)
-        _send_preferences_confirmation(from_number, scheduled_time_human, scheduled_time_iso, player)
+        _send_preferences_confirmation(from_number, scheduled_time_human, scheduled_time_iso, player, cid=state_cid)
         return
     
     # Check for group selection
@@ -390,7 +396,8 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
             target_group_id=target_group_id,
             skip_filters=True,
             group_name=group_name,
-            friendly_time=format_sms_datetime(parse_iso_datetime(scheduled_time_iso), club_id=player.get("club_id"))
+            friendly_time=format_sms_datetime(parse_iso_datetime(scheduled_time_iso), club_id=player.get("club_id")),
+            cid=state_cid # Pass cid to _create_match
         )
         return
     
@@ -421,24 +428,25 @@ def handle_group_selection(from_number: str, body: str, player: dict, state_data
             club_name=get_club_name(),
             time=human_readable,
             groups_list=groups_list
-        ))
+        ), club_id=state_cid or player.get("club_id"))
         
         # Update state with new time
         set_user_state(from_number, msg.STATE_MATCH_GROUP_SELECTION, {
             "scheduled_time_iso": iso_format,
             "scheduled_time_human": human_readable,
-            "group_options": group_options
+            "group_options": group_options,
+            "club_id": state_cid or player.get("club_id") # Pass cid to state
         })
         return
     
     # Invalid selection
-    send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.", club_id=player.get("club_id"))
+    send_sms(from_number, "Invalid selection. Please reply with 1 for Everyone or the number of your group.", club_id=state_cid or player.get("club_id"))
 
 
 
 
 
-def _handle_mute(from_number: str, player: dict):
+def _handle_mute(from_number: str, player: dict, cid: str = None):
     """
     Mute player from receiving invites until end of day.
     """
@@ -453,7 +461,7 @@ def _handle_mute(from_number: str, player: dict):
         "muted_until": tomorrow.isoformat()
     }).eq("player_id", player["player_id"]).execute()
     
-    send_sms(from_number, msg.MSG_MUTED, club_id=player.get("club_id"))
+    send_sms(from_number, msg.MSG_MUTED, club_id=cid or player.get("club_id"))
 
 
 def _create_match(
@@ -467,14 +475,16 @@ def _create_match(
     target_group_id: Optional[str] = None,
     skip_filters: bool = False,
     group_name: str = None,
-    friendly_time: str = None
+    friendly_time: str = None,
+    cid: str = None # Added cid parameter
 ):
     """
     Create match in database with preferences and trigger invites.
     If skip_filters is True, invites all group members regardless of level/gender.
     """
     if not player:
-        send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND, club_id=None) # Fallback to default if no player
+        # Resolve cid (club_id) passed from dispatcher for error message
+        send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND, club_id=cid) 
         clear_user_state(from_number)
         return
     
@@ -522,14 +532,14 @@ def _create_match(
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_QUIET_HOURS.format(
                     club_name=get_club_name(),
                     resume_time=resume_time
-                ), club_id=player["club_id"])
+                ), club_id=cid or player["club_id"])
             elif skip_filters and group_name:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_GROUP.format(
                     club_name=get_club_name(), 
                     time=friendly_time, 
                     count=max(0, count),
                     group_name=group_name
-                ))
+                ), club_id=player["club_id"])
             else:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
                     club_name=get_club_name(), time=friendly_time, count=max(0, count)
@@ -588,7 +598,7 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
             return
 
         if not player:
-            send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND, club_id=None)
+            send_sms(from_number, msg.MSG_PLAYER_NOT_FOUND, club_id=kwargs.get("cid"))
             clear_user_state(from_number)
             return
 
@@ -621,14 +631,14 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
             count = find_and_invite_players(match_id)
             send_sms(from_number, msg.MSG_MATCH_REQUESTED_VOTING.format(club_name=get_club_name(), count=count), club_id=player["club_id"])
         else:
-            send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL)
+            send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL, club_id=player["club_id"])
 
     except ValueError:
         send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT, club_id=player.get("club_id"))
 
 
 
-def handle_court_booking_sms(from_number: str, player: dict, entities: dict):
+def handle_court_booking_sms(from_number: str, player: dict, entities: dict, cid: str = None):
     """
     Handle an SMS from an originator saying they've booked a court.
     """
@@ -713,9 +723,9 @@ def notify_players_of_booking(match_id: str, court_text: str):
 
 
 # Backwards compatibility alias
-def handle_match_request(from_number: str, body: str, player: dict, entities: Optional[dict] = None):
+def handle_match_request(from_number: str, body: str, player: dict, entities: Optional[dict] = None, cid: str = None):
     """
     Legacy function name for backwards compatibility.
     Routes to handle_match_date_input.
     """
-    handle_match_date_input(from_number, body, player, entities)
+    handle_match_date_input(from_number, body, player, entities, cid=cid)

@@ -68,7 +68,7 @@ async def health_check():
 
 from sms_handler import handle_incoming_sms
 
-@app.post("/webhook/sms")
+@app.post(f"{prefix}/webhook/sms")
 async def sms_webhook(From: str = Form(...), Body: str = Form(...), To: str = Form(...)):
     """
     Handle incoming SMS from Twilio.
@@ -126,7 +126,7 @@ async def post_sms_inbox(message: InboxMessage):
     handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
 
-@app.api_route("/cron/recalculate-scores", methods=["GET", "POST"])
+@app.api_route(f"{prefix}/cron/recalculate-scores", methods=["GET", "POST"])
 async def trigger_score_recalculation_direct():
     """Direct cron endpoint to debug routing issues."""
     from fastapi import HTTPException
@@ -141,7 +141,7 @@ async def trigger_score_recalculation_direct():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.api_route("/debug-routing", methods=["GET", "POST"])
+@app.api_route(f"{prefix}/debug-routing", methods=["GET", "POST"])
 async def debug_routing(request: Request):
     return {
         "root_path": request.scope.get("root_path"),
@@ -151,7 +151,7 @@ async def debug_routing(request: Request):
         "is_vercel": os.environ.get('VERCEL')
     }
 
-@app.api_route("/debug-routes", methods=["GET"])
+@app.api_route(f"{prefix}/debug-routes", methods=["GET"])
 async def list_routes():
     routes = []
     for route in app.routes:

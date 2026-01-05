@@ -160,36 +160,62 @@ export async function togglePlayerStatus(playerId: string, newStatus: boolean) {
     revalidatePath('/dashboard')
 }
 
-export async function deletePlayer(playerId: string) {
+export async function removePlayerFromClub(playerId: string, clubId: string) {
     const supabase = await createClient()
 
-    // 1. Delete all match invites for this player
-    const { error: invitesError } = await supabase
-        .from('match_invites')
-        .delete()
-        .eq('player_id', playerId)
-
-    if (invitesError) {
-        console.error('Error deleting player invites:', invitesError)
-        throw invitesError
+    if (!clubId) {
+        throw new Error('clubId is required to remove player from club')
     }
 
-    // 2. Delete group memberships
-    const { error: groupError } = await supabase
-        .from('group_memberships')
-        .delete()
-        .eq('player_id', playerId)
+    console.log(`Removing player ${playerId} from club ${clubId}`)
 
-    if (groupError) {
-        console.error('Error deleting group memberships:', groupError)
-        throw groupError
+    // 1. Delete all match invites for this player within this club's matches
+    const { data: clubMatches } = await supabase
+        .from('matches')
+        .select('match_id')
+        .eq('club_id', clubId)
+
+    const matchIds = clubMatches?.map(m => m.match_id) || []
+
+    if (matchIds.length > 0) {
+        const { error: invitesError } = await supabase
+            .from('match_invites')
+            .delete()
+            .eq('player_id', playerId)
+            .in('match_id', matchIds)
+
+        if (invitesError) {
+            console.error('Error deleting player invites for club:', invitesError)
+            throw invitesError
+        }
     }
 
-    // 3. Remove player from any matches (team_1_players, team_2_players)
-    // Fetch matches where this player is in either team
+    // 2. Delete group memberships for groups belonging to this club
+    const { data: clubGroups } = await supabase
+        .from('player_groups')
+        .select('group_id')
+        .eq('club_id', clubId)
+
+    const groupIds = clubGroups?.map(g => g.group_id) || []
+
+    if (groupIds.length > 0) {
+        const { error: groupError } = await supabase
+            .from('group_memberships')
+            .delete()
+            .eq('player_id', playerId)
+            .in('group_id', groupIds)
+
+        if (groupError) {
+            console.error('Error deleting group memberships for club:', groupError)
+            throw groupError
+        }
+    }
+
+    // 3. Remove player from any matches (team_1_players, team_2_players) in this club
     const { data: matchesWithPlayer } = await supabase
         .from('matches')
         .select('match_id, team_1_players, team_2_players')
+        .eq('club_id', clubId)
         .or(`team_1_players.cs.{${playerId}},team_2_players.cs.{${playerId}}`)
 
     if (matchesWithPlayer && matchesWithPlayer.length > 0) {
@@ -204,15 +230,16 @@ export async function deletePlayer(playerId: string) {
         }
     }
 
-    // 4. Finally, delete the player
-    const { error: playerError } = await supabase
-        .from('players')
+    // 4. Finally, remove the membership entry
+    const { error: membershipError } = await supabase
+        .from('club_members')
         .delete()
         .eq('player_id', playerId)
+        .eq('club_id', clubId)
 
-    if (playerError) {
-        console.error('Error deleting player:', playerError)
-        throw playerError
+    if (membershipError) {
+        console.error('Error removing club membership:', membershipError)
+        throw membershipError
     }
 
     revalidatePath('/dashboard')

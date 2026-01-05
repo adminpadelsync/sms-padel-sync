@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { updatePlayer, createPlayer, togglePlayerStatus, deletePlayer } from './actions'
+import { updatePlayer, createPlayer, togglePlayerStatus, removePlayerFromClub } from './actions'
 import { getClubs } from './get-clubs'
 
 interface Player {
@@ -18,6 +18,7 @@ interface Player {
     avail_weekend_morning?: boolean
     avail_weekend_afternoon?: boolean
     avail_weekend_evening?: boolean
+    club_id?: string
 }
 
 interface PlayerModalProps {
@@ -296,14 +297,20 @@ export function PlayerActions({ player }: PlayerActionsProps) {
         }
     }
 
-    const handleDelete = async () => {
-        if (confirm(`⚠️ PERMANENTLY DELETE ${player.name}?\n\nThis will also remove:\n• All their match invites\n• Group memberships\n• Match participations\n\nThis action cannot be undone!`)) {
+    const handleRemoveFromClub = async () => {
+        const clubId = player.club_id
+        if (!clubId) {
+            alert('Cannot remove player: Missing club context')
+            return
+        }
+
+        if (confirm(`⚠️ REMOVE ${player.name} FROM THIS CLUB?\n\nThis will also remove their:\n• Match invites at this club\n• Group memberships at this club\n• Upcoming match participations at this club\n\nThey will still remain in Padel Sync and any other clubs they belong to.\n\nContinue?`)) {
             try {
-                await deletePlayer(player.player_id)
+                await removePlayerFromClub(player.player_id, clubId)
                 window.location.reload()
             } catch (error) {
-                console.error('Error deleting player:', error)
-                alert('Failed to delete player')
+                console.error('Error removing player:', error)
+                alert('Failed to remove player from club')
             }
         }
     }
@@ -351,13 +358,13 @@ export function PlayerActions({ player }: PlayerActionsProps) {
                         </button>
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
-                            onClick={() => { handleDelete(); setShowDropdown(false); }}
+                            onClick={() => { handleRemoveFromClub(); setShowDropdown(false); }}
                             className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
-                            Delete
+                            Remove from Club
                         </button>
                     </div>
                 )}

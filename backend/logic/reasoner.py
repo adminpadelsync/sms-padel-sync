@@ -3,6 +3,7 @@ import json
 import requests
 import time
 import random
+import re
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
@@ -32,11 +33,16 @@ Current User Profile: {user_profile}
 ### Conversation History:
 {history}
 
+### Pending Context (CRITICAL):
+{pending_context}
+
 ### Golden Samples (Follow these patterns):
 {golden_samples}
 
 ### Intents:
 - START_MATCH: Requesting to play a match (Look for "play", "match", "game").
+- ACCEPT_INVITE: Specifically accepting a match invite (Look for "yes", "count me in", "i'm in").
+- DECLINE_INVITE: Specifically declining a match invite (Look for "no", "can't make it", "not today").
 - JOIN_GROUP: Viewing, joining, or managing player group memberships (Look for "groups", "what groups am i in", "join group", number selections LIKE "1", "2").
 - SET_AVAILABILITY: Providing availability (Look for "mornings", "weekends", "anytime").
 - CHECK_STATUS: Asking for match invites or next matches (Look for "matches", "next", "status").
@@ -70,8 +76,11 @@ Current User Profile: {user_profile}
 - If the user provides a partial update (like "5pm instead"), acknowledge the full updated date/time (e.g. "Got it, shifting to tomorrow at 5pm") to confirm context is preserved.
 - When in "STATE_MATCH_GROUP_SELECTION", if the user mentions a group name or number (e.g., "Intermediate"), extract it as an entity "selection", but DO NOT switch to JOIN_GROUP intent. Keep it as the current intent (START_MATCH) or a generic SELECT_OPTION. JOIN_GROUP is ONLY for browsing/joining club groups.
 - If the user asks "what groups am i in" or similar, use the JOIN_GROUP intent and reply warmly that you are checking their memberships now.
+- If the user is NOT a member of the club (check 'is_member' in user profile, or if profile is empty/null), any message like "START", "HELLO", or even "PLAY" should be classified as a GREETING. The priority is to welcome them and get them onboarded. Do NOT classify as START_MATCH if they are not yet a member.
 - Be concise, friendly, and act like a helpful Padel club manager.
 - ALWAYS use the player's name if provided in the profile.
+- If there is a "Pending Context" regarding a match invite, prioritize ACCEPT_INVITE or DECLINE_INVITE intents for responses like "Yes", "No", "I'm in", etc.
+- Never say "Yes to what?" if there is an obvious pending invite or match context. Be proactive and assume they are responding to the most recent relevant event in the context.
 
 ### Output Format:
 Return ONLY a JSON object:
@@ -150,7 +159,7 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.0-fla
                 pass
         return None
 
-def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict[str, Any] = None, history: List[Dict[str, str]] = None, golden_samples: List[Dict[str, Any]] = None) -> ReasonerResult:
+def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict[str, Any] = None, history: List[Dict[str, str]] = None, golden_samples: List[Dict[str, Any]] = None, pending_context: Any = None) -> ReasonerResult:
     """
     Analyzes the message to determine intent and entities, and generates a human reply.
     """
@@ -160,16 +169,24 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     # Priority Keywords (Global Interrupts)
     if body_clean == "RESET":
         return ReasonerResult("RESET", 1.0, {}, reply_text="System reset. How can I help you from scratch?")
-    if body_clean in ["PLAY", "START"]:
+    if body_clean == "PLAY":
         return ReasonerResult("START_MATCH", 1.0, {}, reply_text="Great! When would you like to play?")
     if body_clean == "GROUPS":
         return ReasonerResult("JOIN_GROUP", 1.0, {}, reply_text="Here are the available groups you can join.")
     if body_clean in ["MATCHES", "NEXT"]:
         return ReasonerResult("CHECK_STATUS", 1.0, {}, reply_text="Checking your upcoming matches now...")
 
-    # 2. Check for Simple Choices (Regex-like)
+    # 2. Check for Simple Choices (Regex-like) - Keep only literal digits or numbered responses (1Y, 1N)
+    # We let the Reasoner handle "Yes!" or "No." now for better context.
     if body_clean.isdigit():
         return ReasonerResult("CHOOSE_OPTION", 0.9, {"selection": int(body_clean)}, reply_text=f"Got it, option {body_clean}.")
+    
+    # Handle literal numbered responses like "1Y" or "1N" as fast path
+    numbered_match = re.match(r'^(\d+)([YNM])?$', body_clean)
+    if numbered_match:
+        # We'll let the dispatcher handle this, but identifying it here helps.
+        # Actually, let's keep it in dispatcher for now.
+        pass
 
     # 3. Slow Path (Gemini REST API)
     api_key = os.getenv("GEMINI_API_KEY")
@@ -186,11 +203,20 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     if golden_samples:
         samples_str = json.dumps(golden_samples, indent=2)
 
+    # Format Pending Context
+    context_str = "None. User is starting fresh."
+    if pending_context:
+        if isinstance(pending_context, (dict, list)):
+            context_str = json.dumps(pending_context, indent=2)
+        else:
+            context_str = str(pending_context)
+
     prompt = PROMPT_TEMPLATE.format(
         message=message,
         current_state=current_state,
         user_profile=json.dumps(user_profile or {}),
         history=history_str,
+        pending_context=context_str,
         golden_samples=samples_str
     )
 

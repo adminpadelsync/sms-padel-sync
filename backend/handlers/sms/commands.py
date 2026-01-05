@@ -261,7 +261,7 @@ def handle_play_command(from_number: str, body: str, player: Dict, club_id: str,
         entities = entities or {}
         if group_id:
             entities["group_id"] = str(group_id)
-        handle_match_request(from_number, body, player, entities)
+        handle_match_request(from_number, body, player, entities, cid=club_id)
     except Exception as e:
         print(f"[ERROR] Failed to process PLAY command: {e}")
         import traceback

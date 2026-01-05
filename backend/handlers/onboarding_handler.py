@@ -17,16 +17,20 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
     if not club_id and state_data:
         club_id = state_data.get("club_id")
     
+    print(f"[ONBOARDING] {from_number} in state {current_state} sent: '{body}' (club_id: {club_id})")
+    
     # Handle States
     if current_state == msg.STATE_WAITING_NAME:
         name = body.strip()
+        print(f"[ONBOARDING] Setting name to '{name}'")
         if len(name) < 2:
-            send_sms(from_number, msg.MSG_NAME_TOO_SHORT)
+            print("[ONBOARDING] Name too short, sending error")
+            send_sms(from_number, msg.MSG_NAME_TOO_SHORT, club_id=club_id)
             return
         
         # Preserve club_id in state for next step
         set_user_state(from_number, msg.STATE_WAITING_LEVEL, {"name": name, "club_id": club_id})
-        send_sms(from_number, msg.MSG_ASK_LEVEL.format(name=name))
+        send_sms(from_number, msg.MSG_ASK_LEVEL.format(name=name), club_id=club_id)
 
     elif current_state == msg.STATE_WAITING_LEVEL:
         level_map = {
@@ -41,12 +45,12 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         level = level_map.get(choice)
         
         if not level:
-            send_sms(from_number, msg.MSG_INVALID_LEVEL)
+            send_sms(from_number, msg.MSG_INVALID_LEVEL, club_id=club_id)
             return
 
         # Preserve name and club_id in state for next step
         set_user_state(from_number, msg.STATE_WAITING_GENDER, {"name": state_data.get("name"), "level": str(level), "club_id": club_id})
-        send_sms(from_number, msg.MSG_ASK_GENDER)
+        send_sms(from_number, msg.MSG_ASK_GENDER, club_id=club_id)
 
     elif current_state == msg.STATE_WAITING_GENDER:
         gender_map = {
@@ -59,7 +63,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
         gender = gender_map.get(choice)
         
         if not gender:
-            send_sms(from_number, msg.MSG_INVALID_GENDER)
+            send_sms(from_number, msg.MSG_INVALID_GENDER, club_id=club_id)
             return
 
         # Preserve all data in state for next step
@@ -80,7 +84,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                 "available_groups": public_groups # Store to map numbers back to IDs
             })
             groups_text = "\n".join([f"{i+1}. {g['name']}" for i, g in enumerate(public_groups)])
-            send_sms(from_number, msg.MSG_ASK_GROUPS_ONBOARDING.format(groups_list=groups_text))
+            send_sms(from_number, msg.MSG_ASK_GROUPS_ONBOARDING.format(groups_list=groups_text), club_id=club_id)
         else:
             set_user_state(from_number, msg.STATE_WAITING_AVAILABILITY, {
                 "name": state_data.get("name"),
@@ -88,7 +92,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                 "gender": gender,
                 "club_id": club_id
             })
-            send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING)
+            send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING, club_id=club_id)
 
     elif current_state == msg.STATE_WAITING_GROUPS_ONBOARDING:
         import re
@@ -113,7 +117,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             "club_id": club_id,
             "selected_group_ids": selected_ids
         })
-        send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING)
+        send_sms(from_number, msg.MSG_ASK_AVAILABILITY_ONBOARDING, club_id=club_id)
 
     elif current_state == msg.STATE_WAITING_AVAILABILITY:
         body_upper = body.upper().strip()
@@ -195,7 +199,7 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                         supabase.table("group_memberships").insert(new_memberships).execute()
                 
                 clear_user_state(from_number)
-                send_sms(from_number, msg.MSG_PROFILE_UPDATE_DONE.format(club_name=get_club_name()))
+                send_sms(from_number, msg.MSG_PROFILE_UPDATE_DONE.format(club_name=get_club_name()), club_id=club_id)
                 return
 
             # NEW PLAYER - Create record
@@ -240,8 +244,8 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
                     supabase.table("group_memberships").insert(memberships).execute()
             
             clear_user_state(from_number)
-            send_sms(from_number, msg.MSG_PROFILE_SETUP_DONE.format(club_name=get_club_name()))
+            send_sms(from_number, msg.MSG_PROFILE_SETUP_DONE.format(club_name=get_club_name()), club_id=club_id)
         except Exception as e:
             print(f"Error creating/updating player: {e}")
-            send_sms(from_number, msg.MSG_PROFILE_ERROR)
+            send_sms(from_number, msg.MSG_PROFILE_ERROR, club_id=club_id)
 

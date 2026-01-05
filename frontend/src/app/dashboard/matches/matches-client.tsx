@@ -97,6 +97,11 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
     const filteredMatches = useMemo(() => {
         let result = [...matches]
 
+        // Club filter
+        if (userClubId) {
+            result = result.filter(m => m.club_id === userClubId)
+        }
+
         // Status filter
         if (filterStatus !== 'all') {
             result = result.filter(m => m.status === filterStatus)

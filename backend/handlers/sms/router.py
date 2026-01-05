@@ -88,19 +88,16 @@ def resolve_player(from_number: str, club_id: str) -> Optional[Dict]:
             if member_res.data:
                 player = potential_player
                 player["club_id"] = str(club_id) # Legacy support
+                player["is_member"] = True
                 return player
             else:
                 print(f"[SMS] Player {from_number} exists but is not a member of club {club_id}")
-                return potential_player # Return generic player anyway? Original logic: Yes, but context matters. 
-                # Original logic: If member_res.data: player = potential_player. Else: print warning.
-                # Actually original logic falls through to 'if potential_player' -> 'return player' if no club context?
-                # Let's return None if strict membership check fails, OR return potential_player if logic allows cross-club?
-                # The original code:
-                # if member_res.data: player = potential_player... else: print...
-                # It effectively returned None for `player` variable if check failed.
-                
-                return None 
+                # Still attach club_id for context/settings, but keep it a 'lite' player
+                potential_player["club_id"] = str(club_id)
+                potential_player["is_member"] = False
+                return potential_player
         else:
+            potential_player["is_member"] = False
             return potential_player
             
     return None

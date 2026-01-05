@@ -13,6 +13,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     """
     from logic_utils import get_match_participants
     player_id = player["player_id"]
+    club_id = player.get("club_id")
     
     # 1. Find the most recent confirmed or completed match for this player
     # Look for matches in the last 24 hours
@@ -31,7 +32,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             .execute()
     
     if not match_res or not match_res.data:
-        send_sms(from_number, "I couldn't find a recent match to report a result for.")
+        send_sms(from_number, "I couldn't find a recent match to report a result for.", club_id=club_id)
         return
 
     match = match_res.data[0]
@@ -44,7 +45,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     team_b_names = entities.get("team_b", [])
     
     if not score or not winner_str:
-        send_sms(from_number, "I caught that you're reporting a result, but I couldn't understand the score or who won. Could you try again? (e.g. 'We won 6-4 6-2')")
+        send_sms(from_number, "I caught that you're reporting a result, but I couldn't understand the score or who won. Could you try again? (e.g. 'We won 6-4 6-2')", club_id=club_id)
         return
 
     # 3. Team Verification Logic
@@ -115,10 +116,9 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         t1_names = [p_map.get(pid, "Unknown") for pid in parts["team_1"]]
         t2_names = [p_map.get(pid, "Unknown") for pid in parts["team_2"]]
         
-        msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying some of the names mentioned."
-        msg_clarify += f"\n\nAs a reminder, the match was:\nTeam 1: {', '.join(t1_names)}\nTeam 2: {', '.join(t2_names)}"
-        msg_clarify += "\n\nCould you please clarify? (e.g. 'Team 1 won 6-4 6-2' or 'Dave and I beat Sarah and Mike 6-4 6-2')"
-        send_sms(from_number, msg_clarify)
+        players_list = ", ".join([p["name"] for p in players_data])
+        msg_clarify = f"I found the match, but I'm having trouble identifying which players are on which teams from your message. Could you clarify? (e.g. 'Adam and John won 6-4 6-2')\n\nPlayers in this match:\n{players_list}"
+        send_sms(from_number, msg_clarify, club_id=club_id)
         return
 
     # 4. Resolve Teams from Match Record (Source of Truth: match_participations)
@@ -154,7 +154,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying the teams based on your message."
             msg_clarify += f"\n\nAs a reminder, the match was:\nTeam 1: {', '.join(t1_names)}\nTeam 2: {', '.join(t2_names)}"
             msg_clarify += "\n\nCould you please clarify who won? (e.g. 'Team 1 won 6-4 6-2' or 'Dave and I beat Sarah and Mike 6-4 6-2')"
-            send_sms(from_number, msg_clarify)
+            send_sms(from_number, msg_clarify, club_id=club_id)
             return
     else:
         # No names provided - assume they are reporting for themselves
@@ -172,8 +172,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             else:
                 is_flipped = True # Sender is Team 2
         else:
-            # Still don't know who is who
-            send_sms(from_number, "I caught that you're reporting a result, but I'm having trouble identifying the teams. Could you please clarify? (e.g. 'We won 6-4 6-2')")
+            send_sms(from_number, "I caught that you're reporting a result, but I'm having trouble identifying the teams. Could you please clarify? (e.g. 'We won 6-4 6-2')", club_id=club_id)
             return
 
     # 5. Determine Winner Team Index
@@ -206,11 +205,10 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         success = update_match_elo(match_id, final_winner)
         
         if success:
-            send_sms(from_number, f"🎾 Result recorded: {score}. Your Sync Rating has been updated! 📈")
+            send_sms(from_number, f"🎾 Result recorded: {score}. Your Sync Rating has been updated! 📈", club_id=club_id)
         else:
-            send_sms(from_number, f"🎾 Result recorded: {score}. (Elo calculation pending - team size mismatch).")
+            send_sms(from_number, f"🎾 Result recorded: {score}. (Elo calculation pending - team size mismatch).", club_id=club_id)
             
     except Exception as e:
         print(f"Error handling result report: {e}")
-        send_sms(from_number, "Sorry, I had trouble recording that result. Please try again later.")
-
+        send_sms(from_number, "Sorry, I had trouble recording that result. Please try again later.", club_id=club_id)

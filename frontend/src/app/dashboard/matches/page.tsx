@@ -17,7 +17,7 @@ export default async function MatchesPage() {
         redirect('/login')
     }
 
-    // Fetch ALL Matches (filtering will happen client-side)
+    // Fetch matches for the current club
     const { data: matches } = await supabase
         .from('matches')
         .select(`
@@ -25,6 +25,7 @@ export default async function MatchesPage() {
             clubs(name, timezone),
             originator:originator_id(name, phone_number, declared_skill_level)
         `)
+        .eq('club_id', userClub.club_id)
         .order('scheduled_time', { ascending: false })
 
     // Fetch clubs for superusers
