@@ -11,6 +11,7 @@ Configurable per club:
 """
 
 from datetime import datetime, timedelta
+from typing import Optional
 from database import supabase
 from logic_utils import (
     get_club_settings, is_quiet_hours, get_club_timezone, 

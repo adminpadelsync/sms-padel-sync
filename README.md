@@ -9,6 +9,7 @@ An automated SMS-based padel match-making system with multi-club support and adm
 - Node.js 18+
 - Supabase account
 - Twilio account (for SMS)
+- [ngrok](https://ngrok.com/) (for local SMS testing)
 
 ### Initial Setup
 
@@ -152,6 +153,7 @@ sms-padel-sync/
 
 - **[Multi-Tenancy Setup](docs/MULTI_TENANCY_SETUP.md)** - Complete guide for setting up club isolation
 - **[Disable Email Confirmation](docs/DISABLE_EMAIL_CONFIRMATION.md)** - Development setup
+- **[Local SMS Testing with ngrok](docs/LOCAL_TESTING_GUIDE.md)** - How to test on your laptop
 - **[Twilio Setup](docs/twilio_setup_guide.md)** - SMS integration guide
 - **[Manual Verification](docs/manual_verification_guide.md)** - Testing guide
 
