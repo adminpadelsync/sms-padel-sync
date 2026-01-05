@@ -47,9 +47,12 @@ interface GoldenSample {
 
 interface TrainingJigClientProps {
     userClubId: string | null
+    isSuperuser?: boolean
+    clubs?: { club_id: string; name: string }[]
 }
 
-export default function TrainingJigClient({ userClubId }: TrainingJigClientProps) {
+export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] }: TrainingJigClientProps) {
+    const [activeClubId, setActiveClubId] = useState<string | null>(userClubId)
     const [players, setPlayers] = useState<Player[]>([])
     const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([])
     const [activePlayerId, setActivePlayerId] = useState<string | null>(null)
@@ -70,8 +73,8 @@ export default function TrainingJigClient({ userClubId }: TrainingJigClientProps
     }, [])
 
     useEffect(() => {
-        if (userClubId) {
-            fetchPlayers(userClubId)
+        if (activeClubId) {
+            fetchPlayers(activeClubId)
         } else {
             setPlayers([])
         }
@@ -79,7 +82,7 @@ export default function TrainingJigClient({ userClubId }: TrainingJigClientProps
         setConversations({})
         setSelectedPlayerIds([])
         setActivePlayerId(null)
-    }, [userClubId])
+    }, [activeClubId])
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -143,7 +146,7 @@ export default function TrainingJigClient({ userClubId }: TrainingJigClientProps
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     player_id: activePlayerId,
-                    club_id: userClubId,
+                    club_id: activeClubId,
                     message: msgText,
                     history: history,
                     golden_samples: goldenSamples.slice(0, 3)
@@ -222,7 +225,7 @@ export default function TrainingJigClient({ userClubId }: TrainingJigClientProps
                     event_type: type,
                     match_id: "SIM_MATCH_123",
                     player_ids: selectedPlayerIds,
-                    club_id: userClubId
+                    club_id: activeClubId
                 })
             })
             const data = await res.json()
@@ -324,10 +327,25 @@ export default function TrainingJigClient({ userClubId }: TrainingJigClientProps
 
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 mr-4">
-                        <span className="text-xs font-bold text-slate-500 uppercase">Context Club ID:</span>
-                        <span className="text-xs font-mono text-indigo-300 bg-slate-800 px-2 py-1 rounded">
-                            {userClubId || 'None'}
-                        </span>
+                        <span className="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Context Club:</span>
+                        {isSuperuser && clubs.length > 0 ? (
+                            <select
+                                value={activeClubId || ''}
+                                onChange={(e) => setActiveClubId(e.target.value)}
+                                className="text-xs font-medium text-indigo-300 bg-slate-800 border border-slate-700 px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer hover:bg-slate-700 transition-colors"
+                            >
+                                <option value="">Select Club</option>
+                                {clubs.map(club => (
+                                    <option key={club.club_id} value={club.club_id}>
+                                        {club.name}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <span className="text-xs font-mono text-indigo-300 bg-slate-800 px-2 py-1 rounded">
+                                {clubs.find(c => c.club_id === activeClubId)?.name || activeClubId || 'None'}
+                            </span>
+                        )}
                     </div>
 
                     <button
