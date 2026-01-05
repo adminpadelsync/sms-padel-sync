@@ -131,8 +131,6 @@ async def trigger_event(request: EventTriggerRequest):
                     match_obj = {
                         "match_id": match_id,
                         "club_id": request.club_id,
-                        "team_1_players": p_ids[:2],
-                        "team_2_players": p_ids[2:4],
                         "scheduled_time": now.isoformat(),
                         "status": "confirmed"
                     }

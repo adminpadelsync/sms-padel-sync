@@ -491,8 +491,6 @@ def _create_match(
     try:
         match_data = {
             "club_id": player["club_id"],
-            "team_1_players": [], # Deprecated arrays - managed via match_participations
-            "team_2_players": [], # Deprecated arrays - managed via match_participations
             "scheduled_time": to_utc_iso(scheduled_time_iso, player["club_id"]),
             "status": "pending",
             "level_range_min": level_min if not skip_filters else None,
@@ -604,8 +602,6 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
 
         match_data = {
             "club_id": player["club_id"],
-            "team_1_players": [player["player_id"]],
-            "team_2_players": [],
             "scheduled_time": to_utc_iso(slots[0], player["club_id"]),
             "status": "voting",
             "voting_options": slots,
@@ -618,6 +614,17 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
         if res.data:
             match_id = res.data[0]["match_id"]
             
+            # Phase 4: Insert into match_participations
+            try:
+                supabase.table("match_participations").insert({
+                    "match_id": match_id,
+                    "player_id": player["player_id"],
+                    "team_index": 1,
+                    "status": "confirmed"
+                }).execute()
+            except Exception as e:
+                print(f"[ERROR] Failed to insert match_participation for voting match: {e}")
+
             # Auto-vote for all options for the requester
             for slot in slots:
                 vote_data = {
