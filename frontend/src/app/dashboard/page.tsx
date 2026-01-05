@@ -24,6 +24,7 @@ interface Match {
     club_id: string
     clubs?: {
         name: string
+        timezone: string
     }
 }
 
@@ -56,7 +57,7 @@ export default async function Dashboard() {
     // Fetch Matches with server-side filtering
     let matchQuery = supabase
         .from('matches')
-        .select('*, clubs(name)')
+        .select('*, clubs(name, timezone)')
         .order('created_at', { ascending: false })
 
     // Optimization: Filter by club for non-superusers
@@ -99,6 +100,7 @@ export default async function Dashboard() {
             initialMatches={matches || []}
             userEmail={user?.email || ''}
             userClubId={userClub.club_id}
+            userClubTimezone={userClub.club_timezone}
         />
     )
 }

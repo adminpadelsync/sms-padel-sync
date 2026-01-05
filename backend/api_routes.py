@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
-from logic_utils import parse_iso_datetime, get_now_utc, to_utc_iso
+from logic_utils import parse_iso_datetime, get_now_utc, get_now_utc_iso, to_utc_iso
 import sms_constants as msg
 from database import supabase
 from match_organizer import (
@@ -96,6 +96,7 @@ class CreateClubRequest(BaseModel):
     main_phone: Optional[str] = None
     booking_system: Optional[str] = None
     booking_slug: Optional[str] = None
+    timezone: str = "America/New_York"  # Required, default for transition
 
 class ClubUpdate(BaseModel):
     name: Optional[str] = None
@@ -111,9 +112,21 @@ class ClubUpdate(BaseModel):
 
 @router.post("/clubs")
 async def create_club(request: CreateClubRequest):
-    """Create a new club and its courts."""
+    """Create a new club and its courts with strict validation."""
     try:
-        # 1. Create Club
+        # 1. Validate Timezone
+        import pytz
+        try:
+            pytz.timezone(request.timezone)
+        except pytz.UnknownTimeZoneError:
+            raise HTTPException(status_code=400, detail=f"Invalid timezone: {request.timezone}")
+
+        # 2. Check for existing phone
+        existing = supabase.table("clubs").select("club_id").eq("phone_number", request.phone_number).execute()
+        if existing.data:
+            raise HTTPException(status_code=409, detail="Phone number already registered to another club.")
+
+        # 3. Create Club
         club_data = {
             "name": request.name,
             "phone_number": request.phone_number,
@@ -124,17 +137,18 @@ async def create_club(request: CreateClubRequest):
             "main_phone": request.main_phone,
             "booking_system": request.booking_system,
             "booking_slug": request.booking_slug,
+            "timezone": request.timezone,
             "active": True
         }
         
         result = supabase.table("clubs").insert(club_data).execute()
         if not result.data:
-            raise HTTPException(status_code=500, detail="Failed to create club")
+            raise HTTPException(status_code=500, detail="Failed to create club record.")
         
         new_club = result.data[0]
         club_id = new_club["club_id"]
         
-        # 2. Create Courts
+        # 4. Create Courts
         courts_data = []
         for i in range(request.court_count):
             courts_data.append({
@@ -146,10 +160,16 @@ async def create_club(request: CreateClubRequest):
         if courts_data:
             supabase.table("courts").insert(courts_data).execute()
             
-        return {"club": new_club, "message": f"Club created with {request.court_count} courts"}
+        return {"club": new_club, "message": f"Club and {len(courts_data)} courts created successfully"}
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Check if it's a Supabase/Postgres constraint error
+        err_str = str(e).lower()
+        if "unique check" in err_str or "duplicate key" in err_str:
+            raise HTTPException(status_code=409, detail="Club with this information already exists.")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 # --- Club Twilio Provisioning ---
 
@@ -234,7 +254,7 @@ async def delete_club(club_id: str):
     logs = []
     
     def add_log(step, status, message):
-        logs.append({"step": step, "status": status, "message": message, "timestamp": datetime.now().isoformat()})
+        logs.append({"step": step, "status": status, "message": message, "timestamp": get_now_utc().isoformat()})
         print(f"[{status.upper()}] {step}: {message}")
 
     try:
@@ -393,12 +413,10 @@ async def get_player_feedback_summary(player_id: str):
     """
 
     try:
-        # Get matches where the player was a participant
-        matches_res = supabase.table("matches").select("match_id").or_(
-            f"team_1_players.cs.{{{player_id}}},team_2_players.cs.{{{player_id}}}"
-        ).execute()
+        # Get matches where the player was a participant (Source of Truth: match_participations)
+        parts_res = supabase.table("match_participations").select("match_id").eq("player_id", player_id).execute()
+        match_ids = [p["match_id"] for p in (parts_res.data or [])]
         
-        match_ids = [m["match_id"] for m in (matches_res.data or [])]
         if not match_ids:
             return {
                 "avg_rating": 0,
@@ -542,26 +560,43 @@ async def get_club_booking_status(club_id: str):
         result = query.execute()
         matches = result.data or []
         
-        # 2. Enrich with player details (name, level, phone)
-        # We need to fetch all players involved in these matches
-        player_ids = set()
-        for m in matches:
-            if m.get("team_1_players"):
-                player_ids.update(m["team_1_players"])
-            if m.get("team_2_players"):
-                player_ids.update(m["team_2_players"])
-        
-        player_map = {}
-        if player_ids:
-            players_res = supabase.table("players").select(
-                "player_id, name, phone_number, declared_skill_level"
-            ).in_("player_id", list(player_ids)).execute()
-            player_map = {p["player_id"]: p for p in players_res.data}
-        
-        # Add enriched player details to each match
-        for m in matches:
-            m["team_1_details"] = [player_map.get(pid) for pid in (m.get("team_1_players") or []) if pid in player_map]
-            m["team_2_details"] = [player_map.get(pid) for pid in (m.get("team_2_players") or []) if pid in player_map]
+        # 2. Enrich with player details (name, level, phone) via match_participations
+        if matches:
+            match_ids = [m["match_id"] for m in matches]
+            # Fetch all participations for these matches
+            parts_res = supabase.table("match_participations").select("match_id, player_id, team").in_("match_id", match_ids).execute()
+            all_parts = parts_res.data or []
+            
+            # Gather unique player IDs
+            player_ids = set(p["player_id"] for p in all_parts)
+            
+            # Fetch player details
+            player_map = {}
+            if player_ids:
+                players_res = supabase.table("players").select(
+                    "player_id, name, phone_number, declared_skill_level"
+                ).in_("player_id", list(player_ids)).execute()
+                player_map = {p["player_id"]: p for p in players_res.data}
+                
+            # Attach to matches
+            # Create a map of match_id -> {team_1: [], team_2: []}
+            match_teams = {mid: {"team_1": [], "team_2": []} for mid in match_ids}
+            for part in all_parts:
+                mid = part["match_id"]
+                pid = part["player_id"]
+                team = part.get("team")
+                p_details = player_map.get(pid)
+                if p_details:
+                    if team == 1:
+                        match_teams[mid]["team_1"].append(p_details)
+                    elif team == 2:
+                        match_teams[mid]["team_2"].append(p_details)
+            
+            # Assign back to matches list
+            for m in matches:
+                mid = m["match_id"]
+                m["team_1_details"] = match_teams.get(mid, {}).get("team_1", [])
+                m["team_2_details"] = match_teams.get(mid, {}).get("team_2", [])
             
         return {"matches": matches}
     except Exception as e:
@@ -616,7 +651,7 @@ async def get_confirmed_matches(club_id: str = None):
     try:
         # Query matches that are confirmed OR have 4 players
         query = supabase.table("matches").select(
-            "match_id, scheduled_time, status, team_1_players, team_2_players, feedback_collected, club_id"
+            "match_id, scheduled_time, status, feedback_collected, club_id"
         )
         
         if club_id:
@@ -629,32 +664,58 @@ async def get_confirmed_matches(club_id: str = None):
         
         matches = result.data or []
         
-        # Filter to only matches with 4 players (for feedback eligibility)
-        matches = [
-            m for m in matches 
-            if len((m.get("team_1_players") or []) + (m.get("team_2_players") or [])) == 4
-            or m.get("status") == "confirmed"
-        ][:20]  # Limit after filtering
-        
-        # Get player names for each match
-        all_player_ids = set()
-        for match in matches:
-            for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
-                if pid:
-                    all_player_ids.add(pid)
-        
-        if all_player_ids:
-            players_result = supabase.table("players").select(
-                "player_id, name"
-            ).in_("player_id", list(all_player_ids)).execute()
-            player_map = {p["player_id"]: p["name"] for p in players_result.data}
+        if matches:
+            match_ids = [m["match_id"] for m in matches]
+            # Fetch participations
+            parts_res = supabase.table("match_participations").select("match_id, player_id, team").in_("match_id", match_ids).execute()
+            all_parts = parts_res.data or []
             
-            # Add player names to matches
-            for match in matches:
-                match["player_names"] = []
-                for pid in (match.get("team_1_players") or []) + (match.get("team_2_players") or []):
-                    if pid and pid in player_map:
-                        match["player_names"].append(player_map[pid])
+            # Reconstruct teams for each match
+            match_parts_map = {mid: {"team_1": [], "team_2": [], "all": []} for mid in match_ids}
+            for p in all_parts:
+                mid = p["match_id"]
+                pid = p["player_id"]
+                match_parts_map[mid]["all"].append(pid)
+                if p.get("team") == 1:
+                    match_parts_map[mid]["team_1"].append(pid)
+                elif p.get("team") == 2:
+                    match_parts_map[mid]["team_2"].append(pid)
+            
+            # Filter matches (confirmed OR 4 players)
+            filtered_matches = []
+            for m in matches:
+                mid = m["match_id"]
+                t1 = match_parts_map[mid]["team_1"]
+                t2 = match_parts_map[mid]["team_2"]
+                status = m.get("status")
+                
+                # Attach legacy fields for frontend compatibility if needed
+                m["team_1_players"] = t1
+                m["team_2_players"] = t2
+                
+                if len(t1) + len(t2) == 4 or status == "confirmed":
+                    filtered_matches.append(m)
+            
+            matches = filtered_matches[:20]
+            
+            # Get player names
+            all_player_ids = set()
+            for m in matches:
+                all_player_ids.update(m["team_1_players"])
+                all_player_ids.update(m["team_2_players"])
+                
+            if all_player_ids:
+                players_result = supabase.table("players").select(
+                    "player_id, name"
+                ).in_("player_id", list(all_player_ids)).execute()
+                player_map = {p["player_id"]: p["name"] for p in players_result.data}
+                
+                # Add player names to matches
+                for match in matches:
+                    match["player_names"] = []
+                    for pid in match["team_1_players"] + match["team_2_players"]:
+                        if pid and pid in player_map:
+                            match["player_names"].append(player_map[pid])
         
         return {"matches": matches}
     except Exception as e:
@@ -868,8 +929,9 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
         
         match_data = {
             "club_id": request.club_id,
-            "team_1_players": team_1,
-            "team_2_players": team_2,
+            "club_id": request.club_id,
+            # "team_1_players": team_1, # DEPRECATED
+            # "team_2_players": team_2, # DEPRECATED
             "scheduled_time": scheduled_time,
             "status": "confirmed",
             "originator_id": team_1[0],
@@ -889,7 +951,27 @@ async def admin_create_confirmed_match(request: CreateConfirmedMatchRequest):
             
         match = result.data[0]
         
-        # Also create accepted invites for all 4 players so they are linked
+        # 2. Insert Participations (Source of Truth)
+        participation_data = []
+        # Team 1
+        for pid in team_1:
+            participation_data.append({
+                "match_id": match["match_id"],
+                "player_id": pid,
+                "team_index": 1,
+                "status": "confirmed" # It's a confirmed match
+            })
+        # Team 2
+        for pid in team_2:
+            participation_data.append({
+                "match_id": match["match_id"],
+                "player_id": pid,
+                "team_index": 2,
+                "status": "confirmed"
+            })
+        supabase.table("match_participations").insert(participation_data).execute()
+
+        # 3. Create accepted invites (History/Redundant but safe)
         invite_data = []
         for pid in request.player_ids:
             invite_data.append({
@@ -953,6 +1035,43 @@ async def bulk_delete_matches(request: BulkMatchDeleteRequest):
     except Exception as e:
         print(f"ERROR: Bulk delete failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Bulk delete failed: {str(e)}")
+        
+@router.delete("/matches/{match_id}")
+async def delete_match(match_id: str):
+    """
+    Delete a single match and all its associated data.
+    Ensures cascading cleanup of invites, feedback, and rating history.
+    """
+    try:
+        print(f"ADMIN: Deleting match {match_id}")
+
+        # 1. Delete associated records in order of dependency
+        # Delete match feedback
+        supabase.table("match_feedback").delete().eq("match_id", match_id).execute()
+        
+        # Delete match invites
+        supabase.table("match_invites").delete().eq("match_id", match_id).execute()
+
+        # Delete feedback requests
+        supabase.table("feedback_requests").delete().eq("match_id", match_id).execute()
+        
+        # Delete rating history
+        supabase.table("player_rating_history").delete().eq("match_id", match_id).execute()
+
+        # Delete match votes
+        supabase.table("match_votes").delete().eq("match_id", match_id).execute()
+
+        # Finally, delete the match itself
+        result = supabase.table("matches").delete().eq("match_id", match_id).execute()
+        
+        if not result.data:
+            print(f"WARNING: Match {match_id} not found during deletion attempt.")
+            # We don't raise 404 here to stay idempotent, but we could
+        
+        return {"message": f"Successfully deleted match {match_id} and all associated records."}
+    except Exception as e:
+        print(f"ERROR: Delete match {match_id} failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 @router.get("/matches/{match_id}/feedback")
 async def get_match_feedback(match_id: str):

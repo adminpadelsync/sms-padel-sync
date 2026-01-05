@@ -5,9 +5,10 @@ import { MatchWizard } from './create-match-wizard'
 
 interface CreateMatchButtonProps {
     clubId: string
+    clubTimezone?: string | null
 }
 
-export function CreateMatchButton({ clubId }: CreateMatchButtonProps) {
+export function CreateMatchButton({ clubId, clubTimezone }: CreateMatchButtonProps) {
     const [showWizard, setShowWizard] = useState(false)
 
     return (
@@ -22,6 +23,7 @@ export function CreateMatchButton({ clubId }: CreateMatchButtonProps) {
                 isOpen={showWizard}
                 onClose={() => setShowWizard(false)}
                 clubId={clubId}
+                clubTimezone={clubTimezone}
             />
         </>
     )

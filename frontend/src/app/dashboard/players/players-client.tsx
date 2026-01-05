@@ -8,6 +8,7 @@ import { AddToGroupModal } from '../groups/add-to-group-modal'
 import { GroupModal } from '../groups/group-modal'
 import { VerificationModal } from '../verification-modal'
 import { MatchDetailsModal } from '../match-details-modal'
+import { formatLocalizedDate } from '@/utils/time-utils'
 
 interface Player {
     player_id: string
@@ -91,11 +92,13 @@ function formatPhoneNumber(phone: string): string {
 interface PlayersClientProps {
     initialPlayers: Player[]
     userClubId: string | null
+    userClubTimezone?: string | null
 }
 
 export function PlayersClient({
     initialPlayers,
-    userClubId
+    userClubId,
+    userClubTimezone
 }: PlayersClientProps) {
     const [verificationModalOpen, setVerificationModalOpen] = useState(false)
     const [playerToVerify, setPlayerToVerify] = useState<Player | null>(null)
@@ -562,7 +565,7 @@ export function PlayersClient({
                                                                             return (
                                                                                 <tr key={entry.history_id} className="hover:bg-gray-50 transition-colors">
                                                                                     <td className="px-4 py-2 text-xs text-gray-600 whitespace-nowrap">
-                                                                                        {new Date(entry.matches?.scheduled_time || entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                                        {formatLocalizedDate(entry.matches?.scheduled_time || entry.created_at, userClubTimezone || undefined)}
                                                                                     </td>
                                                                                     <td className="px-4 py-2 text-xs">
                                                                                         <span
@@ -680,7 +683,11 @@ export function PlayersClient({
                 isOpen={isMatchWizardOpen}
                 onClose={() => setIsMatchWizardOpen(false)}
                 clubId={userClubId || ''}
-                initialSelectedPlayers={initialPlayers.filter(p => selectedPlayerIds.has(p.player_id))}
+                clubTimezone={userClubTimezone}
+                initialSelectedPlayers={initialPlayers
+                    .filter(p => p.club_id === userClubId)
+                    .filter(p => selectedPlayerIds.has(p.player_id))
+                }
             />
 
             <VerificationModal

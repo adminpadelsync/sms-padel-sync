@@ -43,10 +43,11 @@ def recalculate_player_scores(player_id=None):
         invites = inv_res.data or []
         
         # 2b. Fetch Matches to calculate total_matches_played
-        match_query = supabase.table("matches").select("team_1_players, team_2_players").in_("status", ["confirmed", "completed"])
-        # Fetch up to 500 matches for safety
+        # Phase 4: Use match_participations
+        # First get relevant match IDs (confirmed/completed)
+        match_query = supabase.table("matches").select("match_id").in_("status", ["confirmed", "completed"])
         match_res = match_query.limit(500).execute()
-        matches = match_res.data or []
+        match_ids = [m["match_id"] for m in (match_res.data or [])]
         
         # 3. Aggregate Stats
         # Structure: player_id -> {'total': 0, 'responded': 0, 'accepted': 0}
@@ -62,13 +63,14 @@ def recalculate_player_scores(player_id=None):
             if status == 'accepted':
                 stats_map[pid]['accepted'] += 1
                 
-        # 3b. Aggregate Match Counts
+        # 3b. Aggregate Match Counts via match_participations
         match_counts = defaultdict(int)
-        for m in matches:
-            players_in_match = (m.get('team_1_players') or []) + (m.get('team_2_players') or [])
-            for pid in players_in_match:
-                if pid:
-                    match_counts[pid] += 1
+        if match_ids:
+            # Fetch participations for these matches
+            # Can limit if needed, but for 500 matches * 4 players = 2000 rows, should be fine
+            parts_res = supabase.table("match_participations").select("player_id").in_("match_id", match_ids).execute()
+            for row in (parts_res.data or []):
+                match_counts[row["player_id"]] += 1
                 
         # 4. Calculate and Update
         updated_count = 0

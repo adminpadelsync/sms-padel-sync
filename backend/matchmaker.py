@@ -1,7 +1,7 @@
 from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta, timezone
-from logic_utils import is_quiet_hours, parse_iso_datetime, get_now_utc
+from logic_utils import is_quiet_hours, parse_iso_datetime, get_now_utc, format_sms_datetime
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
 
@@ -25,17 +25,19 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     Returns:
         Number of invites sent
     """
+    import sys
     print(f"Finding players for match {match_id} (batch {batch_number}, skip_filters={skip_filters})...")
+    sys.stdout.flush()
     
-    # 1. Fetch the match details
+    # 1. Get Match Details
     match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
     if not match_res.data:
         print("Match not found.")
         return 0
     match = match_res.data[0]
     club_id = match.get("club_id")
-
-    # Quiet hours check
+    
+    # Check for quiet hours cancellation
     is_quiet = is_quiet_hours(club_id)
     if is_quiet:
         print(f"[QUIET HOURS] Deferring invites for club {club_id} (pending_sms mode)")
@@ -45,14 +47,21 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     if match["status"] not in ["pending", "voting"]:
         print(f"Match status is {match['status']}, not inviting.")
         return 0
-    
-    # Get requester (first player in team 1)
-    requester_id = match["team_1_players"][0]
-    player_res = supabase.table("players").select("*").eq("player_id", requester_id).execute()
-    if not player_res.data:
-        print("Requester not found.")
-        return 0
-    requester = player_res.data[0]
+        
+    # Phase 4 Update: Use match_participations for requester (originator/team_1 lead)
+    from logic_utils import get_match_participants
+    participants = get_match_participants(match_id)
+    requester_id = participants["team_1"][0] if participants["team_1"] else match.get("originator_id")
+
+    requester = None
+    if requester_id:
+        player_res = supabase.table("players").select("*").eq("player_id", requester_id).execute()
+        if player_res.data:
+            requester = player_res.data[0]
+            
+    if not requester and not skip_filters:
+        # If no requester and we need filtering, we might have issues determining target level
+        pass  
     
     # Fetch club name and settings for SMS messages and timeout
     club_name = "the club"
@@ -72,7 +81,9 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     # If no level range set and not skipping filters, use requester's level ± 0.25
     if not skip_filters and (level_min is None or level_max is None):
-        target_level = requester.get("adjusted_skill_level") or requester.get("declared_skill_level") or 3.5
+        target_level = 3.5
+        if requester:
+            target_level = requester.get("adjusted_skill_level") or requester.get("declared_skill_level") or 3.5
         level_min = target_level - 0.25
         level_max = target_level + 0.25
     
@@ -103,8 +114,9 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             print("Target group not found or empty.")
             return 0
     
-    # Get players already in the match
-    players_in_match = set(match.get("team_1_players", []) + match.get("team_2_players", []))
+    # Get players already in the match (Source of Truth: match_participations)
+    parts_res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).execute()
+    players_in_match = {row["player_id"] for row in (parts_res.data or [])}
     
     # Get players already invited to this match
     existing_invites = supabase.table("match_invites").select("player_id").eq("match_id", match_id).execute()
@@ -204,31 +216,55 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     expires_at = (get_now_utc() + timedelta(minutes=invite_timeout_minutes)).isoformat()
     
     for p in sorted_candidates[:invite_limit]:
-        # Create Invite with expiration and SCORES
-        # If quiet hours, status is 'pending_sms'
         invite_status = "pending_sms" if is_quiet else "sent"
         
-        invite_data = {
-            "match_id": match_id,
-            "player_id": p["player_id"],
-            "status": invite_status,
-            "sent_at": get_now_utc().isoformat(),
-            "expires_at": expires_at if not skip_filters else None,
-            "batch_number": batch_number,
-            "invite_score": p.get("_invite_score"),
-            "score_breakdown": p.get("_score_breakdown")
+        # Use RPC to atomically check and insert
+        # This prevents race conditions and ensures data integrity
+        rpc_params = {
+            "p_match_id": match_id,
+            "p_player_id": p["player_id"],
+            "p_status": invite_status,
+            "p_batch_number": batch_number,
+            "p_sent_at": get_now_utc().isoformat(),
+            "p_expires_at": expires_at if not skip_filters else None,
+            "p_invite_score": p.get("_invite_score"),
+            "p_score_breakdown": p.get("_score_breakdown")
         }
-        supabase.table("match_invites").insert(invite_data).execute()
         
-        if not is_quiet:
-            sms_msg = _build_invite_sms(match, requester, club_name)
-            send_sms(p["phone_number"], sms_msg, club_id=club_id)
+        try:
+            rpc_res = supabase.rpc("attempt_insert_invite", rpc_params).execute()
+            result = rpc_res.data
             
-            # CLEAR STATE so they don't get stuck in old feedback loops
-            clear_user_state(p["phone_number"])
-        
-        invite_count += 1
-        print(f"{'Created' if is_quiet else 'Invited'} {p['name']} ({p['phone_number']}) - Status: {invite_status}")
+            if result == 'SUCCESS':
+                if not is_quiet:
+                    sms_msg = _build_invite_sms(match, requester, club_name)
+                    send_sms(p["phone_number"], sms_msg, club_id=club_id)
+                    
+                    # CLEAR STATE so they don't get stuck in old feedback loops
+                    clear_user_state(p["phone_number"])
+                
+                invite_count += 1
+                print(f"{'Created' if is_quiet else 'Invited'} {p['name']} ({p['phone_number']}) - Status: {invite_status}")
+            
+            elif result == 'MATCH_FULL':
+                print(f"Skipping {p['name']} - Match is full.")
+                # We can probably break here if strict, but maybe other spots open? 
+                # For now, let's just continue/break based on logic.
+                # If match is full, we should stop inviting people.
+                break 
+                
+            elif result == 'ALREADY_INVITED':
+                print(f"Skipping {p['name']} - Already invited.")
+                
+            elif result == 'ALREADY_IN_MATCH':
+                print(f"Skipping {p['name']} - Already in match.")
+                
+            else:
+                print(f"RPC returned unknown code: {result}")
+                
+        except Exception as e:
+            print(f"Error inviting {p['name']}: {e}")
+            continue
     
     return invite_count
 
@@ -268,8 +304,11 @@ def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
         except:
             time_str = match['scheduled_time']
         
+        organizer_name = requester['name'] if requester else "An organizer"
+        skill_str = f" ({requester['declared_skill_level']})" if requester else ""
+
         return (
-            f"🎾 {club_name}: {requester['name']} ({requester['declared_skill_level']}) wants to play "
+            f"🎾 {club_name}: {organizer_name}{skill_str} wants to play "
             f"{time_str}.\n"
             f"Reply YES to join, NO to decline, or MUTE to pause invites today."
         )
@@ -387,11 +426,13 @@ def _check_match_deadpool(match_id: str):
         return
 
     # 2. Count current players and active invites
-    players_in_match = len(match.get("team_1_players", []) + match.get("team_2_players", []))
+    parts_res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).execute()
+    players_in_match_count = len(parts_res.data or [])
+    
     active_invites = supabase.table("match_invites").select("invite_id").eq("match_id", match_id).eq("status", "sent").execute()
     active_count = len(active_invites.data or [])
     
-    needed = 4 - players_in_match - active_count
+    needed = 4 - players_in_match_count - active_count
     if needed <= 0:
         return
 
@@ -403,7 +444,7 @@ def _check_match_deadpool(match_id: str):
     # Get all involvements (in match, invited, or declined/expired)
     involvement_res = supabase.table("match_invites").select("player_id, status").eq("match_id", match_id).execute()
     already_involved = {inv["player_id"] for inv in (involvement_res.data or [])}
-    already_involved.update(set(match.get("team_1_players", []) + match.get("team_2_players", [])))
+    already_involved.update({row["player_id"] for row in (parts_res.data or [])})
     
     pool = [pid for pid in group_member_ids if pid not in already_involved]
     
@@ -478,8 +519,10 @@ def process_pending_matches():
                 if is_quiet_hours(club_id):
                     continue
                 
-                # Get requester
-                req_id = m_data["team_1_players"][0]
+                # Get requester - Phase 4 use match_participations
+                from logic_utils import get_match_participants
+                parts = get_match_participants(match_id)
+                req_id = parts["team_1"][0] if parts["team_1"] else m_data.get("originator_id")
                 req_res = supabase.table("players").select("*").eq("player_id", req_id).execute()
                 if not req_res.data: continue
                 

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from database import supabase
-from logic_utils import parse_iso_datetime, get_now_utc, to_utc_iso
+from logic_utils import parse_iso_datetime, get_now_utc, get_now_utc_iso, to_utc_iso, get_match_participants, format_sms_datetime
 
 def _get_club_name(club_id: str) -> str:
     """Helper to get club name from ID."""
@@ -125,10 +125,9 @@ def initiate_match_outreach(
         "club_id": club_id,
         "scheduled_time": to_utc_iso(scheduled_time, club_id),
         "status": "pending",
-        "team_1_players": initial_player_ids,  # Start with committed players
-        "team_2_players": [],
+        # Phase 4 Cleanup: Removed team_1_players/team_2_players (using match_participations)
         "originator_id": originator_id or (initial_player_ids[0] if initial_player_ids else None),
-        "created_at": get_now_utc().isoformat()
+        "created_at": get_now_utc_iso()
     }
     
     match_result = supabase.table("matches").insert(match_data).execute()
@@ -138,6 +137,24 @@ def initiate_match_outreach(
     match = match_result.data[0]
     match_id = match['match_id']
     
+    match = match_result.data[0]
+    match_id = match['match_id']
+    
+    # Phase 3: Insert initial participants
+    if initial_player_ids:
+        participations = []
+        for pid in initial_player_ids:
+            participations.append({
+                "match_id": match_id,
+                "player_id": pid,
+                "team_index": 1,
+                "status": "confirmed"
+            })
+        try:
+            supabase.table("match_participations").insert(participations).execute()
+        except Exception as e:
+            print(f"Error inserting initial participants: {e}")
+
     # 2. Trigger outreach via matchmaker (respects quiet hours)
     from matchmaker import find_and_invite_players
     find_and_invite_players(
@@ -161,32 +178,39 @@ def get_match_details(match_id: str) -> dict:
     Returns:
         Match dictionary with player details
     """
-    # Get match
-    match_result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    # Get match with club details
+    match_result = supabase.table("matches").select("*, clubs(name, timezone)").eq("match_id", match_id).execute()
     if not match_result.data:
         raise Exception(f"Match {match_id} not found")
     
     match = match_result.data[0]
     
+    # Get participants from Source of Truth
+    participants = get_match_participants(match_id)
+    t1_ids = participants["team_1"]
+    t2_ids = participants["team_2"]
+    
     # Get player details for team 1
     team_1_players = []
-    if match.get('team_1_players'):
-        for player_id in match['team_1_players']:
-            player_result = supabase.table("players").select("*").eq("player_id", player_id).execute()
-            if player_result.data:
-                team_1_players.append(player_result.data[0])
+    for player_id in t1_ids:
+        player_result = supabase.table("players").select("*").eq("player_id", player_id).execute()
+        if player_result.data:
+            team_1_players.append(player_result.data[0])
     
     # Get player details for team 2
     team_2_players = []
-    if match.get('team_2_players'):
-        for player_id in match['team_2_players']:
-            player_result = supabase.table("players").select("*").eq("player_id", player_id).execute()
-            if player_result.data:
-                team_2_players.append(player_result.data[0])
+    for player_id in t2_ids:
+        player_result = supabase.table("players").select("*").eq("player_id", player_id).execute()
+        if player_result.data:
+            team_2_players.append(player_result.data[0])
     
     # Add player details to match
     match['team_1_player_details'] = team_1_players
     match['team_2_player_details'] = team_2_players
+    
+    # BACKWARD COMPAT: Ensure the match object has the lists if frontend expects them from this endpoint
+    match['team_1_players'] = t1_ids
+    match['team_2_players'] = t2_ids
     
     # Get originator details if exists
     if match.get('originator_id'):
@@ -253,8 +277,9 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
     # Format date for SMS
     formatted_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=match['club_id'])
     
-    # Get already confirmed players
-    confirmed_player_ids = (match.get('team_1_players') or []) + (match.get('team_2_players') or [])
+    # Get already confirmed players (Source of Truth: match_participations)
+    participants = get_match_participants(match_id)
+    confirmed_player_ids = participants["all"]
     confirmed_players_text = ""
     if confirmed_player_ids:
         confirmed_result = supabase.table("players").select("name, declared_skill_level").in_("player_id", confirmed_player_ids).execute()
@@ -312,16 +337,47 @@ def update_match(match_id: str, updates: dict) -> dict:
     
     Args:
         match_id: The match ID
-        updates: Dictionary of fields to update (e.g., {'scheduled_time': '...', 'status': '...'})
+        updates: Dictionary of fields to update
         
     Returns:
         Updated match dictionary
     """
-    result = supabase.table("matches").update(updates).eq("match_id", match_id).execute()
-    if not result.data:
-        raise Exception(f"Failed to update match {match_id}")
+    # 1. Pop team updates to handle separately (Phase 4 Cleanup)
+    t1_updates = updates.pop('team_1_players', None)
+    t2_updates = updates.pop('team_2_players', None)
     
-    return result.data[0]
+    # 2. Update matches table with remaining fields
+    if updates:
+        result = supabase.table("matches").update(updates).eq("match_id", match_id).execute()
+        if not result.data:
+            raise Exception(f"Failed to update match {match_id}")
+    
+    # 3. Handle team updates via match_participations
+    if t1_updates is not None:
+        _sync_team_participation(match_id, 1, t1_updates)
+    if t2_updates is not None:
+        _sync_team_participation(match_id, 2, t2_updates)
+            
+    # 4. Return fully enriched match object
+    return get_match_details(match_id)
+
+def _sync_team_participation(match_id: str, team: int, new_player_ids: List[str]):
+    """Helper to sync a team's roster in match_participations."""
+    # Get current participants for this team
+    res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).eq("team", team).execute()
+    current_ids = {row["player_id"] for row in (res.data or [])}
+    new_ids = set(new_player_ids)
+    
+    # Identify to delete and to insert
+    to_delete = current_ids - new_ids
+    to_insert = new_ids - current_ids # Only insert new ones
+    
+    if to_delete:
+        supabase.table("match_participations").delete().eq("match_id", match_id).eq("team_index", team).in_("player_id", list(to_delete)).execute()
+        
+    if to_insert:
+        data = [{"match_id": match_id, "player_id": pid, "team_index": team, "status": "confirmed"} for pid in to_insert]
+        supabase.table("match_participations").insert(data).execute()
 
 def add_player_to_match(match_id: str, player_id: str, team: int) -> dict:
     """
@@ -335,29 +391,20 @@ def add_player_to_match(match_id: str, player_id: str, team: int) -> dict:
     Returns:
         Updated match dictionary
     """
-    # Get current match
-    match_result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
-    if not match_result.data:
-        raise Exception(f"Match {match_id} not found")
-    
-    match = match_result.data[0]
-    
-    # Add player to appropriate team
-    if team == 1:
-        team_players = match.get('team_1_players', [])
-        if player_id not in team_players:
-            team_players.append(player_id)
-        updates = {'team_1_players': team_players}
-    elif team == 2:
-        team_players = match.get('team_2_players', [])
-        if player_id not in team_players:
-            team_players.append(player_id)
-        updates = {'team_2_players': team_players}
-    else:
-        raise Exception("Team must be 1 or 2")
-    
-    # Update match
-    return update_match(match_id, updates)
+    # Phase 3/4: Update match_participations (Source of Truth)
+    try:
+        supabase.table("match_participations").upsert({
+            "match_id": match_id,
+            "player_id": player_id,
+            "team_index": team,
+            "status": "confirmed"
+        }, on_conflict="match_id, player_id").execute()
+    except Exception as e:
+        print(f"Error adding player to match_participations: {e}")
+        raise e
+        
+    # Return updated match details (which reads from match_participations)
+    return get_match_details(match_id)
 
 def remove_player_from_match(match_id: str, player_id: str) -> dict:
     """
@@ -371,33 +418,25 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
     Returns:
         Updated match dictionary
     """
-    # Get current match
+    # Get current match metadata (for checking status/club_id)
     match_result = supabase.table("matches").select("*").eq("match_id", match_id).execute()
     if not match_result.data:
         raise Exception(f"Match {match_id} not found")
     
     match = match_result.data[0]
-    team_1_players = match.get('team_1_players', [])
-    team_2_players = match.get('team_2_players', [])
-    updates = {}
     
-    # Remove from team 1 if present
-    if player_id in team_1_players:
-        team_1_players.remove(player_id)
-        updates['team_1_players'] = team_1_players
-    # Remove from team 2 if present
-    elif player_id in team_2_players:
-        team_2_players.remove(player_id)
-        updates['team_2_players'] = team_2_players
-    else:
-        # Player not found in either team
-        raise Exception(f"Player {player_id} not found in match {match_id}")
+    # Check if player in match (Source of Truth: match_participations)
+    participants = get_match_participants(match_id)
+    if player_id not in participants["all"]:
+         # Strict check: if not in participations, unexpected.
+         # But for cleanup, allow it to pass? No, raise to be safe.
+         raise Exception(f"Player {player_id} not found in match {match_id}")
     
     # Check if we need to revert status to pending
-    new_total = len(team_1_players) + len(team_2_players)
+    new_total = len(participants["all"]) - 1
     if match.get('status') == 'confirmed' and new_total < 4:
-        updates['status'] = 'pending'
-        updates['confirmed_at'] = None
+        # Revert to pending
+        update_match(match_id, {'status': 'pending', 'confirmed_at': None})
     
     # Update the player's invite status to 'removed'
     supabase.table("match_invites").update({
@@ -428,4 +467,11 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
     except Exception as e:
         print(f"[WARNING] Failed to send removal SMS: {e}")
     
-    return update_match(match_id, updates)
+    # Phase 3/4: Remove from match_participations (Source of Truth)
+    try:
+        supabase.table("match_participations").delete().eq("match_id", match_id).eq("player_id", player_id).execute()
+    except Exception as e:
+        print(f"Error removing player from match_participations: {e}")
+
+    # Return updated match details
+    return get_match_details(match_id)

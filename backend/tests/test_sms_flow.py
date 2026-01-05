@@ -16,6 +16,14 @@ def test_flow():
     print("--- Starting SMS Flow Test ---")
     
     # 1. Cleanup previous test data
+    # Delete Match Feedback (Foreign key dependency)
+    supabase.table("match_feedback").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
+    supabase.table("feedback_requests").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
+    # Delete Player Compatibility (FK dependency)
+    supabase.table("player_compatibility").delete().neq("player_1_id", "00000000-0000-0000-0000-000000000000").execute()
+    # Delete match_participations (Phase 3 future proofing)
+    supabase.table("match_participations").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
+    
     # Delete Invites
     supabase.table("match_invites").delete().neq("invite_id", "00000000-0000-0000-0000-000000000000").execute()
     # Delete Match Votes
@@ -37,6 +45,14 @@ def test_flow():
     # 4. Provide Level
     print("\n> User sends: 'C'")
     handle_incoming_sms(TEST_PHONE, "C")
+    
+    # 4b. Provide Gender
+    print("\n> User sends: 'Male'")
+    handle_incoming_sms(TEST_PHONE, "Male")
+    
+    # 4c. Provide Groups
+    print("\n> User sends: 'No'")
+    handle_incoming_sms(TEST_PHONE, "No")
     
     # 5. Provide Availability
     print("\n> User sends: 'Weekends'")
@@ -61,6 +77,10 @@ def test_flow():
         print("\n> User sends: '2023-12-01 18:00'")
         handle_incoming_sms(TEST_PHONE, "2023-12-01 18:00")
         
+        # 3. Confirm Match
+        print("\n> User sends: 'Yes'")
+        handle_incoming_sms(TEST_PHONE, "Yes")
+        
         # 9. Verify Match
         print("\n--- Verifying Database (Match) ---")
         # Fetch latest match for this player
@@ -74,6 +94,13 @@ def test_flow():
             print(f"Match ID: {m['match_id']}")
             print(f"Scheduled: {m['scheduled_time']}")
             print(f"Status: {m['status']}")
+            
+            # Phase 3 Verification
+            parts_res = supabase.table("match_participations").select("*").eq("match_id", m['match_id']).execute()
+            if parts_res.data:
+                print(f"SUCCESS: match_participations has {len(parts_res.data)} rows.")
+            else:
+                print("FAILURE: match_participations is empty.")
         else:
             print("FAILURE: Match not found")
 

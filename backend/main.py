@@ -107,7 +107,8 @@ async def get_sms_outbox(phone_number: Optional[str] = None):
 @app.post(f"{sms_prefix}/sms-outbox/{{message_id}}/read")
 async def mark_message_read(message_id: str):
     """Mark a message as read."""
-    supabase.table("sms_outbox").update({"read_at": datetime.now().isoformat()}).eq("id", message_id).execute()
+    from logic_utils import get_now_utc
+    supabase.table("sms_outbox").update({"read_at": get_now_utc().isoformat()}).eq("id", message_id).execute()
     return {"status": "ok"}
 
 @app.post(f"{sms_prefix}/sms-inbox")

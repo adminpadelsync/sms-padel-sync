@@ -21,6 +21,7 @@ interface DashboardClientProps {
     initialMatches: Match[]
     userEmail: string
     userClubId: string | null
+    userClubTimezone?: string | null
 }
 
 export function DashboardClient({

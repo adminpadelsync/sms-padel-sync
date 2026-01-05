@@ -1,7 +1,7 @@
 import math
 from typing import Dict, List, Tuple
 from database import supabase
-
+from logic_utils import get_match_participants
 # Elo constants
 BASE_K_FACTOR = 32
 PROVISIONAL_K_FACTOR = 64
@@ -74,8 +74,9 @@ def update_match_elo(match_id: str, winner_team: int):
         return False
     match = match_res.data[0]
     
-    team_1_ids = match.get("team_1_players", [])
-    team_2_ids = match.get("team_2_players", [])
+    participants = get_match_participants(match_id)
+    team_1_ids = participants["team_1"]
+    team_2_ids = participants["team_2"]
     
     if len(team_1_ids) != 2 or len(team_2_ids) != 2:
         print(f"Match {match_id} does not have 4 players assigned to teams.")

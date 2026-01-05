@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { getUserClub } from './get-user-club'
 import { getClubs } from './get-clubs'
 import { searchPlayers } from './search-players'
+import { formatLocalizedTime } from '@/utils/time-utils'
 
 interface Player {
     player_id: string
@@ -19,12 +20,13 @@ interface MatchWizardProps {
     isOpen: boolean
     onClose: () => void
     clubId: string
+    clubTimezone?: string | null
     initialSelectedPlayers?: Player[]
 }
 
 const DEFAULT_PLAYERS: Player[] = []
 
-export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = DEFAULT_PLAYERS }: MatchWizardProps) {
+export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSelectedPlayers = DEFAULT_PLAYERS }: MatchWizardProps) {
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
     const isQuickMode = initialSelectedPlayers.length > 0
@@ -394,14 +396,7 @@ export function MatchWizard({ isOpen, onClose, clubId, initialSelectedPlayers = 
                                 <p className="text-sm text-gray-600 border-t border-gray-200 pt-2">
                                     Scheduled for: <br />
                                     <span className="font-semibold text-gray-900">
-                                        {config.scheduled_time ? new Date(config.scheduled_time).toLocaleString(undefined, {
-                                            weekday: 'short',
-                                            year: 'numeric',
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: 'numeric',
-                                            minute: 'numeric'
-                                        }) : ''}
+                                        {config.scheduled_time ? formatLocalizedTime(config.scheduled_time, clubTimezone || undefined, false) : ''}
                                     </span>
                                 </p>
                             </div>

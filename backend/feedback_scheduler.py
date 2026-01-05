@@ -119,13 +119,15 @@ def send_feedback_requests_for_match(match: dict, is_manual_trigger: bool = Fals
     match_id = match["match_id"]
     club_id = match.get("club_id")
     
+    from logic_utils import get_match_participants
+    
     # Check quiet hours unless manually triggered
     if not is_manual_trigger and is_quiet_hours(club_id):
         return 0
     
-    # Get all player IDs from both teams
-    all_players = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
-    all_players = [p for p in all_players if p]  # Filter nulls
+    # Get all player IDs from Source of Truth
+    parts = get_match_participants(match_id)
+    all_players = parts["all"]
     
     if len(all_players) != 4:
         print(f"Match {match_id} doesn't have 4 players, skipping feedback")
@@ -283,8 +285,9 @@ def send_reminder_for_request(request: dict):
         print(f"Error claiming reminder for request {request['request_id']}: {e}")
         return False
     
-    all_player_ids = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
-    all_player_ids = [p for p in all_player_ids if p]
+    from logic_utils import get_match_participants
+    parts = get_match_participants(match_id)
+    all_player_ids = parts["all"]
     
     result = supabase.table("players").select("player_id, name").in_(
         "player_id", all_player_ids

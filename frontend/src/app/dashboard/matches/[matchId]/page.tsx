@@ -16,8 +16,15 @@ import {
     Clock,
     AlertCircle,
     RotateCcw,
-    ArrowRightLeft
+    ArrowRightLeft,
+    History,
+    Trash2,
+    Check,
+    X,
+    RefreshCw,
+    UserPlus
 } from 'lucide-react'
+import { formatLocalizedTime, isPastTime } from '@/utils/time-utils'
 
 
 interface Player {
@@ -32,10 +39,11 @@ interface Invite {
     invite_id: string
     match_id: string
     player_id: string
-    status: 'sent' | 'accepted' | 'declined' | 'expired' | 'maybe'
+    status: 'sent' | 'accepted' | 'declined' | 'expired' | 'maybe' | 'pending_sms'
     sent_at: string
     responded_at: string | null
     player?: Player
+    timezone?: string
 }
 
 interface Match {
@@ -53,6 +61,10 @@ interface Match {
     score_text?: string
     winner_team?: number
     feedback_collected?: boolean
+    clubs?: {
+        name: string
+        timezone: string
+    }
 }
 
 interface Feedback {
@@ -74,7 +86,8 @@ const statusConfig: Record<string, { bg: string; text: string; label: string; ic
     maybe: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Maybe', icon: '🤔' },
     sent: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'No Response', icon: '⏳' },
     expired: { bg: 'bg-gray-200', text: 'text-gray-500', label: 'Expired', icon: '⌛' },
-    removed: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Removed', icon: '🚫' }
+    removed: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Removed', icon: '🚫' },
+    pending_sms: { bg: 'bg-indigo-50', text: 'text-indigo-600', label: 'Queued (Quiet Hours)', icon: '🌙' }
 }
 
 export default function MatchDetailPage() {
@@ -115,9 +128,9 @@ export default function MatchDetailPage() {
     const [resendingFeedback, setResendingFeedback] = useState(false)
 
     const isPast = useMemo(() => {
-        if (!match) return false
-        return new Date(match.scheduled_time) < new Date()
-    }, [match])
+        if (!match?.scheduled_time) return false
+        return isPastTime(match.scheduled_time)
+    }, [match?.scheduled_time])
 
     // Effect to handle default collapse state
     useEffect(() => {
@@ -486,14 +499,7 @@ export default function MatchDetailPage() {
         ...(match.team_2_player_details || [])
     ]
 
-    const formattedTime = new Date(match.scheduled_time).toLocaleString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-    })
+    const formattedTime = formatLocalizedTime(match.scheduled_time, match.clubs?.timezone)
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -1162,7 +1168,9 @@ export default function MatchDetailPage() {
                                                             </div>
                                                             <div>
                                                                 <p className="font-black text-gray-900 text-sm leading-none mb-1 uppercase tracking-tight">{invite.player?.name || 'Unknown'}</p>
-                                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Sent {new Date(invite.sent_at).toLocaleDateString()}</p>
+                                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                                                    {invite.status === 'pending_sms' ? 'Queued' : 'Sent'} {new Date(invite.sent_at).toLocaleDateString()}
+                                                                </p>
                                                             </div>
                                                         </div>
                                                         <div className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${config.bg} ${config.text} ${config.bg.replace('100', '200')}`}>

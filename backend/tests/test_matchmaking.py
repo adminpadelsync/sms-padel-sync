@@ -5,7 +5,7 @@ from database import supabase
 from redis_client import clear_user_state
 
 # Mock SMS
-def mock_send_sms(to, body):
+def mock_send_sms(to, body, **kwargs):
     print(f"\n[SMS to {to}]: {body}")
 
 import sms_handler
@@ -26,6 +26,7 @@ def setup_players():
     supabase.table("match_invites").delete().neq("invite_id", "00000000-0000-0000-0000-000000000000").execute()
     supabase.table("match_feedback").delete().neq("feedback_id", "00000000-0000-0000-0000-000000000000").execute()
     supabase.table("match_votes").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
+    supabase.table("match_participations").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
     supabase.table("feedback_requests").delete().neq("request_id", "00000000-0000-0000-0000-000000000000").execute()
     supabase.table("error_logs").delete().neq("error_id", "00000000-0000-0000-0000-000000000000").execute()
     
@@ -55,12 +56,18 @@ def setup_players():
             "avail_weekend_morning": True,
             "avail_weekend_afternoon": True,
             "avail_weekend_evening": True,
-            "club_id": club_id,
             "active_status": True
         }
         res = supabase.table("players").insert(p_data).execute()
-        players.append(res.data[0])
+        player = res.data[0]
+        players.append(player)
         print(f"Created {p_data['name']}")
+        
+        # Add to club_members
+        supabase.table("club_members").insert({
+            "club_id": club_id,
+            "player_id": player["player_id"]
+        }).execute()
     
     return players
 
@@ -106,6 +113,21 @@ def test_matchmaking():
         print("SUCCESS: Match Confirmed!")
     else:
         print("FAILURE: Match not confirmed")
+    
+    # Phase 3 Verification: match_participations
+    parts_res = supabase.table("match_participations").select("*").eq("match_id", match['match_id']).execute()
+    print(f"Match Participations Configured: {len(parts_res.data)}")
+    if len(parts_res.data) == 4:
+        print("SUCCESS: match_participations table populated correctly!")
+    else:
+        print(f"FAILURE: match_participations has {len(parts_res.data)} rows, expected 4.")
+
+
+    if updated_match['status'] != 'confirmed':
+        print("\n--- ERROR LOGS ---")
+        errs = supabase.table("error_logs").select("*").order("created_at", desc=True).limit(5).execute()
+        for e in errs.data:
+            print(f"[{e['created_at']}] {e['error_type']}: {e['error_message']}")
 
 if __name__ == "__main__":
     test_matchmaking()

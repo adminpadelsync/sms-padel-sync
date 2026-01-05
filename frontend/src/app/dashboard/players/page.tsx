@@ -52,6 +52,7 @@ export default async function PlayersPage() {
         <PlayersClient
             initialPlayers={players}
             userClubId={userClub.club_id}
+            userClubTimezone={userClub.club_timezone}
         />
     )
 }

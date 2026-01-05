@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from database import supabase
 from twilio_client import send_sms, get_club_name, set_reply_from, set_club_name
 import sms_constants as msg
-from logic_utils import parse_iso_datetime, format_sms_datetime, get_now_utc
+from logic_utils import parse_iso_datetime, format_sms_datetime, get_now_utc, get_match_participants
 
 def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
     """Notify players who replied MAYBE that someone joined."""
@@ -101,13 +101,17 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
         supabase.table("match_invites").update({"status": "accepted", "responded_at": get_now_utc().isoformat()}).eq("invite_id", invite["invite_id"]).execute()
         
         # Add to Match (if not already)
-        if player["player_id"] not in match["team_1_players"] and player["player_id"] not in match["team_2_players"]:
-                if len(match["team_1_players"]) < 2:
-                    new_team_1 = match["team_1_players"] + [player["player_id"]]
-                    supabase.table("matches").update({"team_1_players": new_team_1}).eq("match_id", match_id).execute()
+        participants = get_match_participants(match_id)
+        if player["player_id"] not in participants["all"]:
+                if len(participants["team_1"]) < 2:
+                    team_idx = 1
                 else:
-                    new_team_2 = match["team_2_players"] + [player["player_id"]]
-                    supabase.table("matches").update({"team_2_players": new_team_2}).eq("match_id", match_id).execute()
+                    team_idx = 2
+                    
+                # Phase 3/4: Match Participation
+                supabase.table("match_participations").upsert({
+                    "match_id": match_id, "player_id": player["player_id"], "team_index": team_idx, "status": "confirmed"
+                }, on_conflict="match_id, player_id").execute()
 
         send_sms(from_number, f"Votes received for {', '.join(votes)}! We'll confirm if we get 4 players.", club_id=player.get("club_id"))
 
@@ -130,7 +134,8 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 # Notify All
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
-                all_player_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
+                final_parts = get_match_participants(match_id)
+                all_player_ids = final_parts["all"]
                 for pid in all_player_ids:
                     p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
                     if p_res.data:
@@ -140,8 +145,9 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
     elif match["status"] == "pending":
         # Existing YES/NO Logic
         if cmd == "yes":
-            # Count current players BEFORE adding
-            current_players = len(match["team_1_players"]) + len(match["team_2_players"])
+            # Count current players BEFORE adding (Source of Truth: match_participations)
+            participants = get_match_participants(match_id)
+            current_players = len(participants["all"])
             
             # Check if match is already full
             if current_players >= 4:
@@ -165,20 +171,19 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             }).eq("invite_id", invite["invite_id"]).execute()
             
             # 2. Add to Match (Fill Team 1, then Team 2)
-            updates = {}
-            if len(match["team_1_players"]) < 2:
-                new_team_1 = match["team_1_players"] + [player["player_id"]]
-                updates["team_1_players"] = new_team_1
+            if len(participants["team_1"]) < 2:
+                team_idx = 1
             else:
-                new_team_2 = match["team_2_players"] + [player["player_id"]]
-                updates["team_2_players"] = new_team_2
+                team_idx = 2
             
             # If no originator is set (e.g. admin-initiated match), the first person to join becomes the initiator
             if not match.get("originator_id"):
-                updates["originator_id"] = player["player_id"]
+                supabase.table("matches").update({"originator_id": player["player_id"]}).eq("match_id", match_id).execute()
                 
-            if updates:
-                supabase.table("matches").update(updates).eq("match_id", match_id).execute()
+            # Phase 3/4: Match Participation
+            supabase.table("match_participations").upsert({
+                "match_id": match_id, "player_id": player["player_id"], "team_index": team_idx, "status": "confirmed"
+            }, on_conflict="match_id, player_id").execute()
             
             # 3. Build progressive confirmation message
             new_player_count = current_players + 1
@@ -190,8 +195,11 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             elif new_player_count < 4:
                 # 2nd or 3rd player - list who's confirmed so far
                 # Fetch updated match to get current player IDs
+                # Fetch updated match to get current player IDs
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
-                all_confirmed_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
+                # Re-fetch participants to ensure freshness
+                curr_parts = get_match_participants(match_id)
+                all_confirmed_ids = curr_parts["all"]
                 
                 # Get player names and levels (including current player)
                 player_list_items = []
@@ -239,10 +247,11 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 
                 # Fetch updated match for player list and time
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
-                all_player_ids = updated_match["team_1_players"] + updated_match["team_2_players"]
+                final_parts = get_match_participants(match_id)
+                all_player_ids = final_parts["all"]
                 
                 # Identify initiator (first player in team 1)
-                initiator_id = updated_match["team_1_players"][0] if updated_match["team_1_players"] else None
+                initiator_id = final_parts["team_1"][0] if final_parts["team_1"] else None
                 
                 # Fetch club details for the booking link
                 from logic_utils import get_booking_url
@@ -339,7 +348,8 @@ def _handle_mute_from_invite(from_number: str, player: dict):
         return
     
     # Set muted_until to end of today (midnight)
-    tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    now = get_now_utc()
+    tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     
     supabase.table("players").update({
         "muted_until": tomorrow.isoformat()

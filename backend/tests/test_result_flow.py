@@ -51,13 +51,15 @@ def verify_result_flow():
         pid = supabase.table("players").insert({
             "phone_number": phone,
             "name": f"Elo Player {i+1}",
-            "club_id": club_id,
-            "declared_skill_level": 3.5,
-            "adjusted_skill_level": 3.5,
-            "elo_rating": 1500,
-            "active_status": True,
-            "elo_confidence": 0
         }).execute().data[0]["player_id"]
+        
+        # Link to club via club_members
+        supabase.table("club_members").insert({
+            "club_id": club_id,
+            "player_id": pid,
+            "added_at": datetime.now().isoformat()
+        }).execute()
+        
         p_ids.append(pid)
 
     # 2. Create Confirmed Match
@@ -71,6 +73,18 @@ def verify_result_flow():
     }).execute().data[0]["match_id"]
     
     print(f"Match created: {match_id}")
+
+    # 3. Create Participations (Critical for Phase 4)
+    part_data = []
+    # Team 1
+    part_data.append({"match_id": match_id, "player_id": p_ids[0], "team_index": 1, "status": "confirmed"})
+    part_data.append({"match_id": match_id, "player_id": p_ids[1], "team_index": 1, "status": "confirmed"})
+    # Team 2
+    part_data.append({"match_id": match_id, "player_id": p_ids[2], "team_index": 2, "status": "confirmed"})
+    part_data.append({"match_id": match_id, "player_id": p_ids[3], "team_index": 2, "status": "confirmed"})
+    
+    supabase.table("match_participations").insert(part_data).execute()
+    print("Participations created.")
 
     # Simulate SMS: "Elo Player 2 and I beat Elo Player 3 and Elo Player 4 6-4 6-2" from Player 1
     # Note: Player names must match the test data names
@@ -88,7 +102,7 @@ def verify_result_flow():
         return False
 
     assert match_final["winner_team"] == 1
-    assert match_final["score_text"] == "6-4 6-2"
+    assert match_final["score_text"] == "6-4, 6-2"
     print("✅ Match status updated to completed")
     
     # Verify Elo updates

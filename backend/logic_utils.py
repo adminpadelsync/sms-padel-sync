@@ -13,17 +13,25 @@ def get_club_settings(club_id: str) -> dict:
     return {}
 
 def get_club_timezone(club_id: str) -> str:
-    """Retrieve the timezone for a given club, defaulting to America/New_York."""
+    """
+    Retrieve the timezone for a given club.
+    Raises ValueError if timezone is not set or invalid.
+    Strict enforcement avoids 'silent failure' where times are shifted by 5-8 hours.
+    """
     if not club_id:
-        return "America/New_York"
+        raise ValueError("Cannot determine timezone: Club ID is missing.")
+        
     try:
         result = supabase.table("clubs").select("timezone").eq("club_id", club_id).execute()
         if result.data and result.data[0].get("timezone"):
             return result.data[0]["timezone"]
+        else:
+            raise ValueError(f"Club {club_id} has no timezone configured.")
     except Exception as e:
-        # Fallback if column doesn't exist or query fails
-        print(f"Note: Could not fetch timezone for club {club_id}, defaulting to America/New_York: {e}")
-    return "America/New_York"
+        # Re-raise if it's our ValueError, otherwise wrap it
+        if isinstance(e, ValueError):
+            raise e
+        raise ValueError(f"Error fetching timezone for club {club_id}: {e}")
 
 def to_utc_iso(dt_str: str, club_id: str) -> str:
     """
@@ -38,24 +46,24 @@ def to_utc_iso(dt_str: str, club_id: str) -> str:
         # Use our robust parser first
         dt = parse_iso_datetime(dt_str)
         
-        # If the original string didn't have timezone info, it was parsed as UTC by parse_iso_datetime
-        # But we actually want to interpret it as the club's local time if it was naive.
-        # Check if the original string had timezone indicator
-        is_naive_string = 'Z' not in dt_str and '+' not in dt_str and '-' not in dt_str[11:]
+        # Determine if it's naive based on string content if possible, 
+        # but also check the parsed datetime object.
+        has_tz_indicator = 'Z' in dt_str or '+' in dt_str or ('-' in dt_str and len(dt_str) > 10 and dt_str.rfind('-') > 10)
         
-        if is_naive_string:
+        if not has_tz_indicator:
             timezone_str = get_club_timezone(club_id)
             local_tz = pytz.timezone(timezone_str)
             # Replace the assumed UTC with None to make it naive, then localize correctly
             dt_naive = dt.replace(tzinfo=None)
             dt_local = local_tz.localize(dt_naive)
-            return dt_local.astimezone(timezone.utc).isoformat()
+            return dt_local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         else:
             # Already has TZ info, ensure it's UTC
-            return dt.astimezone(timezone.utc).isoformat()
+            return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     except Exception as e:
-        print(f"Error converting to UTC ISO: {e}")
-        return dt_str # Return as-is on failure (best effort)
+        print(f"Error converting to UTC ISO for {dt_str}: {e}")
+        # If parsing failed but it looks like a date, try to return it or None
+        return dt_str 
 
 
 def get_quiet_hours_info(club_id: str) -> tuple[bool, int]:
@@ -115,6 +123,10 @@ def get_booking_url(club: dict) -> str:
 def get_now_utc() -> datetime:
     """Return the current time as a timezone-aware UTC datetime."""
     return datetime.now(timezone.utc)
+
+def get_now_utc_iso() -> str:
+    """Return the current UTC time as an ISO string with the 'Z' suffix."""
+    return get_now_utc().isoformat().replace("+00:00", "Z")
 
 def parse_iso_datetime(dt_str: str) -> datetime:
     """
@@ -220,3 +232,30 @@ def normalize_score(score_str: str) -> str:
         return ", ".join(sets)
     
     return score_str # Fallback to original if we can't parse it
+
+def get_match_participants(match_id: str) -> dict:
+    """
+    Fetch participants from the match_participations table.
+    Returns:
+        {
+            "team_1": [player_id1, ...],
+            "team_2": [player_id2, ...],
+            "all": [player_id1, ...]
+        }
+    """
+    try:
+        res = supabase.table("match_participations").select("player_id, team_index").eq("match_id", match_id).execute()
+        t1 = []
+        t2 = []
+        all_p = []
+        for row in (res.data or []):
+            pid = row["player_id"]
+            if row["team_index"] == 1:
+                t1.append(pid)
+            elif row["team_index"] == 2:
+                t2.append(pid)
+            all_p.append(pid)
+        return {"team_1": t1, "team_2": t2, "all": all_p}
+    except Exception as e:
+        print(f"Error fetching match participants: {e}")
+        return {"team_1": [], "team_2": [], "all": []}

@@ -81,6 +81,8 @@ def send_result_nudge_for_match(match: dict, is_manual: bool = False):
     club_id = match.get("club_id")
     originator_id = match.get("originator_id")
     
+    from logic_utils import get_match_participants
+    
     if not originator_id:
         return 0
         
@@ -112,10 +114,9 @@ def send_result_nudge_for_match(match: dict, is_manual: bool = False):
         except Exception as e:
             print(f"Error formatting nudge time: {e}")
 
-    # 2. Players
-    team1_ids = match.get("team_1_players") or []
-    team2_ids = match.get("team_2_players") or []
-    all_player_ids = [pid for pid in (team1_ids + team2_ids) if pid]
+    # 2. Players (Source of Truth: match_participations)
+    parts = get_match_participants(match_id)
+    all_player_ids = parts["all"]
     
     player_names = []
     if all_player_ids:

@@ -1,7 +1,7 @@
 import re
 from typing import Optional, Tuple
 from datetime import datetime, timedelta
-from logic_utils import get_now_utc
+
 
 
 def _parse_gender(text: str) -> Optional[str]:
@@ -49,7 +49,7 @@ from database import supabase
 from twilio_client import send_sms, get_club_name
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
-from logic_utils import get_club_timezone, format_sms_datetime, parse_iso_datetime, to_utc_iso
+from logic_utils import get_club_timezone, format_sms_datetime, parse_iso_datetime, to_utc_iso, get_now_utc, get_match_participants
 from handlers.date_parser import parse_natural_date, parse_natural_date_with_context
 
 from error_logger import log_match_error
@@ -446,7 +446,8 @@ def _handle_mute(from_number: str, player: dict):
         return
     
     # Set muted_until to end of today (midnight)
-    tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    now = get_now_utc()
+    tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     
     supabase.table("players").update({
         "muted_until": tomorrow.isoformat()
@@ -480,8 +481,8 @@ def _create_match(
     try:
         match_data = {
             "club_id": player["club_id"],
-            "team_1_players": [player["player_id"]],
-            "team_2_players": [],
+            "team_1_players": [], # Deprecated arrays - managed via match_participations
+            "team_2_players": [], # Deprecated arrays - managed via match_participations
             "scheduled_time": to_utc_iso(scheduled_time_iso, player["club_id"]),
             "status": "pending",
             "level_range_min": level_min if not skip_filters else None,
@@ -497,6 +498,18 @@ def _create_match(
         
         if res.data:
             match_id = res.data[0]["match_id"]
+            
+            # Phase 3: Insert into match_participations (Dual-Write)
+            try:
+                supabase.table("match_participations").insert({
+                    "match_id": match_id,
+                    "player_id": player["player_id"],
+                    "team_index": 1,
+                    "status": "confirmed"
+                }).execute()
+            except Exception as e:
+                print(f"[ERROR] Failed to insert match_participation: {e}")
+
             from matchmaker import find_and_invite_players
             count = find_and_invite_players(match_id, skip_filters=skip_filters)
             
@@ -627,10 +640,24 @@ def handle_court_booking_sms(from_number: str, player: dict, entities: dict):
         return
 
     # Find the player's most recent confirmed match that isn't booked yet
+    # Find the player's most recent confirmed match that isn't booked yet
     player_id = player["player_id"]
-    match_res = supabase.table("matches").select("*").eq("status", "confirmed").eq("court_booked", False).or_(
-        f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
-    ).order("scheduled_time", desc=True).limit(1).execute()
+    
+    # Phase 4: Query match_participations first
+    parts_res = supabase.table("match_participations").select("match_id").eq("player_id", player_id).eq("status", "confirmed").execute()
+    match_ids = [p['match_id'] for p in parts_res.data] if parts_res.data else []
+    
+    if not match_ids:
+        send_sms(from_number, "I couldn't find a confirmed match for you to book a court for. Have you already marked it as booked?", club_id=player.get("club_id"))
+        return
+
+    match_res = supabase.table("matches").select("*")\
+        .in_("match_id", match_ids)\
+        .eq("status", "confirmed")\
+        .eq("court_booked", False)\
+        .order("scheduled_time", desc=True)\
+        .limit(1)\
+        .execute()
 
     if not match_res.data:
         send_sms(from_number, "I couldn't find a confirmed match for you to book a court for. Have you already marked it as booked?", club_id=player.get("club_id"))
@@ -662,7 +689,9 @@ def notify_players_of_booking(match_id: str, court_text: str):
     
     match = match_res.data[0]
     club_id = match["club_id"]
-    all_pids = (match.get("team_1_players") or []) + (match.get("team_2_players") or [])
+    
+    participants = get_match_participants(match_id)
+    all_pids = participants["all"]
     
     # Format time
     friendly_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=club_id)

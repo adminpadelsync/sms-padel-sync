@@ -9,26 +9,28 @@ from logic.reasoner import resolve_names_with_ai
 
 def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any]):
     """
-    Handle match result reporting via SMS.
     Attempts to identify the match, verify teams, and apply Elo updates.
     """
+    from logic_utils import get_match_participants
     player_id = player["player_id"]
     
     # 1. Find the most recent confirmed or completed match for this player
     # Look for matches in the last 24 hours
     since = (get_now_utc() - timedelta(hours=24)).isoformat()
     
-    match_res = supabase.table("matches").select("*").or_(
-        f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
-    ).eq("status", "confirmed").order("scheduled_time", desc=True).limit(1).execute()
+    # Phase 4: Query match_participations first
+    parts_res = supabase.table("match_participations").select("match_id").eq("player_id", player_id).in_("status", ["confirmed", "completed"]).execute()
+    match_ids = [p['match_id'] for p in parts_res.data] if parts_res.data else []
     
-    if not match_res.data:
-        # Check for already completed matches if they are reporting late
-        match_res = supabase.table("matches").select("*").or_(
-            f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
-        ).eq("status", "completed").order("scheduled_time", desc=True).limit(1).execute()
-        
-    if not match_res.data:
+    match_res = None
+    if match_ids:
+        match_res = supabase.table("matches").select("*")\
+            .in_("match_id", match_ids)\
+            .order("scheduled_time", desc=True)\
+            .limit(1)\
+            .execute()
+    
+    if not match_res or not match_res.data:
         send_sms(from_number, "I couldn't find a recent match to report a result for.")
         return
 
@@ -46,7 +48,8 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         return
 
     # 3. Team Verification Logic
-    all_pids = match["team_1_players"] + match["team_2_players"]
+    parts = get_match_participants(match_id)
+    all_pids = parts["all"]
     players_data = supabase.table("players").select("player_id, name").in_("player_id", all_pids).execute().data or []
     
     def resolve_name(name_str, players_data, sender_id):
@@ -109,8 +112,8 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     # NEW: Safety check - if they mentioned names but we couldn't resolve all of them, clarify.
     if (team_a_names and len(resolved_a) < len(team_a_names)) or (team_b_names and len(resolved_b) < len(team_b_names)):
         p_map = {p["player_id"]: p["name"] for p in players_data}
-        t1_names = [p_map.get(pid, "Unknown") for pid in match["team_1_players"]]
-        t2_names = [p_map.get(pid, "Unknown") for pid in match["team_2_players"]]
+        t1_names = [p_map.get(pid, "Unknown") for pid in parts["team_1"]]
+        t2_names = [p_map.get(pid, "Unknown") for pid in parts["team_2"]]
         
         msg_clarify = "I caught that you're reporting a result, but I'm having trouble identifying some of the names mentioned."
         msg_clarify += f"\n\nAs a reminder, the match was:\nTeam 1: {', '.join(t1_names)}\nTeam 2: {', '.join(t2_names)}"
@@ -118,14 +121,13 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         send_sms(from_number, msg_clarify)
         return
 
-    # 4. Resolve Teams from Match Record
-    # We want to map resolved_a and resolved_b to match['team_1_players'] or match['team_2_players']
-    match_t1 = set(match["team_1_players"])
-    match_t2 = set(match["team_2_players"])
+    # 4. Resolve Teams from Match Record (Source of Truth: match_participations)
+    participants = get_match_participants(match_id)
+    match_t1 = set(participants["team_1"])
+    match_t2 = set(participants["team_2"])
     
-    final_team_1 = match["team_1_players"]
-    final_team_2 = match["team_2_players"]
     teams_verified = False
+    is_flipped = False # If True, "Team A" (reporter's team) corresponds to DB Team 2
 
     # If they mentioned names, try to verify which match team they correspond to
     if resolved_a or resolved_b:
@@ -135,18 +137,14 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         
         # Scenario A: team_a maps to match_t1
         if set_a.issubset(match_t1) and (not set_b or set_b.issubset(match_t2)):
-            # This is the expected ordering: Team A is Match Team 1, Team B is Match Team 2
+            # Team A is Match Team 1
             teams_verified = True
-            team_1_players = final_team_1
-            team_2_players = final_team_2
+            is_flipped = False
         # Scenario B: team_a maps to match_t2
         elif set_a.issubset(match_t2) and (not set_b or set_b.issubset(match_t1)):
-            # Swapped ordering: Team A is Match Team 2, Team B is Match Team 1
+            # Team A is Match Team 2
             teams_verified = True
-            team_1_players = final_team_2
-            team_2_players = final_team_1
-            # We also need to swap the winner logic later if they use "Team A/B" winner text
-            # But let's keep it simple: we now know who team_1 and team_2 are in the context of this report.
+            is_flipped = True
         else:
             # Ambiguous or mismatched
             p_map = {p["player_id"]: p["name"] for p in players_data}
@@ -160,11 +158,8 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             return
     else:
         # No names provided - assume they are reporting for themselves
-        # If they just say "I won 6-0", resolved_a should at least have the sender
-        # But if the reasoner didn't extract any names, we fall back to clarification or 
-        # assume they mean themselves as "Team 1" if they are on Team 1?
-        # Let's be safe and clarify if NO names were caught but REPORT_RESULT intent was high.
-        # Actually, if winner_str is "we", the reasoner might not put "we" in team_a but set winner="we".
+        # Reasoner/parsing logic:
+        # winner_str might be "we", "me", "i", "a", "b", "them"
         pass
 
     if not teams_verified:
@@ -173,36 +168,42 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         if "me" in winner_str or "we" in winner_str or "i " in winner_str or winner_str == "i":
             teams_verified = True
             if player_id in match_t1:
-                team_1_players = final_team_1
-                team_2_players = final_team_2
+                is_flipped = False # Sender is Team 1
             else:
-                team_1_players = final_team_2
-                team_2_players = final_team_1
+                is_flipped = True # Sender is Team 2
         else:
             # Still don't know who is who
             send_sms(from_number, "I caught that you're reporting a result, but I'm having trouble identifying the teams. Could you please clarify? (e.g. 'We won 6-4 6-2')")
             return
 
     # 5. Determine Winner Team Index
-    winner_team = 1 # Default
+    # Base winner: 1 = "Team A/We", 2 = "Team B/They"
+    base_winner = 1 
     if "b" in winner_str or "opponent" in winner_str or "them" in winner_str or "lost" in winner_str:
-        winner_team = 2
+        base_winner = 2
     elif "a" in winner_str or "me" in winner_str or "we" in winner_str or "won" in winner_str:
-        winner_team = 1
+        base_winner = 1
         
+    # Apply Flip
+    # If is_flipped is True (Team A = DB Team 2):
+    #   If base_winner=1 (A won) -> DB Winner = 2
+    #   If base_winner=2 (B won) -> DB Winner = 1
+    final_winner = base_winner
+    if is_flipped:
+        final_winner = 3 - base_winner
+        
+    # 6. Update Match and Apply Elo
     # 6. Update Match and Apply Elo
     try:
         supabase.table("matches").update({
             "score_text": normalize_score(score),
-            "winner_team": winner_team,
+            "winner_team": final_winner,
             "status": "completed",
-            "team_1_players": team_1_players,
-            "team_2_players": team_2_players,
             "teams_verified": teams_verified
         }).eq("match_id", match_id).execute()
         
         # Apply Elo updates!
-        success = update_match_elo(match_id, winner_team)
+        success = update_match_elo(match_id, final_winner)
         
         if success:
             send_sms(from_number, f"🎾 Result recorded: {score}. Your Sync Rating has been updated! 📈")
