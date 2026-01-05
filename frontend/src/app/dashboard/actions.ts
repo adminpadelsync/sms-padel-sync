@@ -211,22 +211,17 @@ export async function removePlayerFromClub(playerId: string, clubId: string) {
         }
     }
 
-    // 3. Remove player from any matches (team_1_players, team_2_players) in this club
-    const { data: matchesWithPlayer } = await supabase
-        .from('matches')
-        .select('match_id, team_1_players, team_2_players')
-        .eq('club_id', clubId)
-        .or(`team_1_players.cs.{${playerId}},team_2_players.cs.{${playerId}}`)
+    // 3. Remove player from any matches in this club (Source of Truth: match_participations)
+    if (matchIds.length > 0) {
+        const { error: participationsError } = await supabase
+            .from('match_participations')
+            .delete()
+            .eq('player_id', playerId)
+            .in('match_id', matchIds)
 
-    if (matchesWithPlayer && matchesWithPlayer.length > 0) {
-        for (const match of matchesWithPlayer) {
-            const team1 = (match.team_1_players || []).filter((id: string) => id !== playerId)
-            const team2 = (match.team_2_players || []).filter((id: string) => id !== playerId)
-
-            await supabase
-                .from('matches')
-                .update({ team_1_players: team1, team_2_players: team2 })
-                .eq('match_id', match.match_id)
+        if (participationsError) {
+            console.error('Error deleting match participations for club:', participationsError)
+            throw participationsError
         }
     }
 

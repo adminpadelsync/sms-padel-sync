@@ -108,8 +108,8 @@ CREATE TABLE IF NOT EXISTS matches (
   club_id UUID NOT NULL REFERENCES clubs(club_id),
   court_id UUID REFERENCES courts(court_id),
   booking_id TEXT, -- external booking system ID
-  team_1_players UUID[2] NOT NULL,
-  team_2_players UUID[2] NOT NULL,
+  -- team_1_players UUID[2] NOT NULL, -- Deprecated (using match_participations)
+  -- team_2_players UUID[2] NOT NULL, -- Deprecated (using match_participations)
   scheduled_time TIMESTAMP WITH TIME ZONE NOT NULL,
   confirmed_at TIMESTAMP WITH TIME ZONE,
   no_show_players UUID[],

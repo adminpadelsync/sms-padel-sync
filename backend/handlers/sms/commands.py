@@ -47,10 +47,13 @@ def handle_matches_command(from_number: str, player: Dict, club_id: str, club_na
                 print(f"Error checking future match: {e}")
                 return True
         
-        # 1. Get matches where player is already in teams
-        matches_as_player = supabase.table("matches").select("*").or_(
-            f"team_1_players.cs.{{\"{player_id}\"}},team_2_players.cs.{{\"{player_id}\"}}"
-        ).execute().data or []
+        # 1. Get matches where player is already in teams (using Source of Truth: match_participations)
+        parts_res = supabase.table("match_participations").select("match_id").eq("player_id", player_id).execute()
+        participating_match_ids = [p["match_id"] for p in (parts_res.data or [])]
+        
+        matches_as_player = []
+        if participating_match_ids:
+            matches_as_player = supabase.table("matches").select("*").in_("match_id", participating_match_ids).execute().data or []
         
         # 2. Get matches where player has invites
         all_invites = supabase.table("match_invites").select("match_id, status").eq("player_id", player_id).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute().data or []
@@ -231,44 +234,68 @@ def handle_groups_command(from_number: str, player: Dict, club_id: str, club_nam
 
 def handle_mute_command(from_number: str, player: Dict, club_id: str):
     """Mute player for rest of day"""
-    now = get_now_utc()
-    tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    muted_until = player.get("muted_until")
-    
-    if muted_until:
-        try:
-            muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
-            if muted_dt > get_now_utc().replace(tzinfo=None):
-                send_sms(from_number, msg.MSG_ALREADY_MUTED, club_id=club_id)
-                return
-        except:
-            pass
-    
-    supabase.table("players").update({
-        "muted_until": tomorrow.isoformat()
-    }).eq("player_id", player["player_id"]).execute()
-    send_sms(from_number, msg.MSG_MUTED, club_id=club_id)
+    try:
+        now = get_now_utc()
+        tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        muted_until = player.get("muted_until")
+        
+        if muted_until:
+            try:
+                muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
+                if muted_dt > get_now_utc().replace(tzinfo=None):
+                    send_sms(from_number, msg.MSG_ALREADY_MUTED, club_id=club_id)
+                    return
+            except:
+                pass
+        
+        supabase.table("players").update({
+            "muted_until": tomorrow.isoformat()
+        }).eq("player_id", player["player_id"]).execute()
+        send_sms(from_number, msg.MSG_MUTED, club_id=club_id)
+    except Exception as e:
+        log_error(
+            error_type="sms_command",
+            error_message=f"MUTE command failed: {e}",
+            phone_number=from_number,
+            player_id=player.get("player_id"),
+            club_id=club_id,
+            handler_name="handle_mute_command",
+            exception=e
+        )
+        send_sms(from_number, "Sorry, I couldn't mute your notifications right now.", club_id=club_id)
 
 
 def handle_unmute_command(from_number: str, player: Dict, club_id: str):
     """Clear mute"""
-    muted_until = player.get("muted_until")
-    if not muted_until:
-        send_sms(from_number, msg.MSG_NOT_MUTED, club_id=club_id)
-        return
-    
     try:
-        muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
-        if muted_dt <= get_now_utc().replace(tzinfo=None):
+        muted_until = player.get("muted_until")
+        if not muted_until:
             send_sms(from_number, msg.MSG_NOT_MUTED, club_id=club_id)
             return
-    except:
-        pass
-    
-    supabase.table("players").update({
-        "muted_until": None
-    }).eq("player_id", player["player_id"]).execute()
-    send_sms(from_number, msg.MSG_UNMUTED, club_id=club_id)
+        
+        try:
+            muted_dt = parse_iso_datetime(muted_until).replace(tzinfo=None)
+            if muted_dt <= get_now_utc().replace(tzinfo=None):
+                send_sms(from_number, msg.MSG_NOT_MUTED, club_id=club_id)
+                return
+        except:
+            pass
+        
+        supabase.table("players").update({
+            "muted_until": None
+        }).eq("player_id", player["player_id"]).execute()
+        send_sms(from_number, msg.MSG_UNMUTED, club_id=club_id)
+    except Exception as e:
+        log_error(
+            error_type="sms_command",
+            error_message=f"UNMUTE command failed: {e}",
+            phone_number=from_number,
+            player_id=player.get("player_id"),
+            club_id=club_id,
+            handler_name="handle_unmute_command",
+            exception=e
+        )
+        send_sms(from_number, "Sorry, I couldn't unmute your notifications right now.", club_id=club_id)
 
 
 def handle_play_command(from_number: str, body: str, player: Dict, club_id: str, entities: Dict = None, group_id: str = None):
@@ -277,32 +304,48 @@ def handle_play_command(from_number: str, body: str, player: Dict, club_id: str,
         entities = entities or {}
         if group_id:
             entities["group_id"] = str(group_id)
-        handle_match_request(from_number, body, player, entities, cid=club_id)
+        handle_match_request(from_number, body, player, entities=entities, cid=club_id)
     except Exception as e:
-        print(f"[ERROR] Failed to process PLAY command: {e}")
-        import traceback
-        traceback.print_exc()
-        send_sms(from_number, f"debug_error: {str(e)}", club_id=club_id)
+        log_error(
+            error_type="sms_command",
+            error_message=f"PLAY command failed: {e}",
+            phone_number=from_number,
+            player_id=player.get("player_id"),
+            club_id=club_id,
+            handler_name="handle_play_command",
+            exception=e
+        )
+        send_sms(from_number, "Sorry, I couldn't process your match request right now.", club_id=club_id)
 
 def handle_help_command(from_number: str, club_name: str, club_id: str):
-    help_text = (
-        f"🎾 {club_name.upper()} COMMANDS\n\n"
-        "MATCH RESPONSES:\n"
-        "• YES - Accept invite\n"
-        "• NO - Decline invite\n"
-        "• MAYBE - Tentative\n\n"
-        "MATCH INFO:\n"
-        "• MATCHES - View your matches\n"
-        "• NEXT - Next confirmed match\n\n"
-        "OTHER:\n"
-        "• PLAY - Request a match\n"
-        "• GROUPS - Join player groups\n"
-        "• AVAILABILITY - Set play times\n"
-        "• MUTE - Pause invites for today\n"
-        "• UNMUTE - Resume invites\n"
-        "• COMMANDS - Show this message"
-    )
-    send_sms(from_number, help_text, club_id=club_id)
+    try:
+        help_text = (
+            f"🎾 {club_name.upper()} COMMANDS\n\n"
+            "MATCH RESPONSES:\n"
+            "• YES - Accept invite\n"
+            "• NO - Decline invite\n"
+            "• MAYBE - Tentative\n\n"
+            "MATCH INFO:\n"
+            "• MATCHES - View your matches\n"
+            "• NEXT - Next confirmed match\n\n"
+            "OTHER:\n"
+            "• PLAY - Request a match\n"
+            "• GROUPS - Join player groups\n"
+            "• AVAILABILITY - Set play times\n"
+            "• MUTE - Pause invites for today\n"
+            "• UNMUTE - Resume invites\n"
+            "• COMMANDS - Show this message"
+        )
+        send_sms(from_number, help_text, club_id=club_id)
+    except Exception as e:
+        log_error(
+            error_type="sms_command",
+            error_message=f"HELP command failed: {e}",
+            phone_number=from_number,
+            club_id=club_id,
+            handler_name="handle_help_command",
+            exception=e
+        )
 
 def handle_reset_command(from_number: str, club_id: str):
     """Handle reset command - mostly just logging as state is cleared by dispatcher"""
@@ -311,8 +354,20 @@ def handle_reset_command(from_number: str, club_id: str):
 
 def handle_availability_command(from_number: str, player: Dict, club_id: str):
     """Initiate availability update flow"""
-    send_sms(from_number, msg.MSG_ASK_AVAILABILITY_UPDATE, club_id=club_id)
-    set_user_state(from_number, msg.STATE_UPDATING_AVAILABILITY)
+    try:
+        send_sms(from_number, msg.MSG_ASK_AVAILABILITY_UPDATE, club_id=club_id)
+        set_user_state(from_number, msg.STATE_UPDATING_AVAILABILITY)
+    except Exception as e:
+        log_error(
+            error_type="sms_command",
+            error_message=f"AVAILABILITY command failed: {e}",
+            phone_number=from_number,
+            player_id=player.get("player_id"),
+            club_id=club_id,
+            handler_name="handle_availability_command",
+            exception=e
+        )
+        send_sms(from_number, "Sorry, I couldn't start the availability update right now.", club_id=club_id)
 
 def handle_availability_update(from_number: str, body: str, player: Dict, club_id: str):
     """Process availability update response"""
