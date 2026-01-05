@@ -88,6 +88,7 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
     const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set())
     const [isDeleting, setIsDeleting] = useState(false)
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+    const [markingBookedId, setMarkingBookedId] = useState<string | null>(null)
 
     // Update matches if initialMatches change
     useEffect(() => {
@@ -132,6 +133,16 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
             new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime()
         )
     }, [matches, filterStatus, searchQuery, showOlderMatches])
+
+    const bookingNeededMatches = useMemo(() => {
+        const now = new Date()
+        return matches.filter(m =>
+            !m.court_booked &&
+            (m.status === 'confirmed' || m.status === 'pending') &&
+            new Date(m.scheduled_time) > now &&
+            (userClubId ? m.club_id === userClubId : true)
+        ).sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
+    }, [matches, userClubId])
 
     const toggleRow = (matchId: string) => {
         const newExpanded = new Set(expandedRows)
@@ -184,6 +195,43 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
         }
     }
 
+    const handleMarkAsBooked = async (e: React.MouseEvent, matchId: string) => {
+        e.stopPropagation()
+        const courtText = prompt("Optional: Which court did you book? (e.g. 'Court 1')")
+        if (courtText === null) return // Cancelled prompt
+
+        setMarkingBookedId(matchId)
+        try {
+            const res = await fetch(`/api/matches/${matchId}/mark-booked`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    court_text: courtText || undefined
+                })
+            })
+
+            if (!res.ok) {
+                const errorData = await res.json()
+                throw new Error(errorData.detail || 'Failed to mark as booked')
+            }
+
+            // Update local state
+            setMatches(prev => prev.map(m =>
+                m.match_id === matchId ? {
+                    ...m,
+                    court_booked: true,
+                    booked_court_text: courtText || m.booked_court_text
+                } : m
+            ))
+        } catch (err: any) {
+            console.error('Error marking as booked:', err)
+            alert(`Error: ${err.message || 'Could not mark match as booked'}`)
+        } finally {
+            setMarkingBookedId(null)
+        }
+    }
+
     const getStatusStyles = (status: string) => {
         switch (status) {
             case 'confirmed':
@@ -230,6 +278,107 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                     {userClubId && <CreateMatchButton clubId={userClubId} clubTimezone={userClubTimezone} />}
                 </div>
             </div>
+
+            {/* Court Booking To-Do List (Only for unbooked future matches) */}
+            {bookingNeededMatches.length > 0 && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Calendar className="w-5 h-5 text-indigo-500" />
+                        <h2 className="text-xl font-bold text-gray-900 tracking-tight">Court Booking Requirements</h2>
+                        <span className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1 rounded-full border border-red-100 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {bookingNeededMatches.length} Pending
+                        </span>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {bookingNeededMatches.map(match => (
+                            <div
+                                key={match.match_id}
+                                className="bg-white p-5 rounded-2xl border-l-[6px] border-l-red-500 shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
+                                onClick={() => router.push(`/dashboard/matches/${match.match_id}`)}
+                            >
+                                <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ChevronRight className="w-5 h-5 text-gray-300" />
+                                </div>
+
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-black text-indigo-600 tracking-wide uppercase">
+                                            {formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined)}
+                                        </p>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${getStatusStyles(match.status)}`}>
+                                                {match.status.toUpperCase()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={(e) => handleMarkAsBooked(e, match.match_id)}
+                                        disabled={markingBookedId === match.match_id}
+                                        className="inline-flex items-center justify-center h-8 px-3.5 bg-green-600 hover:bg-green-700 text-white text-xs font-black rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                                    >
+                                        {markingBookedId === match.match_id ? (
+                                            <div className="flex items-center gap-1">
+                                                <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                ...
+                                            </div>
+                                        ) : (
+                                            'MARK BOOKED'
+                                        )}
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {/* Originator Callout */}
+                                    {match.originator && (
+                                        <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/50 group-hover:bg-indigo-50 transition-colors">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                                <User className="w-3 h-3 text-indigo-500" />
+                                                <p className="text-[10px] uppercase font-black text-indigo-600 tracking-wider">Host/Originator</p>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <p className="text-xs font-bold text-gray-900 truncate mr-2">{match.originator.name}</p>
+                                                <p className="text-[10px] text-indigo-700 font-mono tracking-tighter bg-white px-1.5 py-0.5 rounded border border-indigo-100/50 shrink-0">
+                                                    {formatPhoneNumber(match.originator.phone_number)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Player List */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {Array.from({ length: 4 }).map((_, i) => {
+                                            const allPlayers = [...(match.team_1_details || []), ...(match.team_2_details || [])]
+                                            const p = allPlayers[i]
+                                            return (
+                                                <div key={i} className={`p-2 rounded-xl border transition-all ${p ? 'bg-gray-50 border-gray-100 group-hover:bg-white' : 'bg-gray-50/30 border-dashed border-gray-200'}`}>
+                                                    {p ? (
+                                                        <>
+                                                            <p className="text-[11px] font-bold text-gray-900 truncate">{p.name || 'Anonymous'}</p>
+                                                            <div className="flex items-center gap-2 mt-0.5 text-[9px] text-gray-500">
+                                                                <span className="bg-gray-200/50 px-1 rounded font-bold">Lvl {p.declared_skill_level || '-'}</span>
+                                                                <span className="font-mono tracking-tighter truncate">{formatPhoneNumber(p.phone_number || '').replace(/^\+1/, '')}</span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="h-full flex items-center justify-center py-1">
+                                                            <Plus className="w-3 h-3 text-gray-300" />
+                                                            <span className="text-[9px] text-gray-400 font-medium ml-1">Open</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1 group">
