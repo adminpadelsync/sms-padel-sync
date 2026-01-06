@@ -8,6 +8,8 @@ import { PlayerActions } from '../player-management'
 import { AddMembersModal } from './add-members-modal'
 import { MatchWizard } from '../create-match-wizard'
 import { GroupNumberSettings } from './group-number-settings'
+import { ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
 
 interface Member {
     player_id: string
@@ -68,10 +70,14 @@ export function GroupDetailsClient({ group, members }: GroupDetailsClientProps) 
 
     return (
         <div className="p-6">
-            <div className="flex items-center gap-4 mb-6">
-                <a href="/dashboard/groups" className="text-indigo-600 hover:text-indigo-800">
-                    &larr; Back to Groups
-                </a>
+            <div className="mb-6">
+                <Link
+                    href="/dashboard/groups"
+                    className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold inline-flex items-center gap-2 group transition-all"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    Back to Groups
+                </Link>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">

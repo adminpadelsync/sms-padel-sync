@@ -16,6 +16,7 @@ import {
     Clock,
     AlertCircle,
     RotateCcw,
+    ArrowLeft,
     ArrowRightLeft,
     History,
     Trash2,
@@ -520,7 +521,7 @@ export default function MatchDetailPage() {
                         onClick={() => router.push('/dashboard/matches')}
                         className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold mb-6 inline-flex items-center gap-2 group transition-all"
                     >
-                        <RotateCcw className="w-4 h-4 group-hover:-rotate-45 transition-transform" />
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                         Back to Matches
                     </button>
 
@@ -1116,10 +1117,10 @@ export default function MatchDetailPage() {
                                                                     {invite.status === 'accepted' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
                                                                     {invite.status === 'declined' && <XCircle className="w-3.5 h-3.5 text-red-400" />}
                                                                 </div>
-                                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1.5 flex items-center gap-1.5">
+                                                                <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1.5 flex items-center gap-1.5">
                                                                     <div className={`w-1.5 h-1.5 rounded-full ${invite.status === 'accepted' ? 'bg-green-500' : 'bg-gray-300'}`} />
                                                                     {invite.status}
-                                                                </p>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <Send className="w-4 h-4 text-gray-200 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />

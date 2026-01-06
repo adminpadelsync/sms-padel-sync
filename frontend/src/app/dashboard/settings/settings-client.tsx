@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { QrCode, ExternalLink, Phone, Search, CheckCircle2, Trash2 } from 'lucide-react'
+import { QrCode, ExternalLink, Phone, Search, CheckCircle2, Trash2, ArrowLeft } from 'lucide-react'
 import { getAvailableNumbers, provisionClubNumber, releaseClubNumber } from '../clubs/actions'
 
 interface Club {
@@ -299,8 +299,12 @@ export default function SettingsClient({ userClubId }: SettingsClientProps) {
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center">
-                            ← Back to Dashboard
+                        <Link
+                            href="/dashboard"
+                            className="text-gray-500 hover:text-indigo-600 text-sm font-semibold mb-2 inline-flex items-center gap-2 group transition-all"
+                        >
+                            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                            Back to Dashboard
                         </Link>
                         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Club Settings</h1>
                         <p className="mt-2 text-lg text-gray-600">Manage your club profile and configurations.</p>
