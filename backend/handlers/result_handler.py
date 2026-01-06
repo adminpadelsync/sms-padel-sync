@@ -44,6 +44,19 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     team_a_names = entities.get("team_a", [])
     team_b_names = entities.get("team_b", [])
     
+    # NEW: If team_a is empty but winner_str contains names, try to extract them
+    if not team_a_names and winner_str:
+        # Check if winner_str is just a keyword or contains names
+        keywords = ["we", "me", "i", "a", "b", "them", "opponent", "team 1", "team 2"]
+        if not any(k == winner_str.strip() for k in keywords):
+            # Try to split by common separators
+            potential_winners = re.split(r'\s+and\s+|\s*,\s*|\s*\&\s*', winner_str)
+            # Remove "won" or other noise if present
+            potential_winners = [re.sub(r'\bwon\b|\bbeaten\b|\bbeat\b', '', w).strip() for w in potential_winners if w.strip()]
+            if potential_winners:
+                team_a_names = potential_winners
+                print(f"[RESULT_HANDLER] Extracted potential names from winner_str: {team_a_names}")
+
     if not score or not winner_str:
         send_sms(from_number, "I caught that you're reporting a result, but I couldn't understand the score or who won. Could you try again? (e.g. 'We won 6-4 6-2')", club_id=club_id)
         return
