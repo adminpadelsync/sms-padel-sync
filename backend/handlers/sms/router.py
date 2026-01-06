@@ -83,6 +83,14 @@ def resolve_player(from_number: str, club_id: str) -> Optional[Dict]:
     potential_player = player_res.data[0] if player_res.data else None
     
     if potential_player:
+        # Fetch memberships for this club
+        memberships_res = supabase.table("group_memberships").select(
+            "group_id, player_groups!inner(name, club_id)"
+        ).eq("player_id", potential_player["player_id"]).eq("player_groups.club_id", club_id).execute()
+        
+        group_names = [m["player_groups"]["name"] for m in (memberships_res.data or [])]
+        potential_player["group_names"] = group_names
+
         if club_id:
             member_res = supabase.table("club_members").select("*").eq("club_id", club_id).eq("player_id", potential_player["player_id"]).execute()
             if member_res.data:

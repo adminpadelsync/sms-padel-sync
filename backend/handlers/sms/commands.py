@@ -174,7 +174,7 @@ def handle_matches_command(from_number: str, player: Dict, club_id: str, club_na
         send_sms(from_number, "Sorry, something went wrong. Please try again.", club_id=club_id)
 
 
-def handle_groups_command(from_number: str, player: Dict, club_id: str, club_name: str):
+def handle_groups_command(from_number: str, player: Dict, club_id: str, club_name: str, ai_reply: str = None):
     """List public groups with membership status"""
     try:
         # 1. Get all public groups for this club
@@ -196,22 +196,28 @@ def handle_groups_command(from_number: str, player: Dict, club_id: str, club_nam
         all_groups_ordered = member_groups + available_groups
         
         # 4. Construct message
-        response = f"🎾 {club_name} Public Groups:\n"
+        response = ""
+        if ai_reply:
+            response = ai_reply + "\n\n"
+        else:
+            response = f"🎾 {club_name} Public Groups:\n\n"
         
         count = 1
         if member_groups:
-            response += "\nGroups you are a member of:\n"
+            response += "Groups you are in:\n"
             for g in member_groups:
                 response += f"{count}. {g['name']}\n"
                 count += 1
+            if available_groups:
+                response += "\n"
         
         if available_groups:
-            response += "\nGroups available to join:\n"
+            response += "Groups you can join:\n"
             for g in available_groups:
                 response += f"{count}. {g['name']}\n"
                 count += 1
         
-        response += "\nReply with a number to join/leave a group."
+        response += "\nReply with a number to join or leave."
         
         send_sms(from_number, response, club_id=club_id)
         set_user_state(from_number, msg.STATE_BROWSING_GROUPS, {

@@ -7,13 +7,13 @@ from datetime import datetime, timedelta
 from logic_utils import get_now_utc, normalize_score
 from logic.reasoner import resolve_names_with_ai
 
-def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any]):
+def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any], cid: str = None):
     """
     Attempts to identify the match, verify teams, and apply Elo updates.
     """
     from logic_utils import get_match_participants
     player_id = player["player_id"]
-    club_id = player.get("club_id")
+    club_id = cid or player.get("club_id")
     
     # 1. Find the most recent confirmed or completed match for this player
     # Look for matches in the last 24 hours

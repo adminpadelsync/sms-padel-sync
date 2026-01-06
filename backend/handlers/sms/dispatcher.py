@@ -165,7 +165,7 @@ class IntentDispatcher:
                     handle_matches_command(from_number, player, cid, cname)
                     return
                 elif cmd == "groups" or (intent == "JOIN_GROUP" and confidence > 0.8):
-                    handle_groups_command(from_number, player, cid, cname)
+                    handle_groups_command(from_number, player, cid, cname, ai_reply=reasoner_result.reply_text)
                     return
                 elif cmd == "availability":
                     handle_availability_command(from_number, player, cid) # Need to export this
