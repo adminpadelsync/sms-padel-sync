@@ -12,16 +12,36 @@ export default async function DashboardLayout({
     const cookieStore = await cookies()
     const isCollapsed = cookieStore.get('sidebar-collapsed')?.value === 'true'
 
-    // Fetch all active clubs if superuser for the switcher
+    // Fetch authorized clubs for the switcher
     let clubs: { club_id: string; name: string }[] = []
+    const supabase = await createClient()
+
     if (userClub?.is_superuser) {
-        const supabase = await createClient()
+        // Superusers see all active clubs
         const { data: clubsData } = await supabase
             .from('clubs')
             .select('club_id, name')
             .eq('active', true)
             .order('name')
         clubs = clubsData || []
+    } else if (userClub?.user_id) {
+        // Regular users see only their assigned clubs
+        const { data: userClubsData } = await supabase
+            .from('user_clubs')
+            .select(`
+                club_id,
+                clubs (
+                    name
+                )
+            `)
+            .eq('user_id', userClub.user_id)
+
+        clubs = (userClubsData || []).map(uc => ({
+            //@ts-ignore
+            club_id: uc.club_id,
+            //@ts-ignore
+            name: uc.clubs?.name || 'Unknown Club'
+        })).sort((a, b) => a.name.localeCompare(b.name))
     }
 
     return (

@@ -10,10 +10,11 @@ export interface CreateClubData {
     poc_phone?: string
     main_phone?: string
     booking_system?: string
-    twilio_phone_number?: string // Now optional
-    selected_provision_number?: string // New field
+    twilio_phone_number?: string
+    selected_provision_number?: string
     court_count: number
     timezone?: string
+    admin_email?: string // Optional initial admin to assign
 }
 
 
@@ -91,6 +92,36 @@ export async function createClub(data: CreateClubData) {
                 }
             } catch (provErr) {
                 console.error('Error provisioning number:', provErr)
+            }
+        }
+
+        // 4. Assign initial admin if provided
+        if (data.admin_email) {
+            try {
+                // Find user in users table (synced from Auth)
+                const { data: targetUser } = await supabase
+                    .from('users')
+                    .select('user_id')
+                    .eq('email', data.admin_email)
+                    .single()
+
+                if (targetUser) {
+                    const { error: userClubError } = await supabase
+                        .from('user_clubs')
+                        .insert({
+                            user_id: targetUser.user_id,
+                            club_id: club.club_id,
+                            role: 'club_admin'
+                        })
+
+                    if (userClubError) {
+                        console.error('Error assigning initial manager:', userClubError)
+                    }
+                } else {
+                    console.warn(`Initial manager email ${data.admin_email} not found in users table. Skipping assignment.`)
+                }
+            } catch (err) {
+                console.error('Failed to process initial manager assignment:', err)
             }
         }
 

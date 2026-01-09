@@ -23,6 +23,7 @@ router = APIRouter()
 from logic.elo_service import update_match_elo
 from result_nudge_scheduler import run_result_nudge_scheduler
 import twilio_manager
+from logic.auth_service import get_current_user, require_superuser, require_club_access, UserContext
 
 class RecommendationRequest(BaseModel):
     club_id: str
@@ -75,6 +76,21 @@ class CreateConfirmedMatchRequest(BaseModel):
     club_id: str
     scheduled_time: Optional[str] = None
 
+class UserClubAssignRequest(BaseModel):
+    club_ids: List[str]
+    role: Optional[str] = None
+
+class InviteUserRequest(BaseModel):
+    email: str
+    role: str = "club_admin"
+
+class UserCreateRequest(BaseModel):
+    email: str
+    password: str
+    role: str = "club_admin"
+    club_ids: List[str] = []
+    send_email: bool = True
+
 @router.get("/clubs")
 async def get_clubs():
     """Get all active clubs."""
@@ -111,7 +127,7 @@ class ClubUpdate(BaseModel):
 
 
 @router.post("/clubs")
-async def create_club(request: CreateClubRequest):
+async def create_club(request: CreateClubRequest, user: UserContext = Depends(require_superuser)):
     """Create a new club and its courts with strict validation."""
     try:
         # 1. Validate Timezone
@@ -239,12 +255,171 @@ async def update_club(club_id: str, updates: ClubUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/admin/users")
+async def get_all_users(user: UserContext = Depends(require_superuser)):
+    """Get all users and their club assignments."""
+    try:
+        # Fetch all users
+        users_res = supabase.table("users").select("*").execute()
+        users = users_res.data or []
+        
+        # Fetch all club assignments
+        user_clubs_res = supabase.table("user_clubs").select("user_id, club_id, role").execute()
+        assignments = user_clubs_res.data or []
+        
+        # Map assignments to users
+        user_map = {u["user_id"]: {**u, "clubs": []} for u in users}
+        for assignment in assignments:
+            if assignment["user_id"] in user_map:
+                user_map[assignment["user_id"]]["clubs"].append(assignment)
+                
+        return {"users": list(user_map.values())}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/users/{user_id}/clubs")
+async def update_user_clubs(user_id: str, request: UserClubAssignRequest, user: UserContext = Depends(require_superuser)):
+    """Update a user's club assignments and role."""
+    try:
+        # 1. Update global role if provided
+        if request.role:
+            supabase.table("users").update({"role": request.role}).eq("user_id", user_id).execute()
+            
+        # 2. Update club assignments
+        # First, remove all existing assignments
+        supabase.table("user_clubs").delete().eq("user_id", user_id).execute()
+        
+        # Then, add new assignments
+        if request.club_ids:
+            new_assignments = [
+                {"user_id": user_id, "club_id": club_id, "role": request.role or "club_admin"}
+                for club_id in request.club_ids
+            ]
+            supabase.table("user_clubs").insert(new_assignments).execute()
+            
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/users")
+async def create_user_admin(request: UserCreateRequest, user: UserContext = Depends(require_superuser)):
+    """Create a new user account via direct password setup OR native Supabase invitation email."""
+    try:
+        new_user_id = None
+        is_recovery = False
+        
+        # 1. Auth Creation Phase
+        if request.send_email:
+            # Invitation Mode: Supabase sends a native email, user sets password on click
+            try:
+                print(f"Sending invitation email to {request.email}...")
+                from main import settings
+                redirect_url = f"{settings.api_base_url}/auth/setup-password"
+                print(f"DEBUG: Invitation Redirect URL: {redirect_url}")
+                
+                # Revert to positional dictionary with both keys (known working method for token delivery)
+                auth_res = supabase.auth.admin.invite_user_by_email(request.email, {
+                    "data": {"role": request.role},
+                    "redirect_to": redirect_url,
+                    "redirectTo": redirect_url
+                })
+                if auth_res.user:
+                    new_user_id = auth_res.user.id
+                    print(f"Invitation sent. User ID: {new_user_id}")
+            except Exception as invite_err:
+                if "already registered" in str(invite_err).lower() or "already exists" in str(invite_err).lower():
+                    is_recovery = True
+                else:
+                    raise invite_err
+        else:
+            # Manual Mode: Admin sets password immediately, no email sent
+            try:
+                auth_res = supabase.auth.admin.create_user({
+                    "email": request.email,
+                    "password": request.password,
+                    "email_confirm": True,
+                    "user_metadata": {"role": request.role}
+                })
+                if auth_res.user:
+                    new_user_id = auth_res.user.id
+                    print(f"User created with direct password: {new_user_id}")
+            except Exception as auth_err:
+                if "already registered" in str(auth_err).lower() or "already exists" in str(auth_err).lower():
+                    is_recovery = True
+                else:
+                    raise auth_err
+
+        # 2. Recovery Sync (if Auth user existed but was orphaned/missing from public tables)
+        if is_recovery:
+            print(f"User {request.email} already exists in Auth. Recovering ID for sync...")
+            all_users = supabase.auth.admin.list_users()
+            existing_user = next((u for u in all_users if u.email == request.email), None)
+            if existing_user:
+                new_user_id = existing_user.id
+                print(f"Recovered Auth ID: {new_user_id}")
+            else:
+                raise HTTPException(status_code=500, detail="User exists in Auth but could not be retrieved.")
+
+        if not new_user_id:
+            raise HTTPException(status_code=500, detail="Failed to initiate user creation in Auth layer")
+            
+        # 3. Public Table Sync (Public Users & Roles)
+        try:
+            supabase.table("users").upsert({
+                "user_id": new_user_id,
+                "email": request.email,
+                "role": request.role,
+                "is_superuser": request.role == "superuser",
+                "active": True
+            }, on_conflict="user_id").execute()
+            print(f"Synced {request.email} to public users table")
+        except Exception as db_err:
+            print(f"DB Error syncing user: {str(db_err)}")
+            raise db_err
+        
+        # 4. Club Assignments (Atomic/Idempotent)
+        if request.club_ids:
+            # Delete any existing assignments (safety for recovery/retry scenarios)
+            supabase.table("user_clubs").delete().eq("user_id", new_user_id).execute()
+            
+            assignments = [
+                {"user_id": new_user_id, "club_id": cid, "role": request.role}
+                for cid in request.club_ids
+            ]
+            supabase.table("user_clubs").insert(assignments).execute()
+        
+        return {
+            "success": True, 
+            "user_id": new_user_id,
+            "message": f"User {request.email} successfully {'invited' if request.send_email else 'created'}."
+        }
+    except Exception as e:
+        print(f"CRITICAL ERROR in create_user_admin: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/admin/users/{user_id}")
+async def delete_user_admin(user_id: str, user: UserContext = Depends(require_superuser)):
+    """Permanently delete a user from Auth and public tables."""
+    try:
+        # Note: supabase.auth.admin.delete_user will trigger ON DELETE CASCADE 
+        # for our public.users and public.user_clubs tables.
+        res = supabase.auth.admin.delete_user(user_id)
+        
+        # res has no .data or .error in the current supabase-py admin response, 
+        # it just returns the user or raises an Exception.
+        print(f"User {user_id} deleted from Auth and public tables.")
+        
+        return {
+            "success": True,
+            "message": f"User {user_id} deleted successfully."
+        }
+    except Exception as e:
+        print(f"Error deleting user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/clubs/{club_id}")
-async def delete_club(club_id: str):
+async def delete_club(club_id: str, user: UserContext = Depends(require_superuser)):
     """
     Delete a club and all its associated data.
     This includes releasing Twilio numbers for the club and all its groups,
@@ -364,12 +539,22 @@ async def delete_club(club_id: str):
 
 
 @router.get("/players")
-async def get_players(request: Request):
+async def get_players(request: Request, user: UserContext = Depends(get_current_user)):
     """Get all players, optionally filtered by club."""
-
     try:
         # Get club_id from query params directly for robustness
         club_id = request.query_params.get("club_id") or request.query_params.get("cid")
+        
+        # Verify club access if club_id is provided
+        if club_id and club_id != "undefined" and club_id != "null":
+            require_club_access(club_id, user)
+        elif not user.is_superuser:
+            # If not a superuser and no club_id provided, default to their first accessible club 
+            # or throw error if they have none
+            if not user.club_ids:
+                raise HTTPException(status_code=403, detail="User is not assigned to any club")
+            club_id = user.club_ids[0]
+            print(f"DEBUG: Defaulting non-superuser to first club: {club_id}")
         print(f"DEBUG: get_players explicitly called with club_id={club_id}")
         
         query = supabase.table("players").select(
@@ -453,7 +638,8 @@ async def get_player_feedback_summary(player_id: str):
 
 
 @router.get("/clubs/{club_id}/rankings")
-async def get_club_rankings(club_id: str):
+async def get_club_rankings(club_id: str, user: UserContext = Depends(get_current_user)):
+    require_club_access(club_id, user)
 
 
     try:
@@ -474,7 +660,8 @@ async def get_club_rankings(club_id: str):
 
 
 @router.post("/recommendations")
-async def get_recommendations(request: RecommendationRequest):
+async def get_recommendations(request: RecommendationRequest, user: UserContext = Depends(get_current_user)):
+    require_club_access(request.club_id, user)
     try:
         players = get_player_recommendations(
             club_id=request.club_id,
@@ -513,7 +700,8 @@ async def search_players(club_id: str, q: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/outreach")
-async def create_outreach(request: OutreachRequest):
+async def create_outreach(request: OutreachRequest, user: UserContext = Depends(get_current_user)):
+    require_club_access(request.club_id, user)
     from fastapi.responses import JSONResponse
     import traceback
     print("DEBUG: Entered create_outreach handler")
@@ -538,7 +726,8 @@ async def create_outreach(request: OutreachRequest):
         )
 
 @router.get("/clubs/{club_id}/matches/booking-status")
-async def get_club_booking_status(club_id: str):
+async def get_club_booking_status(club_id: str, user: UserContext = Depends(get_current_user)):
+    require_club_access(club_id, user)
 
 
     try:
@@ -643,9 +832,14 @@ async def mark_match_booked(match_id: str, request: BookingMarkRequest):
             error_msg = "Database column missing. Please run the SQL migration 016_add_match_booking_fields.sql in Supabase."
         raise HTTPException(status_code=500, detail=error_msg)
 
-# IMPORTANT: This route MUST come before /matches/{match_id} or "confirmed" gets treated as a match_id
 @router.get("/matches/confirmed")
-async def get_confirmed_matches(club_id: str = None):
+async def get_confirmed_matches(club_id: str = None, user: UserContext = Depends(get_current_user)):
+    if club_id:
+        require_club_access(club_id, user)
+    elif not user.is_superuser:
+        if not user.club_ids:
+            return {"matches": []}
+        club_id = user.club_ids[0]
 
 
     try:
@@ -723,11 +917,15 @@ async def get_confirmed_matches(club_id: str = None):
 
 
 @router.get("/matches/{match_id}")
-async def get_match(match_id: str):
+async def get_match(match_id: str, user: UserContext = Depends(get_current_user)):
     """Get detailed match information including player names."""
     try:
         match = get_match_details(match_id)
+        if match and match.get('club_id'):
+            require_club_access(match['club_id'], user)
         return {"match": match}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 

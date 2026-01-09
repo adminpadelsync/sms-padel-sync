@@ -25,7 +25,8 @@ export default function NewClubPage() {
         main_phone: '',
         booking_system: 'playtomic',
         court_count: 4,
-        timezone: 'America/New_York'
+        timezone: 'America/New_York',
+        admin_email: ''
     })
 
     const [twilioState, setTwilioState] = useState({
@@ -65,7 +66,8 @@ export default function NewClubPage() {
             const result = await createClub({
                 ...formData,
                 address: fullAddress,
-                selected_provision_number: twilioState.selectedNumber
+                selected_provision_number: twilioState.selectedNumber,
+                admin_email: formData.admin_email
             })
             if (result.success && result.clubId) {
                 router.push(`/dashboard/clubs/${result.clubId}/poster`)
@@ -328,10 +330,37 @@ export default function NewClubPage() {
                             </div>
                         </section>
 
-                        {/* Section: System Integration */}
+                        {/* Section: Administrator Setup */}
                         <section>
                             <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
                                 <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">3</span>
+                                Administrator Setup
+                            </h3>
+                            <div className="grid grid-cols-1 gap-y-8 gap-x-6 sm:grid-cols-2">
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="admin_email" className="block text-base font-bold text-gray-800 mb-2">
+                                        Initial Manager Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        name="admin_email"
+                                        id="admin_email"
+                                        placeholder="manager@example.com"
+                                        value={formData.admin_email}
+                                        onChange={handleChange}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg py-3 px-4"
+                                    />
+                                    <p className="mt-2 text-sm text-gray-500">
+                                        Assign an existing user as the first manager of this club. They will gain access immediately.
+                                    </p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section: System Integration */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center border-b pb-2">
+                                <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">4</span>
                                 Integration
                             </h3>
                             <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sm:col-span-2 mb-6">

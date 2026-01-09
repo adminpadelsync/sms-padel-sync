@@ -84,7 +84,7 @@ export function SidebarClient({ userClub, clubs, children, initialCollapsed = fa
             <div className="md:hidden flex items-center justify-between h-16 px-4 border-b border-gray-200 bg-white sticky top-0 z-50 w-full">
                 <div className="flex items-center gap-2 min-w-0 flex-1 mr-4">
                     <span className="text-lg font-bold text-indigo-600 truncate min-w-0">{userClub.club_name || 'Padel Sync'}</span>
-                    {userClub.is_superuser && (
+                    {clubs.length > 1 && (
                         <button
                             onClick={() => setIsSwitchModalOpen(true)}
                             className="p-1.5 hover:bg-indigo-50 text-indigo-400 hover:text-indigo-600 rounded-lg transition-all duration-200 active:scale-95"
@@ -127,7 +127,7 @@ export function SidebarClient({ userClub, clubs, children, initialCollapsed = fa
                                     <X className="w-6 h-6" />
                                 </button>
                             </div>
-                            {userClub.is_superuser && (
+                            {clubs.length > 1 && (
                                 <button
                                     onClick={() => {
                                         setIsMobileMenuOpen(false);
@@ -190,7 +190,7 @@ export function SidebarClient({ userClub, clubs, children, initialCollapsed = fa
                                         <ChevronLeft className="w-5 h-5" />
                                     </button>
                                 </div>
-                                {userClub.is_superuser && (
+                                {clubs.length > 1 && (
                                     <button
                                         onClick={() => setIsSwitchModalOpen(true)}
                                         className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-all duration-200 active:scale-[0.98]"

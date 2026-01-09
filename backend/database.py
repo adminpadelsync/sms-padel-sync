@@ -1,5 +1,5 @@
 import os
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,14 +9,17 @@ key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 def get_supabase_client() -> Client:
     if not url or not key:
-        # Return None or raise error depending on if we want strict startup
-        # For now, let's allow it to fail at runtime if env vars are missing
-        # to avoid breaking import if just checking types etc.
         if not url:
             print("Warning: SUPABASE_URL not set")
         if not key:
             print("Warning: SUPABASE_SERVICE_ROLE_KEY not set")
         return None
-    return create_client(url, key)
+    
+    # Increase timeout to 30 seconds for slow custom SMTP email sending
+    options = ClientOptions(
+        postgrest_client_timeout=30,
+        storage_client_timeout=30
+    )
+    return create_client(url, key, options=options)
 
 supabase = get_supabase_client()
