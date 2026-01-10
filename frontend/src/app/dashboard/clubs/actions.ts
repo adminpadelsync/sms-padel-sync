@@ -134,17 +134,30 @@ export async function createClub(data: CreateClubData) {
 }
 
 export async function getAvailableNumbers(areaCode: string) {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
-    const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`)
+    const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
     if (!res.ok) throw new Error('Failed to fetch available numbers')
     return res.json()
 }
 
 export async function provisionClubNumber(clubId: string, phoneNumber: string) {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/provision-number`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ phone_number: phoneNumber })
     })
     if (!res.ok) throw new Error('Failed to provision number')
@@ -152,9 +165,14 @@ export async function provisionClubNumber(clubId: string, phoneNumber: string) {
 }
 
 export async function releaseClubNumber(clubId: string) {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/release-number`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!res.ok) throw new Error('Failed to release number')
     return res.json()

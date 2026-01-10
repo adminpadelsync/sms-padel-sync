@@ -92,8 +92,8 @@ class UserCreateRequest(BaseModel):
     send_email: bool = True
 
 @router.get("/clubs")
-async def get_clubs():
-    """Get all active clubs."""
+async def get_clubs(user: UserContext = Depends(require_superuser)):
+    """Get all active clubs. Restricted to superusers."""
 
     try:
         result = supabase.table("clubs").select("*").eq("active", True).execute()
@@ -190,8 +190,8 @@ async def create_club(request: CreateClubRequest, user: UserContext = Depends(re
 # --- Club Twilio Provisioning ---
 
 @router.get("/clubs/available-numbers")
-async def get_club_available_numbers(area_code: str = "305"):
-    """Search for available Twilio numbers by area code."""
+async def get_club_available_numbers(area_code: str = "305", user: UserContext = Depends(require_superuser)):
+    """Search for available Twilio numbers by area code. Restricted to superusers."""
     try:
         numbers = twilio_manager.search_available_numbers(area_code)
         return {"numbers": numbers}
@@ -199,8 +199,9 @@ async def get_club_available_numbers(area_code: str = "305"):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clubs/{club_id}")
-async def get_club(club_id: str):
-    """Get a single club by ID."""
+async def get_club(club_id: str, user: UserContext = Depends(get_current_user)):
+    """Get a single club by ID. Requires access to that club or superuser."""
+    require_club_access(club_id, user)
     try:
         result = supabase.table("clubs").select("*").eq("club_id", club_id).execute()
         if not result.data:
@@ -213,8 +214,8 @@ async def get_club(club_id: str):
 
 
 @router.put("/clubs/{club_id}")
-async def update_club(club_id: str, updates: ClubUpdate):
-    """Update club fields (name, phone_number)."""
+async def update_club(club_id: str, updates: ClubUpdate, user: UserContext = Depends(require_club_access)):
+    """Update club fields (name, phone_number). Restricted to users with club access."""
 
     try:
         # Build updates dict from non-None fields
@@ -1344,9 +1345,9 @@ class ClubSettingsUpdate(BaseModel):
 
 
 @router.get("/clubs/{club_id}/settings")
-async def get_club_settings(club_id: str):
-
-
+async def get_club_settings(club_id: str, user: UserContext = Depends(get_current_user)):
+    """Get club settings. Requires club access."""
+    require_club_access(club_id, user)
     try:
         result = supabase.table("clubs").select("settings").eq("club_id", club_id).execute()
         if not result.data:
@@ -1371,8 +1372,9 @@ async def get_club_settings(club_id: str):
 
 
 @router.put("/clubs/{club_id}/settings")
-async def update_club_settings(club_id: str, updates: ClubSettingsUpdate):
-    """Update club settings."""
+async def update_club_settings(club_id: str, updates: ClubSettingsUpdate, user: UserContext = Depends(get_current_user)):
+    """Update club settings. Requires club access."""
+    require_club_access(club_id, user)
     from database import supabase
     try:
         # Get current settings
@@ -1770,8 +1772,8 @@ async def get_suggested_numbers(group_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/groups/{group_id}/provision-number")
-async def provision_number(group_id: str, request: Dict[str, str]):
-    """Provision a specific phone number for a group."""
+async def provision_number(group_id: str, request: Dict[str, str], user: UserContext = Depends(require_superuser)):
+    """Provision a specific phone number for a group. Restricted to superusers."""
     phone_number = request.get("phone_number")
     if not phone_number:
         raise HTTPException(status_code=400, detail="phone_number is required")
@@ -1789,8 +1791,8 @@ async def release_number_get(group_id: str):
     return await release_number(group_id)
 
 @router.delete("/groups/{group_id}/release-number")
-async def release_number(group_id: str):
-    """Release the dedicated phone number for a group."""
+async def release_number(group_id: str, user: UserContext = Depends(require_superuser)):
+    """Release the dedicated phone number for a group. Restricted to superusers."""
     success, result = twilio_manager.release_group_number(group_id)
     if not success:
         raise HTTPException(status_code=500, detail=result)
@@ -1799,8 +1801,8 @@ async def release_number(group_id: str):
 
 
 @router.post("/clubs/{club_id}/provision-number")
-async def provision_club_number(club_id: str, request: Dict[str, str]):
-    """Provision a specific phone number for a club."""
+async def provision_club_number(club_id: str, request: Dict[str, str], user: UserContext = Depends(require_superuser)):
+    """Provision a specific phone number for a club. Restricted to superusers."""
     phone_number = request.get("phone_number")
     if not phone_number:
         raise HTTPException(status_code=400, detail="phone_number is required")
@@ -1812,8 +1814,8 @@ async def provision_club_number(club_id: str, request: Dict[str, str]):
     return {"status": "success", "phone_number": result}
 
 @router.delete("/clubs/{club_id}/release-number")
-async def release_club_number(club_id: str):
-    """Release the Twilio phone number for a club."""
+async def release_club_number(club_id: str, user: UserContext = Depends(require_superuser)):
+    """Release the Twilio phone number for a club. Restricted to superusers."""
     success, result = twilio_manager.release_club_number(club_id)
     if not success:
         raise HTTPException(status_code=500, detail=result)

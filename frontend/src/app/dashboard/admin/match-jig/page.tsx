@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PlayerColumn } from '../simulator/player-column'
+import { authFetch } from '@/utils/auth-fetch'
 
 interface Player {
     player_id: string
@@ -64,7 +65,7 @@ export default function MatchJigPage() {
     const fetchClubs = async () => {
         try {
             console.log("DEBUG: Fetching clubs...");
-            const response = await fetch('/api/clubs')
+            const response = await authFetch('/api/clubs')
             if (response.ok) {
                 const data = await response.json()
                 const clubList = data.clubs || []
@@ -87,7 +88,7 @@ export default function MatchJigPage() {
 
             setIsLoading(true);
             const timestamp = new Date().getTime();
-            const response = await fetch(`/api/players?club_id=${clubId}&_t=${timestamp}`)
+            const response = await authFetch(`/api/players?club_id=${clubId}&_t=${timestamp}`)
 
             if (response.ok) {
                 const data = await response.json()
@@ -119,7 +120,7 @@ export default function MatchJigPage() {
 
         const pollOutbox = async () => {
             try {
-                const response = await fetch('/api/sms-outbox')
+                const response = await authFetch('/api/sms-outbox')
                 if (response.ok) {
                     const data = await response.json()
                     const messages: OutboxMessage[] = data.messages || []
@@ -144,7 +145,7 @@ export default function MatchJigPage() {
                             })
 
                             // Mark as read so it doesn't pop up again
-                            await fetch(`/api/sms-outbox/${msg.id}/read`, { method: 'POST' })
+                            await authFetch(`/api/sms-outbox/${msg.id}/read`, { method: 'POST' })
                         }
                     }
                 }
@@ -178,7 +179,7 @@ export default function MatchJigPage() {
 
         setIsLoading(true)
         try {
-            const response = await fetch('/api/admin/create-confirmed-match', {
+            const response = await authFetch('/api/admin/create-confirmed-match', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -209,7 +210,7 @@ export default function MatchJigPage() {
         if (!currentMatch) return
         setFeedbackLoading(true)
         try {
-            const response = await fetch(`/api/matches/${currentMatch.match_id}/feedback`, {
+            const response = await authFetch(`/api/matches/${currentMatch.match_id}/feedback`, {
                 method: 'POST'
             })
             if (response.ok) {
@@ -243,7 +244,7 @@ export default function MatchJigPage() {
 
         // Send to backend (Simulated SMS Inbox)
         try {
-            await fetch('/api/sms-inbox', {
+            await authFetch('/api/sms-inbox', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -254,7 +255,7 @@ export default function MatchJigPage() {
 
             // Re-fetch match status if a result might have been reported
             if (currentMatch) {
-                const res = await fetch(`/api/matches/${currentMatch.match_id}`)
+                const res = await authFetch(`/api/matches/${currentMatch.match_id}`)
                 if (res.ok) {
                     const data = await res.json()
                     setCurrentMatch(data.match)
@@ -372,7 +373,7 @@ export default function MatchJigPage() {
                         </div>
                         <div className="text-right flex items-center gap-2">
                             <button onClick={() => {
-                                fetch(`/api/matches/${currentMatch.match_id}`).then(r => r.json()).then(d => setCurrentMatch(d.match))
+                                authFetch(`/api/matches/${currentMatch.match_id}`).then(r => r.json()).then(d => setCurrentMatch(d.match))
                             }} className="p-1 hover:bg-white/10 rounded" title="Refresh match status">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

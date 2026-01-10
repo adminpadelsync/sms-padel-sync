@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PlayerColumn } from './player-column'
+import { authFetch } from '@/utils/auth-fetch'
 
 interface Player {
     player_id: string
@@ -91,7 +92,7 @@ export default function SMSSimulatorPage() {
 
         const pollOutbox = async () => {
             try {
-                const response = await fetch('/api/sms-outbox')
+                const response = await authFetch('/api/sms-outbox')
                 if (response.ok) {
                     const data = await response.json()
                     const messages: OutboxMessage[] = data.messages || []
@@ -118,7 +119,7 @@ export default function SMSSimulatorPage() {
                             })
 
                             // Mark as read
-                            await fetch(`/api/sms-outbox/${msg.id}/read`, { method: 'POST' })
+                            await authFetch(`/api/sms-outbox/${msg.id}/read`, { method: 'POST' })
                         }
                     }
                 }
@@ -136,7 +137,7 @@ export default function SMSSimulatorPage() {
 
     const fetchPlayers = async () => {
         try {
-            const response = await fetch('/api/players')
+            const response = await authFetch('/api/players')
             if (response.ok) {
                 const data = await response.json()
                 setPlayers(data.players || [])
@@ -148,7 +149,7 @@ export default function SMSSimulatorPage() {
 
     const fetchClubs = async () => {
         try {
-            const response = await fetch('/api/clubs')
+            const response = await authFetch('/api/clubs')
             if (response.ok) {
                 const data = await response.json()
                 const clubList = data.clubs || []
@@ -165,7 +166,7 @@ export default function SMSSimulatorPage() {
 
     const fetchGroups = async (clubId: string) => {
         try {
-            const response = await fetch(`/api/clubs/${clubId}/groups`)
+            const response = await authFetch(`/api/clubs/${clubId}/groups`)
             if (response.ok) {
                 const data = await response.json()
                 setGroups(data.groups || [])
@@ -180,7 +181,7 @@ export default function SMSSimulatorPage() {
             // Try to get club_id, but fetch matches even if we can't
             let clubId = null
             try {
-                const clubResponse = await fetch('/api/clubs')
+                const clubResponse = await authFetch('/api/clubs')
                 if (clubResponse.ok) {
                     const clubData = await clubResponse.json()
                     clubId = clubData.clubs?.[0]?.club_id
@@ -197,7 +198,7 @@ export default function SMSSimulatorPage() {
                 ? `/api/matches/confirmed?club_id=${clubId}`
                 : '/api/matches/confirmed'
 
-            const response = await fetch(url)
+            const response = await authFetch(url)
             if (response.ok) {
                 const data = await response.json()
                 setConfirmedMatches(data.matches || [])
@@ -211,7 +212,7 @@ export default function SMSSimulatorPage() {
     const handleSendFeedback = async (matchId: string) => {
         setFeedbackLoading(matchId)
         try {
-            const response = await fetch(`/api/matches/${matchId}/feedback`, {
+            const response = await authFetch(`/api/matches/${matchId}/feedback`, {
                 method: 'POST'
             })
             if (response.ok) {
@@ -291,7 +292,7 @@ export default function SMSSimulatorPage() {
             const clubId = currentClubId || selectedPlayers[0]?.player_id?.split('-')[0] || 'default'
 
             // Create a REAL match in the database via API
-            const response = await fetch('/api/outreach', {
+            const response = await authFetch('/api/outreach', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -432,7 +433,7 @@ Reply YES to join, NO to decline`
                     toNumber = selectedClub?.phone_number
                 }
 
-                await fetch('/api/sms-inbox', {
+                await authFetch('/api/sms-inbox', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

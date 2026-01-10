@@ -24,7 +24,8 @@ export function RankingsClient({ initialClubId }: { initialClubId: string | null
     const fetchRankings = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await fetch(`/api/clubs/${clubId}/rankings`);
+            const { authFetch } = await import('@/utils/auth-fetch');
+            const response = await authFetch(`/api/clubs/${clubId}/rankings`);
             const data = await response.json();
             setRankings(data.rankings || []);
         } catch (error) {

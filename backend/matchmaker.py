@@ -92,7 +92,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
     member_ids = [m["player_id"] for m in (members_res.data or [])]
     
-    if target_player_ids:
+    if target_player_ids and len(target_player_ids) > 0:
         # Use specific players provided by Admin
         candidates_res = supabase.table("players").select("*").in_("player_id", target_player_ids).execute()
     else:

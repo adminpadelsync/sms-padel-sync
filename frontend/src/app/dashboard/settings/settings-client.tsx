@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { QrCode, ExternalLink, Phone, Search, CheckCircle2, Trash2, ArrowLeft } from 'lucide-react'
 import { getAvailableNumbers, provisionClubNumber, releaseClubNumber } from '../clubs/actions'
+import { authFetch } from '@/utils/auth-fetch'
 
 interface Club {
     club_id: string
@@ -114,12 +115,12 @@ export default function SettingsClient({ userClubId }: SettingsClientProps) {
 
     const fetchClub = async (targetId: string) => {
         try {
-            const response = await fetch('/api/clubs')
+            const response = await authFetch(`/api/clubs/${targetId}`)
             if (response.ok) {
-                const data = (await response.json()) as { clubs: Club[] }
-                if (data.clubs && data.clubs.length > 0) {
-                    const clubData = data.clubs.find((c: Club) => c.club_id === targetId) || data.clubs[0]
+                const data = (await response.json()) as { club: Club }
+                const clubData = data.club
 
+                if (clubData) {
                     setClub(clubData)
 
                     // Populate form
@@ -164,6 +165,10 @@ export default function SettingsClient({ userClubId }: SettingsClientProps) {
                         initial_batch_size: clubData.settings?.initial_batch_size ?? 6
                     })
                 }
+            } else {
+                const errorData = await response.json()
+                console.error('Error response:', errorData)
+                setMessage({ type: 'error', text: `Failed to load settings: ${errorData.detail || 'Unknown error'}` })
             }
         } catch (error) {
             console.error('Error fetching club:', error)
@@ -181,9 +186,11 @@ export default function SettingsClient({ userClubId }: SettingsClientProps) {
         const fullAddress = `${addressFields.street}, ${addressFields.city}, ${addressFields.state} ${addressFields.zip}`
 
         try {
-            const clubResponse = await fetch(`/api/clubs/${club.club_id}`, {
+            const clubResponse = await authFetch(`/api/clubs/${club.club_id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     name: formData.name,
                     phone_number: formData.twilio_phone_number || null,
@@ -199,9 +206,11 @@ export default function SettingsClient({ userClubId }: SettingsClientProps) {
 
             if (!clubResponse.ok) throw new Error('Failed to update club info')
 
-            const settingsResponse = await fetch(`/api/clubs/${club.club_id}/settings`, {
+            const settingsResponse = await authFetch(`/api/clubs/${club.club_id}/settings`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(feedbackSettings)
             })
 

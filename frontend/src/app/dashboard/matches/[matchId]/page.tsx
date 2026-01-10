@@ -26,6 +26,7 @@ import {
     UserPlus
 } from 'lucide-react'
 import { formatLocalizedTime, isPastTime } from '@/utils/time-utils'
+import { authFetch } from '@/utils/auth-fetch'
 
 
 interface Player {
@@ -180,9 +181,9 @@ export default function MatchDetailPage() {
         async function fetchData() {
             try {
                 const [matchRes, invitesRes, feedbackRes] = await Promise.all([
-                    fetch(`/api/matches/${matchId}`),
-                    fetch(`/api/matches/${matchId}/invites`),
-                    fetch(`/api/matches/${matchId}/feedback`)
+                    authFetch(`/api/matches/${matchId}`),
+                    authFetch(`/api/matches/${matchId}/invites`),
+                    authFetch(`/api/matches/${matchId}/feedback`)
                 ])
 
                 if (matchRes.ok) {
@@ -224,7 +225,7 @@ export default function MatchDetailPage() {
             }
 
             try {
-                const res = await fetch(`/api/players/search?club_id=${match.club_id}&q=${encodeURIComponent(searchTerm)}`)
+                const res = await authFetch(`/api/players/search?club_id=${match.club_id}&q=${encodeURIComponent(searchTerm)}`)
 
                 if (res.ok) {
                     const data = await res.json()
@@ -254,7 +255,7 @@ export default function MatchDetailPage() {
         if (!match) return
         setActionLoading(true)
         try {
-            const res = await fetch(`/api/matches/${matchId}`, {
+            const res = await authFetch(`/api/matches/${matchId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'confirmed' })
@@ -273,7 +274,7 @@ export default function MatchDetailPage() {
         if (!match || !confirm('Are you sure you want to cancel this match?')) return
         setActionLoading(true)
         try {
-            const res = await fetch(`/api/matches/${matchId}`, {
+            const res = await authFetch(`/api/matches/${matchId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'cancelled' })
@@ -292,7 +293,7 @@ export default function MatchDetailPage() {
         if (!match || selectedToInvite.size === 0) return
         setActionLoading(true)
         try {
-            const res = await fetch(`/api/matches/${matchId}/invites`, {
+            const res = await authFetch(`/api/matches/${matchId}/invites`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -302,7 +303,7 @@ export default function MatchDetailPage() {
 
             if (res.ok) {
                 // Refresh invites
-                const invitesRes = await fetch(`/api/matches/${matchId}/invites`)
+                const invitesRes = await authFetch(`/api/matches/${matchId}/invites`)
                 if (invitesRes.ok) {
                     const invitesData = await invitesRes.json()
                     setInvites(invitesData.invites || [])
@@ -332,7 +333,7 @@ export default function MatchDetailPage() {
         if (!match) return
         setActionLoading(true)
         try {
-            const res = await fetch(`/api/matches/${matchId}`, {
+            const res = await authFetch(`/api/matches/${matchId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -358,12 +359,12 @@ export default function MatchDetailPage() {
         if (!match || !confirm('Remove this player from the match?')) return
         setActionLoading(true)
         try {
-            const res = await fetch(`/api/matches/${matchId}/players/${playerId}`, {
+            const res = await authFetch(`/api/matches/${matchId}/players/${playerId}`, {
                 method: 'DELETE'
             })
             if (res.ok) {
                 // Refresh match data
-                const matchRes = await fetch(`/api/matches/${matchId}`)
+                const matchRes = await authFetch(`/api/matches/${matchId}`)
                 if (matchRes.ok) {
                     const matchData = await matchRes.json()
                     setMatch(matchData.match)
@@ -413,7 +414,7 @@ export default function MatchDetailPage() {
 
             const winner_team = calculateWinnerFromScores(setScores)
 
-            const res = await fetch(`/api/matches/${matchId}`, {
+            const res = await authFetch(`/api/matches/${matchId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -440,7 +441,7 @@ export default function MatchDetailPage() {
         if (!match || resendingResult) return
         setResendingResult(true)
         try {
-            const res = await fetch(`/api/matches/${matchId}/result-nudge`, {
+            const res = await authFetch(`/api/matches/${matchId}/result-nudge`, {
                 method: 'POST'
             })
             if (res.ok) {
@@ -462,7 +463,7 @@ export default function MatchDetailPage() {
         setResendingFeedback(true)
         try {
             // Backend now handles skipping responders if we use the standard endpoint with force=true
-            const res = await fetch(`/api/matches/${matchId}/feedback?force=true`, {
+            const res = await authFetch(`/api/matches/${matchId}/feedback?force=true`, {
                 method: 'POST'
             })
             if (res.ok) {
@@ -1102,38 +1103,60 @@ export default function MatchDetailPage() {
                                             )}
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {invites.map(invite => (
-                                                    <div key={invite.invite_id} className="group relative flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-green-200 hover:shadow-md transition-all">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm transition-colors ${invite.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                                                invite.status === 'maybe' ? 'bg-yellow-100 text-yellow-700' :
-                                                                    'bg-gray-200 text-gray-500'
-                                                                }`}>
-                                                                {invite.player?.name?.[0] || '?'}
-                                                            </div>
-                                                            <div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className="font-bold text-gray-900 leading-none tracking-tight">{invite.player?.name}</p>
-                                                                    {invite.status === 'accepted' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
-                                                                    {invite.status === 'declined' && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                                                {invites.length > 0 ? (
+                                                    invites.map(invite => {
+                                                        const config = statusConfig[invite.status] || statusConfig.sent
+                                                        return (
+                                                            <div key={invite.invite_id} className="group relative flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-indigo-100 hover:shadow-md transition-all">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm transition-all ${config.bg} ${config.text}`}>
+                                                                        {invite.player?.name?.[0] || '?'}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <p className="font-bold text-gray-900 leading-none tracking-tight">{invite.player?.name}</p>
+                                                                            {invite.status === 'accepted' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                                                                            {invite.status === 'declined' && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                                                                            {invite.status === 'pending_sms' && <Clock className="w-3.5 h-3.5 text-indigo-400" />}
+                                                                        </div>
+                                                                        <div className={`text-[10px] font-black uppercase tracking-widest mt-1.5 flex items-center gap-1.5 ${config.text}`}>
+                                                                            <div className={`w-1.5 h-1.5 rounded-full ${invite.status === 'accepted' ? 'bg-green-500' :
+                                                                                invite.status === 'pending_sms' ? 'bg-indigo-400' : 'bg-gray-300'}`} />
+                                                                            {config.label}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1.5 flex items-center gap-1.5">
-                                                                    <div className={`w-1.5 h-1.5 rounded-full ${invite.status === 'accepted' ? 'bg-green-500' : 'bg-gray-300'}`} />
-                                                                    {invite.status}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <Send className="w-4 h-4 text-gray-200 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
 
-                                                        {invite.status === 'accepted' && (
-                                                            <div onClick={(e) => { e.stopPropagation(); handleRemovePlayer(invite.player_id) }} className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                                                <div className="bg-white rounded-full p-1 shadow-md border border-red-50 hover:bg-red-50 transition-colors">
-                                                                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xl opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-110">
+                                                                        {config.icon}
+                                                                    </span>
+                                                                    {invite.status === 'pending_sms' ? (
+                                                                        <Clock className="w-4 h-4 text-indigo-300" />
+                                                                    ) : (
+                                                                        <Send className="w-4 h-4 text-gray-200 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+                                                                    )}
                                                                 </div>
+
+                                                                {invite.status === 'accepted' && (
+                                                                    <div onClick={(e) => { e.stopPropagation(); handleRemovePlayer(invite.player_id) }} className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                                        <div className="bg-white rounded-full p-1 shadow-md border border-red-50 hover:bg-red-50 transition-colors">
+                                                                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
+                                                        )
+                                                    })
+                                                ) : (
+                                                    <div className="col-span-full py-12 bg-gray-50/50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
+                                                        <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                                                            <UserPlus className="w-6 h-6 text-gray-300" />
+                                                        </div>
+                                                        <p className="text-sm font-bold text-gray-500">No players invited yet</p>
+                                                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-black">Click "Send More Invites" to start outreach</p>
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
                                         </div>
                                     </div>

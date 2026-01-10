@@ -103,7 +103,9 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
             setLoading(true)
             try {
                 // Fetch recommendations
-                const response = await fetch('/api/recommendations', {
+                const { authFetch } = await import('@/utils/auth-fetch')
+
+                const response = await authFetch('/api/recommendations', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -133,6 +135,8 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
     const handleSendInvites = async () => {
         setLoading(true)
         try {
+            const { authFetch } = await import('@/utils/auth-fetch')
+
             const payload = {
                 club_id: clubId,
                 player_ids: selectedPlayers,
@@ -141,7 +145,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
             }
             console.log('Sending Invites Payload:', payload)
 
-            const response = await fetch('/api/outreach', {
+            const response = await authFetch('/api/outreach', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

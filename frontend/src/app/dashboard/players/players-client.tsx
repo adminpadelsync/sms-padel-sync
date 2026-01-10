@@ -152,7 +152,8 @@ export function PlayersClient({
 
     const openMatchDetails = async (matchId: string) => {
         try {
-            const res = await fetch(`/api/matches/${matchId}`)
+            const { authFetch } = await import('@/utils/auth-fetch')
+            const res = await authFetch(`/api/matches/${matchId}`)
             const data = await res.json()
             setSelectedMatch(data.match)
             setIsMatchDetailsOpen(true)

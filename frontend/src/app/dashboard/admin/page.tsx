@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/utils/auth-fetch'
 
 interface Club {
     club_id: string;
@@ -41,7 +42,7 @@ export default function AdminPage() {
     const fetchClubs = async () => {
         setIsFetchingClubs(true)
         try {
-            const res = await fetch('/api/clubs')
+            const res = await authFetch('/api/clubs')
             const data = await res.json()
             if (res.ok) {
                 setClubs(data.clubs || [])
@@ -57,7 +58,7 @@ export default function AdminPage() {
         setIsLoading(true)
         setResult(null)
         try {
-            const res = await fetch('/api/cron/recalculate-scores', {
+            const res = await authFetch('/api/cron/recalculate-scores', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -81,7 +82,7 @@ export default function AdminPage() {
         setIsLoading(true)
         setDeletionLogs([]) // Reset logs
         try {
-            const res = await fetch(`/api/clubs/${clubToDelete.club_id}`, {
+            const res = await authFetch(`/api/clubs/${clubToDelete.club_id}`, {
                 method: 'DELETE'
             })
             const data = await res.json()

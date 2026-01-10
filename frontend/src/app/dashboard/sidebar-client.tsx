@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LogoutButton } from './logout-button'
 import { SwitchClubModal } from './switch-club-modal'
-import { Building2, ChevronLeft, LayoutDashboard, Users2, Users as GroupsIcon, CalendarDays, Trophy, Settings, ShieldCheck, Pin, Menu, X, LogOut } from 'lucide-react'
+import { Building2, PanelLeft, LayoutDashboard, Users2, Users as GroupsIcon, CalendarDays, Trophy, Settings, ShieldCheck, Bookmark, Menu, X, LogOut } from 'lucide-react'
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
 
@@ -26,6 +26,27 @@ export function SidebarClient({ userClub, clubs, children, initialCollapsed = fa
     const [isHovering, setIsHovering] = useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false)
+    const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+    const handleMouseEnter = () => {
+        if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current)
+            hoverTimeoutRef.current = null
+        }
+        if (isCollapsed) {
+            setIsHovering(true)
+        }
+    }
+
+    const handleMouseLeave = () => {
+        if (isCollapsed) {
+            // Add a small delay before collapsing so it doesn't "spring back" too quickly
+            hoverTimeoutRef.current = setTimeout(() => {
+                setIsHovering(false)
+                hoverTimeoutRef.current = null
+            }, 400)
+        }
+    }
 
 
     // Persist collapsed state
@@ -68,11 +89,11 @@ export function SidebarClient({ userClub, clubs, children, initialCollapsed = fa
             href: '/dashboard/settings',
             icon: <Settings className="w-5 h-5" />
         },
-        {
+        ...(userClub.is_superuser ? [{
             name: 'Admin',
             href: '/dashboard/admin',
             icon: <ShieldCheck className="w-5 h-5" />
-        },
+        }] : []),
     ]
 
     // Determine if sidebar should appear expanded (either not collapsed, or hovering when collapsed)
@@ -170,50 +191,56 @@ export function SidebarClient({ userClub, clubs, children, initialCollapsed = fa
             <div
                 className={`hidden md:flex md:flex-col fixed inset-y-0 z-50 transition-all duration-300 ease-in-out ${showExpanded ? 'md:w-64' : 'md:w-16'
                     }`}
-                onMouseEnter={() => isCollapsed && setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
             >
                 <div className="flex flex-col flex-grow border-r border-gray-200 bg-white overflow-y-auto overflow-x-hidden">
                     {/* Header with Logo and Toggle */}
-                    <div className={`flex flex-col flex-shrink-0 border-b border-gray-200 transition-all duration-300 ${showExpanded ? 'p-4' : 'h-16 items-center justify-center'}`}>
+                    <div className="h-16 flex items-center justify-between px-4 flex-shrink-0 border-b border-gray-200">
                         {showExpanded ? (
-                            <div className="space-y-4">
-                                <div className="flex items-start justify-between min-w-0">
-                                    <span className="text-xl font-bold text-indigo-600 leading-tight break-words">
-                                        {userClub.club_name || 'Padel Sync'}
-                                    </span>
-                                    <button
-                                        onClick={toggleCollapsed}
-                                        className="p-1.5 -mr-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200"
-                                        title="Collapse sidebar"
-                                    >
-                                        <ChevronLeft className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                {clubs.length > 1 && (
-                                    <button
-                                        onClick={() => setIsSwitchModalOpen(true)}
-                                        className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-all duration-200 active:scale-[0.98]"
-                                        title="Switch Club"
-                                    >
-                                        <Building2 className="w-4 h-4 flex-shrink-0" />
-                                        <span className="truncate">Switch Club</span>
-                                    </button>
-                                )}
-                            </div>
+                            <>
+                                <span className="text-xl font-bold text-indigo-600 truncate mr-2">
+                                    {userClub.club_name || 'Padel Sync'}
+                                </span>
+                                <button
+                                    onClick={toggleCollapsed}
+                                    className="p-1.5 -mr-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200"
+                                    title="Collapse sidebar"
+                                >
+                                    <PanelLeft className="w-5 h-5" />
+                                </button>
+                            </>
                         ) : (
-                            <button
-                                onClick={toggleCollapsed}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200"
-                                title={isHovering ? 'Pin sidebar open' : 'Expand sidebar'}
-                            >
-                                {isHovering ? <Pin className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5 rotate-180" />}
-                            </button>
+                            <div className="w-full flex justify-center">
+                                <button
+                                    onClick={toggleCollapsed}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200"
+                                    title={isHovering ? 'Pin sidebar open' : 'Expand sidebar'}
+                                >
+                                    {isHovering ? <Bookmark className="w-5 h-5" /> : <PanelLeft className="w-5 h-5 rotate-180" />}
+                                </button>
+                            </div>
                         )}
                     </div>
 
+                    {/* Switch Club Section (Fixed height to prevent menu jump) */}
+                    {clubs.length > 1 && (
+                        <div className="flex-shrink-0 px-2 py-2 border-b border-gray-200 h-[60px] flex items-center justify-center">
+                            <button
+                                onClick={() => setIsSwitchModalOpen(true)}
+                                className="group flex items-center w-full px-2 py-2 text-sm font-medium rounded-md text-gray-500 hover:text-indigo-600 hover:bg-gray-50 transition-all duration-200 active:scale-[0.98]"
+                                title={!showExpanded ? 'Switch Club' : undefined}
+                            >
+                                <span className="flex-shrink-0"><Building2 className="w-5 h-5 group-hover:text-indigo-600" /></span>
+                                <span className={`ml-3 whitespace-nowrap transition-opacity duration-200 ${showExpanded ? 'opacity-100' : 'opacity-0 w-0'}`}>
+                                    Switch Club
+                                </span>
+                            </button>
+                        </div>
+                    )}
+
                     {/* Navigation */}
-                    <div className="flex-grow mt-5 flex flex-col">
+                    <div className="flex-grow flex flex-col pt-4">
                         <nav className="flex-1 px-2 space-y-1">
                             {navigation.map((item) => {
                                 const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href))

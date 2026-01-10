@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from database import supabase
-from logic_utils import parse_iso_datetime, get_now_utc, get_now_utc_iso, to_utc_iso, get_match_participants, format_sms_datetime
+from logic_utils import parse_iso_datetime, get_now_utc, get_now_utc_iso, to_utc_iso, get_match_participants, format_sms_datetime, is_quiet_hours
 
 def _get_club_name(club_id: str) -> str:
     """Helper to get club name from ID."""
@@ -157,11 +157,12 @@ def initiate_match_outreach(
 
     # 2. Trigger outreach via matchmaker (respects quiet hours)
     from matchmaker import find_and_invite_players
+    has_targets = player_ids and len(player_ids) > 0
     find_and_invite_players(
         match_id=match_id, 
-        target_player_ids=player_ids, 
+        target_player_ids=player_ids if has_targets else None, 
         batch_number=1, 
-        skip_filters=True # Use specific players selected by Admin
+        skip_filters=True if has_targets else False # Use filters if doing automatic matching
     )
 
     print(f"Match created with {len(initial_player_ids)} initial players already committed")
@@ -287,19 +288,26 @@ def send_match_invites(match_id: str, player_ids: List[str]) -> List[dict]:
             player_list = [f"{p['name']} ({p['declared_skill_level']})" for p in confirmed_result.data]
             confirmed_players_text = "Already in:\n" + "\n".join([f"• {name}" for name in player_list]) + "\n\n"
     
+    # Check for quiet hours deferral
+    is_quiet = is_quiet_hours(match['club_id'])
+    
     # Create invites
     invites = []
     for pid in player_ids:
         invites.append({
             "match_id": match_id,
             "player_id": pid,
-            "status": "sent",
+            "status": "pending_sms" if is_quiet else "sent",
             "sent_at": get_now_utc().isoformat()
         })
     
     if invites:
         supabase.table("match_invites").insert(invites).execute()
     
+    if is_quiet:
+        print(f"[QUIET HOURS] Deferring {len(player_ids)} manual invites for match {match_id}")
+        return invites
+
     # Calculate spots left
     spots_left = 4 - len(confirmed_player_ids)
     spots_text = f"{spots_left} spot{'s' if spots_left != 1 else ''} left"

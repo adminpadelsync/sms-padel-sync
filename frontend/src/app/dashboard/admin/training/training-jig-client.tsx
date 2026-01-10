@@ -15,6 +15,7 @@ import {
     Zap,
     Trophy
 } from 'lucide-react'
+import { authFetch } from '@/utils/auth-fetch'
 
 interface Player {
     player_id: string
@@ -109,7 +110,7 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
 
     const fetchPlayers = async (clubId: string) => {
         try {
-            const response = await fetch(`/api/players?club_id=${clubId}`)
+            const response = await authFetch(`/api/players?club_id=${clubId}`)
             if (response.ok) {
                 const data = await response.json()
                 setPlayers(data.players || [])
@@ -121,7 +122,7 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
 
     const fetchGoldenSamples = async () => {
         try {
-            const res = await fetch('/api/training/golden-samples')
+            const res = await authFetch('/api/training/golden-samples')
             const data = await res.json()
             if (data.samples) setGoldenSamples(data.samples)
         } catch (e) {
@@ -159,7 +160,7 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
                 text: m.text
             }))
 
-            const response = await fetch('/api/training/step', {
+            const response = await authFetch('/api/training/step', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -236,7 +237,7 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
         if (!activePlayerId) return
         setLoading(true)
         try {
-            const res = await fetch('/api/training/trigger-event', {
+            const res = await authFetch('/api/training/trigger-event', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -291,7 +292,7 @@ export default function TrainingJigClient({ userClubId, isSuperuser, clubs = [] 
                 }
             }
 
-            const res = await fetch('/api/training/correct', {
+            const res = await authFetch('/api/training/correct', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

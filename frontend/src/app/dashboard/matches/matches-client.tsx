@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { CreateMatchButton } from '../create-match-button'
 import { formatLocalizedTime } from '@/utils/time-utils'
+import { authFetch } from '@/utils/auth-fetch'
 import {
     Calendar,
     Search,
@@ -160,14 +161,10 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
 
         setIsDeleting(true)
         try {
-            const supabase = createClient()
-            const { data: { session } } = await supabase.auth.getSession()
-
-            const res = await fetch('/api/admin/matches/bulk-delete', {
+            const res = await authFetch('/api/admin/matches/bulk-delete', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ match_ids: Array.from(selectedMatchIds) })
             })
@@ -191,14 +188,10 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
 
         setMarkingBookedId(matchId)
         try {
-            const supabase = createClient()
-            const { data: { session } } = await supabase.auth.getSession()
-
-            const res = await fetch(`/api/matches/${matchId}/mark-booked`, {
+            const res = await authFetch(`/api/matches/${matchId}/mark-booked`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     user_id: userId,

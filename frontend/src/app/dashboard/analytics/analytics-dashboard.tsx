@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { StatCard, SkillLevelRanges, LeaderboardTable } from './widgets';
+import { authFetch } from '@/utils/auth-fetch';
 
 interface AnalyticsDashboardProps {
     clubId: string;
@@ -21,9 +22,9 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
             setError(null);
             try {
                 const [healthRes, activityRes, feedbackRes] = await Promise.all([
-                    fetch(`/api/insights/health?club_id=${clubId}`),
-                    fetch(`/api/insights/activity?club_id=${clubId}`),
-                    fetch(`/api/insights/feedback?club_id=${clubId}`)
+                    authFetch(`/api/insights/health?club_id=${clubId}`),
+                    authFetch(`/api/insights/activity?club_id=${clubId}`),
+                    authFetch(`/api/insights/feedback?club_id=${clubId}`)
                 ]);
 
                 if (!healthRes.ok) throw new Error(`Health API Error: ${healthRes.statusText}`);

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/utils/auth-fetch'
 
 interface ScenarioStep {
     user_input: string
@@ -73,7 +74,7 @@ export default function ScenarioTesterClient() {
     const fetchGoldenScenarios = async () => {
         setIsLoadingGolden(true)
         try {
-            const res = await fetch('/api/test/scenarios')
+            const res = await authFetch('/api/test/scenarios')
             const data = await res.json()
             setGoldenScenarios(data.scenarios || [])
         } catch (err) {
@@ -96,7 +97,7 @@ export default function ScenarioTesterClient() {
                 expected_intent: results[idx]?.intent || s.expected_intent
             }))
 
-            const res = await fetch('/api/test/scenarios', {
+            const res = await authFetch('/api/test/scenarios', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -127,7 +128,7 @@ export default function ScenarioTesterClient() {
     const deleteScenario = async (id: string) => {
         if (!confirm('Are you sure you want to delete this scenario?')) return
         try {
-            await fetch(`/api/test/scenarios/${id}`, { method: 'DELETE' })
+            await authFetch(`/api/test/scenarios/${id}`, { method: 'DELETE' })
             fetchGoldenScenarios()
         } catch (err) {
             alert('Failed to delete')
@@ -154,7 +155,7 @@ export default function ScenarioTesterClient() {
         setResults([])
 
         try {
-            const response = await fetch('/api/test/scenario', {
+            const response = await authFetch('/api/test/scenario', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
