@@ -16,6 +16,12 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     Dependency to get the current authenticated user and their scoped clubs.
     Expects a JWT in the Authorization header.
     """
+    if not authorization:
+        # Fallback to custom header if Authorization is missing (proxies sometimes strip it)
+        authorization = request.headers.get("X-Padel-Token")
+        if authorization and not authorization.startswith("Bearer "):
+            authorization = f"Bearer {authorization}"
+
     if not authorization or not authorization.startswith("Bearer "):
          print(f"DEBUG: Auth Failure. Path: {request.url.path}")
          print(f"DEBUG: All Headers: {dict(request.headers)}")

@@ -20,7 +20,10 @@ export async function authFetch(url: string, options: RequestInit = {}) {
     const headers: Record<string, string> = {
         'Accept': 'application/json',
         ...((options.headers || {}) as Record<string, string>),
-        ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+        ...(session?.access_token ? {
+            'Authorization': `Bearer ${session.access_token}`,
+            'X-Padel-Token': session.access_token
+        } : {})
     }
 
     return fetch(url, { ...options, headers })
