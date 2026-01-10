@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { authFetch } from '@/utils/auth-fetch'
 import {
     Users,
     Search,
@@ -60,17 +61,9 @@ export default function UserManagementPage() {
     const fetchData = async () => {
         setIsLoading(true)
         try {
-            const supabase = createClient()
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-
             const [usersRes, clubsRes] = await Promise.all([
-                fetch('/api/admin/users', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }),
-                fetch('/api/clubs', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
+                authFetch('/api/admin/users'),
+                authFetch('/api/clubs')
             ])
 
             if (usersRes.ok && clubsRes.ok) {
@@ -89,15 +82,10 @@ export default function UserManagementPage() {
     const handleSaveAssignment = async (userId: string, clubIds: string[], role: string) => {
         setIsSaving(true)
         try {
-            const supabase = createClient()
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-
-            const res = await fetch(`/api/admin/users/${userId}/clubs`, {
+            const res = await authFetch(`/api/admin/users/${userId}/clubs`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ club_ids: clubIds, role })
             })
@@ -121,15 +109,10 @@ export default function UserManagementPage() {
 
         setIsInviting(true)
         try {
-            const supabase = createClient()
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-
-            const res = await fetch('/api/admin/users', {
+            const res = await authFetch('/api/admin/users', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     email: inviteEmail,
@@ -162,13 +145,8 @@ export default function UserManagementPage() {
 
         setIsSaving(true)
         try {
-            const supabase = createClient()
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-
-            const res = await fetch(`/api/admin/users/${userId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+            const res = await authFetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE'
             })
 
             if (res.ok) {
