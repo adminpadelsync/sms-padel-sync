@@ -54,26 +54,43 @@ export default function UserManagementPage() {
     const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
     const [isInviting, setIsInviting] = useState(false)
 
+    const [error, setError] = useState<string | null>(null)
+
     useEffect(() => {
         fetchData()
     }, [])
 
     const fetchData = async () => {
         setIsLoading(true)
+        setError(null)
         try {
+            console.log('Fetching user management data...')
             const [usersRes, clubsRes] = await Promise.all([
                 authFetch('/api/admin/users'),
                 authFetch('/api/clubs')
             ])
 
-            if (usersRes.ok && clubsRes.ok) {
-                const usersData = await usersRes.json()
-                const clubsData = await clubsRes.json()
-                setUsers(usersData.users || [])
-                setClubs(clubsData.clubs || [])
+            console.log('Users Response:', usersRes.status, usersRes.statusText)
+            console.log('Clubs Response:', clubsRes.status, clubsRes.statusText)
+
+            if (!usersRes.ok || !clubsRes.ok) {
+                const usersErr = !usersRes.ok ? await usersRes.text() : null
+                const clubsErr = !clubsRes.ok ? await clubsRes.text() : null
+                const msg = `Failed to fetch: ${usersErr || ''} ${clubsErr || ''}`.trim()
+                setError(msg || 'Unauthorized or server error')
+                return
             }
+
+            const usersData = await usersRes.json()
+            const clubsData = await clubsRes.json()
+
+            console.log(`Loaded ${usersData.users?.length || 0} users and ${clubsData.clubs?.length || 0} clubs`)
+
+            setUsers(usersData.users || [])
+            setClubs(clubsData.clubs || [])
         } catch (err) {
             console.error('Error fetching data:', err)
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred')
         } finally {
             setIsLoading(false)
         }
@@ -170,6 +187,26 @@ export default function UserManagementPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-sans">
+            {error && (
+                <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-3xl flex items-center gap-4 text-red-600 animate-in fade-in slide-in-from-top-4">
+                    <div className="p-3 bg-white rounded-2xl shadow-sm">
+                        <Shield className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-sm font-black uppercase tracking-widest mb-1">Authorization Error</p>
+                        <p className="text-sm opacity-80 font-bold">{error}</p>
+                        <p className="text-[10px] mt-2 text-red-400 font-bold uppercase tracking-wider italic">
+                            Check the Vercel logs for "DEBUG: Auth Error" to see more details.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => fetchData()}
+                        className="px-4 py-2 bg-white text-red-600 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-50 transition-all active:scale-95"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
             <div className="mb-8">
                 <button
                     onClick={() => router.push('/dashboard/admin')}

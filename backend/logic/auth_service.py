@@ -17,27 +17,28 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserC
     Expects a JWT in the Authorization header.
     """
     if not authorization or not authorization.startswith("Bearer "):
-         # During transition, we might allow non-auth if locally testing
-         # but for production this should be strict.
-         # For now, let's assume we need it.
+         print(f"DEBUG: Missing or invalid Authorization header. Header exists: {authorization is not None}")
          raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     
     token = authorization.split(" ")[1]
+    print(f"DEBUG: Token received, length: {len(token)}")
     
     try:
         # Verify token with Supabase
         user_res = supabase.auth.get_user(token)
         if not user_res.user:
+            print("DEBUG: Supabase auth.get_user returned no user")
             raise HTTPException(status_code=401, detail="Invalid token")
         
         user_id = user_res.user.id
         email = user_res.user.email
+        print(f"DEBUG: Token verified for user: {email} ({user_id})")
         
         # Fetch role and club assignments
-        # Note: We check both the legacy 'users' table and the new 'user_clubs' table
         user_data_res = supabase.table("users").select("is_superuser, role").eq("user_id", user_id).single().execute()
         
         if not user_data_res.data:
+            print(f"DEBUG: User {user_id} not found in 'users' table")
             raise HTTPException(status_code=403, detail="User record not found in application database")
         
         is_superuser = user_data_res.data.get("is_superuser", False)
