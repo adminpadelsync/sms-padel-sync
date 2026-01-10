@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Depends, Header
+from fastapi import HTTPException, Depends, Header, Request
 from typing import Optional, List
 from database import supabase
 import uuid
@@ -11,13 +11,14 @@ class UserContext:
         self.role = role
         self.club_ids = club_ids
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> UserContext:
+async def get_current_user(request: Request, authorization: Optional[str] = Header(None)) -> UserContext:
     """
     Dependency to get the current authenticated user and their scoped clubs.
     Expects a JWT in the Authorization header.
     """
     if not authorization or not authorization.startswith("Bearer "):
-         print(f"DEBUG: Missing or invalid Authorization header. Header exists: {authorization is not None}")
+         print(f"DEBUG: Auth Failure. Path: {request.url.path}")
+         print(f"DEBUG: All Headers: {dict(request.headers)}")
          raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     
     token = authorization.split(" ")[1]
