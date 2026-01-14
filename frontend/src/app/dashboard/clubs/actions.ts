@@ -96,7 +96,8 @@ export async function createClub(data: CreateClubData) {
                 })
 
                 if (!provisionRes.ok) {
-                    console.error('Failed to provision number after club creation')
+                    const errBody = await provisionRes.text()
+                    console.error(`Failed to provision number (${provisionRes.status}):`, errBody)
                 }
             } catch (provErr) {
                 console.error('Error provisioning number:', provErr)
