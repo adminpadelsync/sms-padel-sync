@@ -148,18 +148,31 @@ export async function getAvailableNumbers(areaCode: string) {
 
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
     console.log(`[getAvailableNumbers] Fetching from: ${baseUrl}/api/clubs/available-numbers`)
+    console.log(`[getAvailableNumbers] Bypass secret present: ${!!process.env.VERCEL_AUTOMATION_BYPASS_SECRET} (Length: ${process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.length || 0})`)
+
     const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`, {
         headers: {
             'Authorization': `Bearer ${token}`,
             ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
         }
     })
-    if (!res.ok) {
-        const errorBody = await res.text()
-        console.error(`Backend error (${res.status}):`, errorBody)
-        throw new Error(`Failed to fetch available numbers (${res.status}): ${errorBody.substring(0, 100)}`)
+
+    const text = await res.text()
+
+    if (!res.ok || text.includes('<!DOCTYPE html>')) {
+        console.error(`Backend error (${res.status}):`, text.substring(0, 300))
+        const errorMsg = text.includes('Authentication Required')
+            ? 'Vercel Protection is still blocking this request. Check your bypass secret.'
+            : `Backend returned non-JSON (${res.status})`
+        throw new Error(errorMsg)
     }
-    return res.json()
+
+    try {
+        return JSON.parse(text)
+    } catch (e) {
+        console.error('Failed to parse JSON:', text.substring(0, 300))
+        throw new Error('Backend response was not valid JSON')
+    }
 }
 
 export async function provisionClubNumber(clubId: string, phoneNumber: string) {
