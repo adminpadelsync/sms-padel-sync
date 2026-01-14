@@ -47,7 +47,7 @@ export default function AdminPage() {
             if (res.ok) {
                 setClubs(data.clubs || [])
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error('Error fetching clubs:', err)
         } finally {
             setIsFetchingClubs(false)
@@ -68,7 +68,7 @@ export default function AdminPage() {
             if (!res.ok) throw new Error(data.detail || 'Failed to recalculate')
 
             setResult({ success: true, message: data.message })
-        } catch (err) {
+        } catch (err: unknown) {
             const error = err as Error
             setResult({ success: false, message: error.message || 'An error occurred' })
         } finally {
@@ -98,7 +98,7 @@ export default function AdminPage() {
             setDeleteConfirmationName('')
             setShowLogModal(true) // Show logs on success
             fetchClubs() // Refresh list
-        } catch (err) {
+        } catch (err: unknown) {
             const error = err as Error
             setResult({ success: false, message: error.message || 'An error occurred' })
             setShowLogModal(true) // Show logs even on failure to see progress

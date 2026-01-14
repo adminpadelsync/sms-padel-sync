@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MessageSquare, Calendar, Users, CheckCircle, ArrowRight, Menu, X, Zap, Smartphone, ShieldCheck } from 'lucide-react';
+import { Users, CheckCircle, ArrowRight, Menu, X, Zap, ShieldCheck } from 'lucide-react';
 import { ContactForm } from '@/components/landing-form';
 
 export default function Home() {
@@ -187,14 +187,14 @@ export default function Home() {
                     <div className="h-10 w-10 flex-shrink-0 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-lg">2</div>
                     <div>
                       <h3 className="text-xl font-bold mb-2">Targeted Invitations</h3>
-                      <p className="text-muted-foreground">Personalized SMS invites are sent. "Hey [Name], we have a spot for a [Level] match this Tuesday. Want in?"</p>
+                      <p className="text-muted-foreground">Personalized SMS invites are sent. &quot;Hey [Name], we have a spot for a [Level] match this Tuesday. Want in?&quot;</p>
                     </div>
                   </div>
                   <div className="flex gap-4">
                     <div className="h-10 w-10 flex-shrink-0 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-lg">3</div>
                     <div>
                       <h3 className="text-xl font-bold mb-2">Automated Confirmation</h3>
-                      <p className="text-muted-foreground">As players reply "IN", the algorithm balances the teams. Once full, the court is booked and calendar synced.</p>
+                      <p className="text-muted-foreground">As players reply &quot;IN&quot;, the algorithm balances the teams. Once full, the court is booked and calendar synced.</p>
                     </div>
                   </div>
                 </div>

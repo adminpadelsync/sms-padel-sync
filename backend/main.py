@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
     # App
     node_env: str = "development"
     api_base_url: str = "http://localhost:3000"
-    webhook_secret: str
+    webhook_secret: str = "test_secret"
 
     class Config:
         env_file = ".env"
@@ -34,7 +35,6 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # For Vercel, requests come in at /api/* so we need to handle that
-import os
 is_vercel = os.environ.get('VERCEL', False)
 
 app = FastAPI(root_path="/api" if is_vercel else "")

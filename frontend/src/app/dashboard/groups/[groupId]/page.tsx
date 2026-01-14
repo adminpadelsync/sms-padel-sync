@@ -1,14 +1,13 @@
 import { getGroupDetails } from '../actions'
 import { GroupDetailsClient } from '../group-details-client'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
 export default async function GroupDetailsPage({ params }: { params: Promise<{ groupId: string }> }) {
     const { groupId } = await params
+    let data;
     try {
         console.log('Fetching group details for:', groupId)
-        const { group, members } = await getGroupDetails(groupId)
-
-        return <GroupDetailsClient group={group} members={members} />
+        data = await getGroupDetails(groupId)
     } catch (error) {
         console.error('Error fetching group details:', error)
         if (error instanceof Error) {
@@ -19,4 +18,6 @@ export default async function GroupDetailsPage({ params }: { params: Promise<{ g
         }
         notFound()
     }
+
+    return <GroupDetailsClient group={data.group} members={data.members} />
 }

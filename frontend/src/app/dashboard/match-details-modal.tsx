@@ -39,7 +39,7 @@ interface MatchDetailsModalProps {
     match: Match | null
     isOpen: boolean
     onClose: () => void
-    onUpdate: (updatedMatch?: any) => void
+    onUpdate: (updatedMatch?: Match) => void
 }
 
 export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDetailsModalProps) {
@@ -108,7 +108,7 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
     const handleSave = async () => {
         setLoading(true)
         try {
-            const updates: any = {
+            const updates: Record<string, unknown> = {
                 scheduled_time: scheduledTime,
                 status: status
             }
@@ -318,9 +318,6 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                         {[1, 2].map((teamNum) => {
                                             const isWinner = match.winner_team === teamNum
                                             const players = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
-                                            const teamName = players && players.length > 0
-                                                ? players.map(p => p.name).join(' / ')
-                                                : `Team ${teamNum}`
 
                                             const sets = match.score_text?.split(/[,\s]+/).filter(s => s.includes('-')).map(s => s.trim().split('-')) || []
 
@@ -385,9 +382,6 @@ export function MatchDetailsModal({ match, isOpen, onClose, onUpdate }: MatchDet
                                         <tbody className="divide-y divide-amber-100">
                                             {[1, 2].map((teamNum) => {
                                                 const players = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
-                                                const teamName = players && players.length > 0
-                                                    ? players.map(p => p.name).join(' / ')
-                                                    : `Team ${teamNum}`
 
                                                 return (
                                                     <tr key={teamNum} className={correctedWinner === teamNum ? 'bg-green-50' : ''}>

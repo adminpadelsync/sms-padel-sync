@@ -1,8 +1,47 @@
+import sys
+from unittest.mock import MagicMock
+
+# 1. Mock Redis BEFORE anything else
+_test_state = {}
+def mock_set_user_state(phone, state, data=None):
+    _test_state[phone] = {"state": state}
+    if data: _test_state[phone].update(data)
+    print(f"[STATE] {phone} -> {state}")
+def mock_get_user_state(phone):
+    return _test_state.get(phone, {})
+def mock_clear_user_state(phone):
+    _test_state.pop(phone, None)
+
+# Create a mock redis_client module
+mock_redis = MagicMock()
+mock_redis.set_user_state = mock_set_user_state
+mock_redis.get_user_state = mock_get_user_state
+mock_redis.clear_user_state = mock_clear_user_state
+sys.modules["redis_client"] = mock_redis
+
+# 2. Mock Reasoner BEFORE anything else
+from logic.reasoner import ReasonerResult
+def mock_reason_message(body, state, player, history=None, samples=None, pending_context=None):
+    body_clean = body.upper().strip()
+    if body_clean == "PLAY":
+        return ReasonerResult("START_MATCH", 1.0, {})
+    if ":" in body_clean or "-" in body_clean or "18:00" in body_clean:
+        return ReasonerResult("UNKNOWN", 1.0, {"date": body_clean})
+    if body_clean == "YES":
+        if pending_context:
+             return ReasonerResult("ACCEPT_INVITE", 1.0, {})
+        return ReasonerResult("UNKNOWN", 1.0, {})
+    return ReasonerResult("UNKNOWN", 1.0, {})
+
+mock_reasoner = MagicMock()
+mock_reasoner.reason_message = mock_reason_message
+sys.modules["logic.reasoner"] = mock_reasoner
+
+# 3. Now import the rest
 import time
 from sms_handler import handle_incoming_sms
 from matchmaker import find_and_invite_players
 from database import supabase
-from redis_client import clear_user_state
 
 # Mock SMS
 def mock_send_sms(to, body, **kwargs):
@@ -21,41 +60,39 @@ P4_PHONE = "+15550000004" # Invitee 3
 
 def setup_players():
     print("--- Setting up Players ---")
-    # Clear DB (Order matters due to FKs)
-    # 1. Delete Invites
-    supabase.table("match_invites").delete().neq("invite_id", "00000000-0000-0000-0000-000000000000").execute()
-    supabase.table("match_feedback").delete().neq("feedback_id", "00000000-0000-0000-0000-000000000000").execute()
-    supabase.table("match_votes").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
-    supabase.table("match_participations").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
-    supabase.table("feedback_requests").delete().neq("request_id", "00000000-0000-0000-0000-000000000000").execute()
-    supabase.table("error_logs").delete().neq("error_id", "00000000-0000-0000-0000-000000000000").execute()
     
-    # 2. Delete Matches
-    supabase.table("matches").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
-
-    # 3. Delete Players
-    for p in [P1_PHONE, P2_PHONE, P3_PHONE, P4_PHONE]:
-        clear_user_state(p)
-        supabase.table("players").delete().eq("phone_number", p).execute()
-
     # Create Club
     club_res = supabase.table("clubs").select("club_id").limit(1).execute()
-    club_id = club_res.data[0]["club_id"]
+    if not club_res.data:
+        # Create one if missing
+        club_id = supabase.table("clubs").insert({
+            "name": "Test Match Club",
+            "phone_number": "+1122334455"
+        }).execute().data[0]["club_id"]
+    else:
+        club_id = club_res.data[0]["club_id"]
 
     # Create 4 Players (Level 3.5)
     players = []
     for i, phone in enumerate([P1_PHONE, P2_PHONE, P3_PHONE, P4_PHONE]):
+        # Cleanup dependencies first
+        p_res = supabase.table("players").select("player_id").eq("phone_number", phone).execute()
+        if p_res.data:
+            pid = p_res.data[0]["player_id"]
+            supabase.table("error_logs").delete().eq("player_id", pid).execute()
+            supabase.table("match_participations").delete().eq("player_id", pid).execute()
+            supabase.table("match_invites").delete().eq("player_id", pid).execute()
+            supabase.table("club_members").delete().eq("player_id", pid).execute()
+            supabase.table("group_memberships").delete().eq("player_id", pid).execute()
+            supabase.table("player_rating_history").delete().eq("player_id", pid).execute()
+            supabase.table("players").delete().eq("player_id", pid).execute()
+        
         p_data = {
             "phone_number": phone,
             "name": f"Player {i+1}",
             "declared_skill_level": 3.5,
             "adjusted_skill_level": 3.5,
             "avail_weekday_morning": True,
-            "avail_weekday_afternoon": True,
-            "avail_weekday_evening": True,
-            "avail_weekend_morning": True,
-            "avail_weekend_afternoon": True,
-            "avail_weekend_evening": True,
             "active_status": True
         }
         res = supabase.table("players").insert(p_data).execute()
@@ -81,53 +118,48 @@ def test_matchmaking():
     handle_incoming_sms(P1_PHONE, "YES")
     
     # Verify Match Created
-    matches_res = supabase.table("matches").select("*").contains("team_1_players", [p1["player_id"]]).order("created_at", desc=True).limit(1).execute()
-    match = matches_res.data[0]
+    # Find match where P1 is a participant
+    parts = supabase.table("match_participations").select("match_id").eq("player_id", p1["player_id"]).execute()
+    if not parts.data:
+        print("❌ No match_participation found for P1!")
+        return False
+        
+    match_id = parts.data[0]["match_id"]
+    match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
     print(f"Match Created: {match['match_id']}")
     
-    # Verify Invites Sent (should happen automatically in handle_incoming_sms now)
-    # But let's check the logs/DB
-    invites_res = supabase.table("match_invites").select("*").eq("match_id", match['match_id']).execute()
-    print(f"Invites found: {len(invites_res.data)}")
-    
     print("\n--- 2. Players Accept Invites ---")
+    # Fetch invites to get pendings
+    invites_res = supabase.table("match_invites").select("*").eq("match_id", match_id).execute()
+    print(f"Invites sent: {len(invites_res.data)}")
+
     # Player 2 accepts
-    print(f"\n> Player 2 ({P2_PHONE}) texts 'YES'")
     handle_incoming_sms(P2_PHONE, "YES")
-    
     # Player 3 accepts
-    print(f"\n> Player 3 ({P3_PHONE}) texts 'YES'")
     handle_incoming_sms(P3_PHONE, "YES")
-    
     # Player 4 accepts (Should trigger confirmation)
-    print(f"\n> Player 4 ({P4_PHONE}) texts 'YES'")
     handle_incoming_sms(P4_PHONE, "YES")
     
     print("\n--- 3. Verify Match Confirmation ---")
-    updated_match = supabase.table("matches").select("*").eq("match_id", match['match_id']).execute().data[0]
+    updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
     print(f"Status: {updated_match['status']}")
-    print(f"Team 1: {len(updated_match['team_1_players'])}")
-    print(f"Team 2: {len(updated_match['team_2_players'])}")
     
-    if updated_match['status'] == 'confirmed':
-        print("SUCCESS: Match Confirmed!")
-    else:
-        print("FAILURE: Match not confirmed")
+    p_final = supabase.table("match_participations").select("*").eq("match_id", match_id).execute().data
+    team1 = [p for p in p_final if p["team_index"] == 1]
+    team2 = [p for p in p_final if p["team_index"] == 2]
+    print(f"Team 1 count: {len(team1)}")
+    print(f"Team 2 count: {len(team2)}")
     
-    # Phase 3 Verification: match_participations
-    parts_res = supabase.table("match_participations").select("*").eq("match_id", match['match_id']).execute()
-    print(f"Match Participations Configured: {len(parts_res.data)}")
-    if len(parts_res.data) == 4:
-        print("SUCCESS: match_participations table populated correctly!")
+    if updated_match['status'] == 'confirmed' and len(p_final) == 4:
+        print("✅ SUCCESS: Match Confirmed and Participations populated!")
+        assert True
     else:
-        print(f"FAILURE: match_participations has {len(parts_res.data)} rows, expected 4.")
-
-
-    if updated_match['status'] != 'confirmed':
-        print("\n--- ERROR LOGS ---")
-        errs = supabase.table("error_logs").select("*").order("created_at", desc=True).limit(5).execute()
-        for e in errs.data:
-            print(f"[{e['created_at']}] {e['error_type']}: {e['error_message']}")
+        print("❌ FAILURE: Match logic incomplete.")
+        assert False
 
 if __name__ == "__main__":
-    test_matchmaking()
+    if test_matchmaking():
+        print("\nMATCHMAKING TEST PASSED!")
+    else:
+        print("\nMATCHMAKING TEST FAILED!")
+        sys.exit(1)

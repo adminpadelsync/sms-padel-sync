@@ -29,7 +29,7 @@ def test_result_handler():
         "name": club_name, 
         "active": True,
         "court_count": 4,
-        "phone_number": "+1234567890"
+        "phone_number": f"+1999{datetime.now().strftime('%H%M%S')}"
     }).execute().data[0]["club_id"]
     
     p_ids = []
@@ -39,24 +39,38 @@ def test_result_handler():
         pid = supabase.table("players").insert({
             "phone_number": phones[i],
             "name": name,
-            "club_id": club_id,
-            "elo_rating": 1500,
-            "elo_confidence": 0,
+            "elo_rating": 1700,
+            "elo_confidence": 1,
             "active_status": True,
             "declared_skill_level": 3.0,
             "adjusted_skill_level": 3.0
         }).execute().data[0]["player_id"]
         p_ids.append(pid)
+        
+        # Add to club_members
+        supabase.table("club_members").insert({
+            "club_id": club_id,
+            "player_id": pid
+        }).execute()
 
     # Create match
     match_id = supabase.table("matches").insert({
         "club_id": club_id,
-        "team_1_players": [p_ids[0], p_ids[1]], # Alice, Bob
-        "team_2_players": [p_ids[2], p_ids[3]], # Charlie, Dave
         "status": "confirmed",
         "scheduled_time": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
         "originator_id": p_ids[0]
     }).execute().data[0]["match_id"]
+    
+    # Add participants
+    participants = []
+    for i in range(4):
+        participants.append({
+            "match_id": match_id,
+            "player_id": p_ids[i],
+            "team_index": 1 if i < 2 else 2,
+            "status": "confirmed"
+        })
+    supabase.table("match_participations").insert(participants).execute()
     
     # 2. Mock Reasoner Result
     # User says: "Me and Bob beat Charlie and Dave 6-4"
@@ -64,8 +78,8 @@ def test_result_handler():
         intent="REPORT_RESULT",
         entities={
             "winner": "Team A",
-            "team_a": "Me and Bob",
-            "team_b": "Charlie and Dave",
+            "team_a": ["Me", "Bob"],
+            "team_b": ["Charlie", "Dave"],
             "score": "6-4"
         },
         confidence=0.9,
@@ -74,14 +88,13 @@ def test_result_handler():
 
     # 3. Call Handler
     print("Calling handle_result_report...")
-    success = handle_result_report(
+    alice_player = supabase.table("players").select("*").eq("player_id", p_ids[0]).execute().data[0]
+    handle_result_report(
         from_number=phones[0], # From Alice
-        reasoner_result=mock_reasoner_result
+        player=alice_player,
+        entities=mock_reasoner_result.entities,
+        cid=club_id
     )
-    
-    if not success:
-        print("❌ Handler returned False")
-        return False
         
     # 4. Verify Database
     match_final = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
@@ -96,11 +109,11 @@ def test_result_handler():
     print(f"P1 Elo: {p1['elo_rating']} (conf: {p1['elo_confidence']}, rank: {p1['adjusted_skill_level']})")
     print(f"P3 Elo: {p3['elo_rating']} (conf: {p3['elo_confidence']}, rank: {p3['adjusted_skill_level']})")
     
-    assert p1["elo_rating"] > 1500
-    assert p1["elo_confidence"] == 1
+    assert p1["elo_rating"] > 1700
+    assert p1["elo_confidence"] == 2
     assert p1["adjusted_skill_level"] > 3.0
-    assert p3["elo_rating"] < 1500
-    assert p3["elo_confidence"] == 1
+    assert p3["elo_rating"] < 1700
+    assert p3["elo_confidence"] == 2
     assert p3["adjusted_skill_level"] < 3.0
     
     print("✅ Elo and Sync Ratings updated correctly!")

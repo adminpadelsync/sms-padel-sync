@@ -2,9 +2,7 @@
 
 import { useState } from 'react'
 import { GroupModal } from './group-modal'
-import { AddToGroupModal } from './add-to-group-modal'
 import { removeGroupMember, deleteGroup } from './actions'
-import { PlayerActions } from '../player-management'
 import { AddMembersModal } from './add-members-modal'
 import { MatchWizard } from '../create-match-wizard'
 import { GroupNumberSettings } from './group-number-settings'
@@ -40,31 +38,29 @@ export function GroupDetailsClient({ group, members }: GroupDetailsClientProps) 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false)
     const [isMatchWizardOpen, setIsMatchWizardOpen] = useState(false)
-    const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
-    const [currentMembers] = useState(members)
+    // We can use members directly from props
 
     const handleDeleteGroup = async () => {
         if (confirm('Are you sure you want to delete this group?')) {
-            await deleteGroup(group.group_id)
-            window.location.href = '/dashboard/groups'
+            try {
+                await deleteGroup(group.group_id)
+                window.location.href = '/dashboard/groups'
+            } catch (error: unknown) {
+                console.error('Error deleting group:', error)
+                alert(`Failed to delete group: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            }
         }
     }
 
     const handleRemoveMember = async (playerId: string) => {
         if (confirm('Remove this player from the group?')) {
-            await removeGroupMember(group.group_id, playerId)
-            // Ideally use optimistic update or router.refresh()
-            // window.location.reload()
-            // Let's rely on server action revalidatePath, but since this is client list state, 
-            // if we use props it *should* update if page is re-rendered by nextjs.
-            // But revalidatePath re-runs the page server component.
-            // Client component will receive new props.
-            // So we don't strictly need reload if Next.js handles it.
-            // But for safety and visual feedback, reload is easiest for now.
-            // Wait, revalidatePath updates the cached payload. 
-            // We might need router.refresh() to fetch it.
-            // Let's import useRouter.
-            window.location.reload()
+            try {
+                await removeGroupMember(group.group_id, playerId)
+                window.location.reload()
+            } catch (error: unknown) {
+                console.error('Error removing member:', error)
+                alert(`Failed to remove member: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            }
         }
     }
 
@@ -157,7 +153,7 @@ export function GroupDetailsClient({ group, members }: GroupDetailsClientProps) 
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {members.length > 0 ? (
-                                members.map((member) => (
+                                members.map((member: Member) => (
                                     <tr key={member.player_id}>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                             {member.name}

@@ -14,7 +14,7 @@ export default function NotSetupPage() {
                     </h2>
 
                     <p className="text-gray-600 text-center mb-6">
-                        Your account has been created, but it hasn't been associated with a club yet.
+                        Your account has been created, but it hasn&apos;t been associated with a club yet.
                     </p>
 
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">

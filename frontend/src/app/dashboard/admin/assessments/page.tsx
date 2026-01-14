@@ -1,20 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Info, Trophy, Target, Award, Calendar, User, MessageSquare, Edit2, Check, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
-import { QUESTIONS, calculateRating, getRatingDescription } from '@/utils/assessment-constants';
+import { ChevronLeft, Info, Trophy, Target, Calendar, User, MessageSquare, Edit2, Check, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { QUESTIONS, calculateRating } from '@/utils/assessment-constants';
+
+interface Breakdown {
+    percentage: number;
+    rawRating: number;
+    ceiling: number;
+    wasCapped: boolean;
+    rating: number;
+}
 
 interface AssessmentResult {
     id: string;
     player_name: string;
     rating: number;
-    responses: Record<string, any>;
-    breakdown: {
-        percentage: number;
-        rawRating: number;
-        ceiling: number;
-        wasCapped: boolean;
-    };
+    responses: Record<string, number>;
+    breakdown: Breakdown;
     created_at: string;
 }
 
@@ -28,7 +31,7 @@ export default function AssessmentViewerPage() {
 
     // Simulator state
     const [tempResponses, setTempResponses] = useState<Record<string, number>>({});
-    const [tempBreakdown, setTempBreakdown] = useState<any>(null);
+    const [tempBreakdown, setTempBreakdown] = useState<Breakdown | null>(null);
 
     useEffect(() => {
         if (selectedResult) {
@@ -256,8 +259,8 @@ export default function AssessmentViewerPage() {
                             </div>
 
                             <div className={`rounded-2xl p-6 grid grid-cols-3 gap-6 text-center border transition-all duration-300 ${JSON.stringify(tempResponses) !== JSON.stringify(selectedResult.responses)
-                                    ? 'bg-amber-50 border-amber-100 shadow-inner'
-                                    : 'bg-indigo-50 border-indigo-100'
+                                ? 'bg-amber-50 border-amber-100 shadow-inner'
+                                : 'bg-indigo-50 border-indigo-100'
                                 }`}>
                                 <div>
                                     <div className={`text-3xl font-black transition-colors ${tempBreakdown?.rating !== selectedResult.rating ? 'text-amber-600' : 'text-indigo-600'
@@ -305,12 +308,12 @@ export default function AssessmentViewerPage() {
 
                                         return (
                                             <div key={q.id} className={`rounded-xl p-4 border transition-colors ${answerValue !== originalValue
-                                                    ? 'bg-amber-50 border-amber-200 shadow-sm'
-                                                    : 'bg-gray-50 border-gray-100'
+                                                ? 'bg-amber-50 border-amber-200 shadow-sm'
+                                                : 'bg-gray-50 border-gray-100'
                                                 } relative group`}>
                                                 <div className={`absolute top-4 right-4 text-[10px] font-black px-2 py-0.5 rounded-full ${answerValue !== originalValue
-                                                        ? 'bg-amber-100 text-amber-700'
-                                                        : 'bg-indigo-100 text-indigo-700'
+                                                    ? 'bg-amber-100 text-amber-700'
+                                                    : 'bg-indigo-100 text-indigo-700'
                                                     }`}>
                                                     +{contribution.toFixed(1)} pts
                                                 </div>

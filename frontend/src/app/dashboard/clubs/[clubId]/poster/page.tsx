@@ -22,7 +22,7 @@ export default function ClubPosterPage() {
     useEffect(() => {
         async function fetchClub() {
             const supabase = createClient()
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('clubs')
                 .select('*')
                 .eq('club_id', clubId)

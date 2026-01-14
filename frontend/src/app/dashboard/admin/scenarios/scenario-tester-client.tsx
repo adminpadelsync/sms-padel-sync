@@ -6,14 +6,14 @@ import { authFetch } from '@/utils/auth-fetch'
 interface ScenarioStep {
     user_input: string
     expected_intent?: string
-    expected_entities?: Record<string, any>
+    expected_entities?: Record<string, unknown>
 }
 
 interface StepResult {
     input: string
     intent: string
     confidence: number
-    entities: Record<string, any>
+    entities: Record<string, unknown>
     state_before: string
     state_after: string
     simulated_reply: string
@@ -77,8 +77,8 @@ export default function ScenarioTesterClient() {
             const res = await authFetch('/api/test/scenarios')
             const data = await res.json()
             setGoldenScenarios(data.scenarios || [])
-        } catch (err) {
-            console.error('Failed to fetch golden scenarios', err)
+        } catch (_err: unknown) {
+            console.error('Failed to fetch golden scenarios', _err)
         } finally {
             setIsLoadingGolden(false)
         }
@@ -111,7 +111,7 @@ export default function ScenarioTesterClient() {
                 alert('Saved to Golden Dataset!')
                 fetchGoldenScenarios()
             }
-        } catch (err) {
+        } catch (_err: unknown) {
             setError('Failed to save scenario')
         } finally {
             setIsSaving(false)
@@ -130,7 +130,7 @@ export default function ScenarioTesterClient() {
         try {
             await authFetch(`/api/test/scenarios/${id}`, { method: 'DELETE' })
             fetchGoldenScenarios()
-        } catch (err) {
+        } catch (_err: unknown) {
             alert('Failed to delete')
         }
     }
@@ -173,7 +173,7 @@ export default function ScenarioTesterClient() {
 
             const data = await response.json()
             setResults(data.step_results)
-        } catch (err) {
+        } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Unknown error')
         } finally {
             setIsLoading(false)
@@ -186,7 +186,7 @@ export default function ScenarioTesterClient() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Conversational Scenario Tester</h1>
                     <p className="text-gray-500">
-                        Test and verify the AI Reasoner's logic across multi-step conversations.
+                        Test and verify the AI Reasoner&apos;s logic across multi-step conversations.
                     </p>
                 </div>
 
@@ -328,7 +328,7 @@ export default function ScenarioTesterClient() {
                             {results.map((res, idx) => (
                                 <div key={idx} className={`bg-white border-l-4 ${res.passed_intent === false ? 'border-red-500' : 'border-emerald-500'} shadow-sm rounded-r-xl p-5 relative overflow-hidden`}>
                                     <div className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">Step {idx + 1} Input</div>
-                                    <div className="text-xl font-semibold text-gray-900 mb-4 tracking-tight">"{res.input}"</div>
+                                    <div className="text-xl font-semibold text-gray-900 mb-4 tracking-tight">&quot;{res.input}&quot;</div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                         <div className={`p-3 rounded-lg ${res.passed_intent === false ? 'bg-red-50' : 'bg-emerald-50'}`}>

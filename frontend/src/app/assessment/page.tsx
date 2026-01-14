@@ -32,8 +32,8 @@ export default function AssessmentPage() {
 
                 <div className="max-w-md mx-auto mt-20 text-center pb-20 px-4">
                     <div className="bg-muted/50 rounded-2xl p-6 border italic text-sm text-muted-foreground">
-                        "This assessment helps us match you with players of similar skill levels,
-                        ensuring every match you play is competitive and fun."
+                        &quot;This assessment helps us match you with players of similar skill levels,
+                        ensuring every match you play is competitive and fun.&quot;
                     </div>
                 </div>
             </main>

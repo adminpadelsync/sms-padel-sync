@@ -5,27 +5,15 @@ import { DashboardClient } from './dashboard-client'
 
 interface Player {
     player_id: string
-    name: string
-    phone_number: string
-    declared_skill_level: number
     active_status: boolean
     club_id: string
-    clubs?: {
-        name: string
-    }
 }
 
 interface Match {
     match_id: string
     scheduled_time: string
     status: string
-    team_1_players: string[]
-    team_2_players: string[]
     club_id: string
-    clubs?: {
-        name: string
-        timezone: string
-    }
 }
 
 export default async function Dashboard() {
@@ -69,35 +57,38 @@ export default async function Dashboard() {
     const { data: members } = await memberQuery
 
     // Transform and flatten
-    const players = members?.map((m: any) => {
-        const player = m.players
+    const players = members?.map((m: { club_id: string, players: Record<string, unknown> | Record<string, unknown>[] }) => {
+        const player = (Array.isArray(m.players) ? m.players[0] : m.players) as Record<string, unknown> | undefined;
+        if (!player) return null;
+
         return {
             ...player,
             club_id: m.club_id,
-            groups: player.group_memberships
-                ?.map((gm: any) => gm.player_groups)
-                .filter((g: any) => g !== null)
-                .map((g: any) => ({ group_id: g.group_id, name: g.name })) || []
+            groups: (player.group_memberships as Record<string, unknown>[] || [])
+                .map((gm) => Array.isArray(gm.player_groups) ? gm.player_groups[0] : gm.player_groups)
+                .filter(Boolean)
+                .map((g: { group_id: string; name: string }) => ({
+                    group_id: g.group_id,
+                    name: g.name
+                }))
         }
-    }) || []
+    }).filter((p): p is NonNullable<typeof p> => !!p) || []
 
     const { data: matches } = await matchQuery
 
     // Fetch clubs for superusers
-    let clubs: { club_id: string; name: string }[] = []
     if (userClub.is_superuser) {
-        const { data: clubsData } = await supabase
+        await supabase
             .from('clubs')
             .select('club_id, name')
             .eq('active', true)
             .order('name')
-        clubs = clubsData || []
     }
 
     return (
         <DashboardClient
-            initialPlayers={players || []}
-            initialMatches={matches || []}
+            initialPlayers={players as unknown as Player[]}
+            initialMatches={matches as unknown as Match[] || []}
             userEmail={user?.email || ''}
             userClubId={userClub.club_id}
             userClubTimezone={userClub.club_timezone}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { User } from '@supabase/supabase-js'
 import { KeyRound, ShieldCheck, AlertCircle, Loader2, Zap } from 'lucide-react'
 
 export default function SetupPasswordPage() {
@@ -12,7 +13,7 @@ export default function SetupPasswordPage() {
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [user, setUser] = useState<any>(null)
+    const [user, setUser] = useState<User | null>(null)
 
     const supabase = createClient()
 
@@ -127,7 +128,7 @@ export default function SetupPasswordPage() {
                 // addLog("Password success! Redirecting...") // Removed verbose log
                 router.push('/dashboard')
             }
-        } catch (err: any) {
+        } catch (_err: unknown) {
             setError('An unexpected error occurred. Please try again.')
         } finally {
             setIsSaving(false)

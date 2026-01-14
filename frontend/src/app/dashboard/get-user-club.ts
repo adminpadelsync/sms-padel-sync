@@ -51,8 +51,8 @@ export async function getUserClub(): Promise<UserClub | null> {
     if (userClubsData && userClubsData.length > 0) {
         const firstClub = userClubsData[0]
         finalClubId = firstClub.club_id
-        finalClubName = (firstClub.clubs as any)?.name
-        finalClubTimezone = (firstClub.clubs as any)?.timezone
+        finalClubName = (firstClub.clubs as unknown as { name: string } | null)?.name || null
+        finalClubTimezone = (firstClub.clubs as unknown as { timezone: string } | null)?.timezone || null
     } else if (userData.club_id) {
         // Fallback to legacy column during transition
         const { data: legacyClub } = await supabase

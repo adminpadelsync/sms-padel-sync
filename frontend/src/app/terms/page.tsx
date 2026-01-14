@@ -20,10 +20,10 @@ export default function TermsPage() {
                 <strong>Cost:</strong> Message and data rates may apply.
             </p>
             <p>
-                <strong>Opt-Out:</strong> You can cancel the SMS service at any time. Just text "STOP" to the short code. After you send the SMS message "STOP" to us, we will send you an SMS message to confirm that you have been unsubscribed. After this, you will no longer receive SMS messages from us. If you want to join again, just sign up as you did the first time and we will start sending SMS messages to you again.
+                <strong>Opt-Out:</strong> You can cancel the SMS service at any time. Just text &quot;STOP&quot; to the short code. After you send the SMS message &quot;STOP&quot; to us, we will send you an SMS message to confirm that you have been unsubscribed. After this, you will no longer receive SMS messages from us. If you want to join again, just sign up as you did the first time and we will start sending SMS messages to you again.
             </p>
             <p>
-                <strong>Support:</strong> If you are experiencing issues with the messaging program you can reply with the keyword "HELP" for more assistance, or you can get help directly at support@padelsync.com.
+                <strong>Support:</strong> If you are experiencing issues with the messaging program you can reply with the keyword &quot;HELP&quot; for more assistance, or you can get help directly at support@padelsync.com.
             </p>
             <p>
                 <strong>Carriers:</strong> Carriers are not liable for delayed or undelivered messages.
@@ -31,7 +31,7 @@ export default function TermsPage() {
 
             <h2>3. Limitation of Liability</h2>
             <p>
-                Padel Sync is provided "as is" without warranties of any kind. We are not liable for missed matches or service interruptions.
+                Padel Sync is provided &quot;as is&quot; without warranties of any kind. We are not liable for missed matches or service interruptions.
             </p>
         </div>
     );

@@ -28,20 +28,11 @@ export default async function MatchesPage() {
         .eq('club_id', userClub.club_id)
         .order('scheduled_time', { ascending: false })
 
-    // Fetch clubs for superusers
-    let clubs: { club_id: string; name: string }[] = []
-    if (userClub.is_superuser) {
-        const { data: clubsData } = await supabase
-            .from('clubs')
-            .select('club_id, name, timezone')
-            .eq('active', true)
-            .order('name')
-        clubs = clubsData || []
-    }
+    // Fetched userClub above
 
     // 2. Fetch all participations for these matches to get correct player lists
     const matchIds = matches?.map(m => m.match_id) || []
-    const participationsMap = new Map<string, { team1: any[], team2: any[], names: string[] }>()
+    const participationsMap = new Map<string, { team1: Record<string, unknown>[], team2: Record<string, unknown>[], names: string[] }>()
 
     // Initialize map
     matchIds.forEach(id => participationsMap.set(id, { team1: [], team2: [], names: [] }))
@@ -62,10 +53,11 @@ export default async function MatchesPage() {
             `)
             .in('match_id', matchIds)
 
-        participations?.forEach((p: any) => {
+        participations?.forEach((p: { match_id: string, players: Record<string, unknown> | Record<string, unknown>[], team_index: number }) => {
             const matchData = participationsMap.get(p.match_id)
             if (matchData && p.players) {
-                const player = p.players
+                const player = (Array.isArray(p.players) ? p.players[0] : p.players) as { name: string }
+                if (!player) return
                 matchData.names.push(player.name)
                 if (p.team_index === 1) {
                     matchData.team1.push(player)

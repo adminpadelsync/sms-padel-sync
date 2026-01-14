@@ -44,9 +44,9 @@ export function ContactForm() {
                     <div className="h-12 w-12 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
                         <CheckCircle className="h-6 w-6 text-green-400" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">You're on the list!</h3>
+                    <h3 className="text-xl font-bold mb-2">You&apos;re on the list!</h3>
                     <p className="opacity-90">{state.message}</p>
-                    <p className="text-sm mt-4 opacity-70">We'll be in touch soon.</p>
+                    <p className="text-sm mt-4 opacity-70">We&apos;ll be in touch soon.</p>
                 </div>
             </div>
         )

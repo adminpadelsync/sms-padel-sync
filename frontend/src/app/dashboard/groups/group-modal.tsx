@@ -109,7 +109,7 @@ export function GroupModal({ group, isOpen, onClose, mode, clubId, initialMember
                         <select
                             id="visibility"
                             value={formData.visibility}
-                            onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
+                            onChange={(e) => setFormData({ ...formData, visibility: e.target.value as 'private' | 'open' | 'public' })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                             <option value="private">Private (Unlisted, admin add only)</option>

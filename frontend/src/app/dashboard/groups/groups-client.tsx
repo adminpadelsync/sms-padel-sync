@@ -19,7 +19,7 @@ interface GroupsClientProps {
 }
 
 export function GroupsClient({ initialGroups, clubId }: GroupsClientProps) {
-    const [groups, setGroups] = useState(initialGroups)
+    const [groups] = useState(initialGroups)
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [editingGroup, setEditingGroup] = useState<Group | undefined>(undefined)
 
@@ -28,9 +28,9 @@ export function GroupsClient({ initialGroups, clubId }: GroupsClientProps) {
             try {
                 await deleteGroup(groupId)
                 window.location.reload()
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error('Error deleting group:', error)
-                alert('Failed to delete group')
+                alert(`Failed to delete group: ${error instanceof Error ? error.message : 'Unknown error'}`)
             }
         }
     }

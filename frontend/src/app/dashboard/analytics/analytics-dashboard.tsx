@@ -4,14 +4,40 @@ import React, { useEffect, useState } from 'react';
 import { StatCard, SkillLevelRanges, LeaderboardTable } from './widgets';
 import { authFetch } from '@/utils/auth-fetch';
 
+interface HealthData {
+    total_players: number;
+    verified_pct: number;
+    availability_pct: number;
+    skill_distribution: Record<string, number>;
+}
+
+interface ActivityData {
+    invite_acceptance_rate: number;
+    invites_accepted: number;
+    invites_sent: number;
+    match_conversion_rate: number;
+    matches_confirmed: number;
+    matches_requested: number;
+}
+
+interface TopPlayer {
+    name: string;
+    avg_rating: number;
+    count: number;
+}
+
+interface FeedbackData {
+    top_players: TopPlayer[];
+}
+
 interface AnalyticsDashboardProps {
     clubId: string;
 }
 
 export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
-    const [health, setHealth] = useState<any>(null);
-    const [activity, setActivity] = useState<any>(null);
-    const [feedback, setFeedback] = useState<any>(null);
+    const [health, setHealth] = useState<HealthData | null>(null);
+    const [activity, setActivity] = useState<ActivityData | null>(null);
+    const [feedback, setFeedback] = useState<FeedbackData | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [error, setError] = useState<string | null>(null);
@@ -35,9 +61,9 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
                 setActivity(await activityRes.json());
                 setFeedback(await feedbackRes.json());
 
-            } catch (error: any) {
-                console.error("Failed to fetch analytics", error);
-                setError(error.message || "Unknown error occurred");
+            } catch (err: unknown) {
+                console.error("Failed to fetch analytics", err);
+                setError(err instanceof Error ? err.message : "Unknown error occurred");
             } finally {
                 setLoading(false);
             }
@@ -84,7 +110,7 @@ export function AnalyticsDashboard({ clubId }: AnalyticsDashboardProps) {
     }));
 
     // Prepare Top Players Data
-    const topPlayersData = (feedback.top_players || []).map((p: any) => ({
+    const topPlayersData = (feedback.top_players || []).map((p: TopPlayer) => ({
         name: p.name,
         score: p.avg_rating,
         subtext: `${p.count} ratings`

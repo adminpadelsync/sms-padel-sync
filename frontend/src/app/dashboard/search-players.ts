@@ -30,10 +30,13 @@ export async function searchPlayers(clubId: string, searchTerm: string = '') {
     const { data, error } = await query.limit(20)
 
     // Flatten result
-    const players = data?.map((d: any) => ({
-        ...d.player,
-        club_id: d.club_id
-    })) || []
+    const players = data?.map((d: { club_id: string, player: Record<string, unknown> | Record<string, unknown>[] }) => {
+        const p = Array.isArray(d.player) ? d.player[0] : d.player
+        return {
+            ...p,
+            club_id: d.club_id
+        }
+    }) || []
 
     if (error) {
         console.error('Error searching players:', error)

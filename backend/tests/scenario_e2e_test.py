@@ -259,7 +259,8 @@ def run_scenario():
         import traceback
         traceback.print_exc()
     finally:
-        input("\nPress Enter to DELETE everything and exit...")
+        if os.environ.get("NON_INTERACTIVE") != "true":
+            input("\nPress Enter to DELETE everything and exit...")
         tester.cleanup()
 
 if __name__ == "__main__":

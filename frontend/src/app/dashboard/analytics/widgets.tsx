@@ -104,7 +104,7 @@ export function SkillLevelRanges({ title, data }: SkillLevelRangesProps) {
         { name: 'Pro', ranges: ['5.0-5.5', '> 5.5'], color: 'bg-indigo-400' },
     ];
 
-    const maxVal = Math.max(...data.map((d: any) => d.value), 1);
+    const maxVal = Math.max(...data.map((d: { value: number }) => d.value), 1);
 
     // Map data for easy access by range label
     const dataMap = Object.fromEntries(data.map(d => [d.label, d.value]));

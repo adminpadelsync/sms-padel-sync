@@ -110,8 +110,8 @@ export default function NewClubPage() {
         try {
             const { numbers } = await getAvailableNumbers(areaCode)
             setTwilioState(prev => ({ ...prev, searchResults: numbers }))
-        } catch (err: any) {
-            setTwilioState(prev => ({ ...prev, error: err.message || 'Failed to search numbers' }))
+        } catch (err: unknown) {
+            setTwilioState(prev => ({ ...prev, error: (err instanceof Error ? err.message : 'Failed to search numbers') }))
         } finally {
             setTwilioState(prev => ({ ...prev, isSearching: false }))
         }
@@ -443,7 +443,7 @@ export default function NewClubPage() {
                                     <div className="flex items-center p-4 bg-blue-100/50 rounded-lg border border-blue-100">
                                         <Phone className="h-5 w-5 text-blue-600 mr-3 shrink-0" />
                                         <p className="text-sm text-blue-800">
-                                            No number selected yet. Click "Provision Number" to find local options.
+                                            No number selected yet. Click &quot;Provision Number&quot; to find local options.
                                         </p>
                                     </div>
                                 )}

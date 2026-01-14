@@ -96,7 +96,7 @@ export async function createPlayer(data: {
     }
 
     // Determine which club to use
-    let club_id = data.club_id || userData.club_id  // Use provided club_id or user's club
+    const club_id = data.club_id || userData.club_id  // Use provided club_id or user's club
 
     // If superuser and no club specified, require club selection
     if (userData.is_superuser && !club_id) {
@@ -253,7 +253,7 @@ export async function verifyPlayer(playerId: string, data: {
     }
 
     const newElo = (data.level * 400) + 500
-    const updates: any = {
+    const updates: Record<string, unknown> = {
         pro_verified: data.verified,
         declared_skill_level: data.level,
         adjusted_skill_level: data.level,

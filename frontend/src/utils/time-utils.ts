@@ -81,7 +81,7 @@ export function formatLocalizedDate(
             timeZone: timeZone || undefined
         };
         return new Intl.DateTimeFormat('en-US', options).format(date);
-    } catch (err) {
+    } catch (_err) {
         return String(isoString);
     }
 }

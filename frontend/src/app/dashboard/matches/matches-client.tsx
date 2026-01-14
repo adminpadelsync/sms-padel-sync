@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { CreateMatchButton } from '../create-match-button'
 import { formatLocalizedTime } from '@/utils/time-utils'
 import { authFetch } from '@/utils/auth-fetch'
@@ -126,7 +125,7 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
         return result.sort((a, b) =>
             new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime()
         )
-    }, [matches, filterStatus, searchQuery, showOlderMatches])
+    }, [matches, filterStatus, searchQuery, showOlderMatches, userClubId])
 
     const bookingNeededMatches = useMemo(() => {
         const now = new Date()
@@ -212,9 +211,9 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                     booked_court_text: courtText || m.booked_court_text
                 } : m
             ))
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error marking as booked:', err)
-            alert(`Error: ${err.message || 'Could not mark match as booked'}`)
+            alert(`Error: ${err instanceof Error ? err.message : 'Could not mark match as booked'}`)
         } finally {
             setMarkingBookedId(null)
         }

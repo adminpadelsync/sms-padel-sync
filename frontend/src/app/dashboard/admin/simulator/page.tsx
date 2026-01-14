@@ -73,18 +73,91 @@ export default function SMSSimulatorPage() {
     // Track selected "to number" per player (player_id -> phone_number)
     const [playerToNumberSelection, setPlayerToNumberSelection] = useState<Record<string, string>>({})
 
+    const fetchPlayers = useCallback(async () => {
+        try {
+            const response = await authFetch('/api/players')
+            if (response.ok) {
+                const data = await response.json()
+                setPlayers(data.players || [])
+            }
+        } catch (error) {
+            console.error('Error fetching players:', error)
+        }
+    }, [])
+
+    const fetchClubs = useCallback(async () => {
+        try {
+            const response = await authFetch('/api/clubs')
+            if (response.ok) {
+                const data = await response.json()
+                const clubList = data.clubs || []
+                setClubs(clubList)
+                // Set default club for currentClubId if not already set
+                if (clubList.length > 0 && !currentClubId) {
+                    setCurrentClubId(clubList[0].club_id)
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching clubs:', error)
+        }
+    }, [currentClubId])
+
+    const fetchGroups = useCallback(async (clubId: string) => {
+        try {
+            const response = await authFetch(`/api/clubs/${clubId}/groups`)
+            if (response.ok) {
+                const data = await response.json()
+                setGroups(data.groups || [])
+            }
+        } catch (error) {
+            console.error('Error fetching groups:', error)
+        }
+    }, [])
+
+    const fetchConfirmedMatches = useCallback(async () => {
+        try {
+            // Try to get club_id, but fetch matches even if we can't
+            let clubId = null
+            try {
+                const clubResponse = await authFetch('/api/clubs')
+                if (clubResponse.ok) {
+                    const clubData = await clubResponse.json()
+                    clubId = clubData.clubs?.[0]?.club_id
+                    if (clubId) {
+                        setCurrentClubId(clubId)
+                    }
+                }
+            } catch {
+                // Club fetch failed, continue without club filter
+            }
+
+            // Fetch matches - with or without club filter
+            const url = clubId
+                ? `/api/matches/confirmed?club_id=${clubId}`
+                : '/api/matches/confirmed'
+
+            const response = await authFetch(url)
+            if (response.ok) {
+                const data = await response.json()
+                setConfirmedMatches(data.matches || [])
+            }
+        } catch (error) {
+            console.error('Error fetching confirmed matches:', error)
+        }
+    }, [])
+
     // Fetch players, clubs, and confirmed matches on mount
     useEffect(() => {
         fetchPlayers()
         fetchClubs()
         fetchConfirmedMatches()
-    }, [])
+    }, [fetchPlayers, fetchClubs, fetchConfirmedMatches])
 
     useEffect(() => {
         if (currentClubId) {
             fetchGroups(currentClubId)
         }
-    }, [currentClubId])
+    }, [currentClubId, fetchGroups])
 
     // Poll for outbox messages when in test mode
     useEffect(() => {
@@ -135,78 +208,6 @@ export default function SMSSimulatorPage() {
         return () => clearInterval(interval)
     }, [testMode, selectedPlayers])
 
-    const fetchPlayers = async () => {
-        try {
-            const response = await authFetch('/api/players')
-            if (response.ok) {
-                const data = await response.json()
-                setPlayers(data.players || [])
-            }
-        } catch (error) {
-            console.error('Error fetching players:', error)
-        }
-    }
-
-    const fetchClubs = async () => {
-        try {
-            const response = await authFetch('/api/clubs')
-            if (response.ok) {
-                const data = await response.json()
-                const clubList = data.clubs || []
-                setClubs(clubList)
-                // Set default club for currentClubId if not already set
-                if (clubList.length > 0 && !currentClubId) {
-                    setCurrentClubId(clubList[0].club_id)
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching clubs:', error)
-        }
-    }
-
-    const fetchGroups = async (clubId: string) => {
-        try {
-            const response = await authFetch(`/api/clubs/${clubId}/groups`)
-            if (response.ok) {
-                const data = await response.json()
-                setGroups(data.groups || [])
-            }
-        } catch (error) {
-            console.error('Error fetching groups:', error)
-        }
-    }
-
-    const fetchConfirmedMatches = async () => {
-        try {
-            // Try to get club_id, but fetch matches even if we can't
-            let clubId = null
-            try {
-                const clubResponse = await authFetch('/api/clubs')
-                if (clubResponse.ok) {
-                    const clubData = await clubResponse.json()
-                    clubId = clubData.clubs?.[0]?.club_id
-                    if (clubId) {
-                        setCurrentClubId(clubId)
-                    }
-                }
-            } catch {
-                // Club fetch failed, continue without club filter
-            }
-
-            // Fetch matches - with or without club filter
-            const url = clubId
-                ? `/api/matches/confirmed?club_id=${clubId}`
-                : '/api/matches/confirmed'
-
-            const response = await authFetch(url)
-            if (response.ok) {
-                const data = await response.json()
-                setConfirmedMatches(data.matches || [])
-            }
-        } catch (error) {
-            console.error('Error fetching confirmed matches:', error)
-        }
-    }
 
 
     const handleSendFeedback = async (matchId: string) => {

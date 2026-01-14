@@ -181,7 +181,7 @@ export const calculateRating = (answers: Record<string, number>) => {
 
     const competitionAnswer = answers['competition'];
     const competitionQuestion = QUESTIONS.find(q => q.id === 'competition');
-    // @ts-ignore
+    // @ts-expect-error - indexing options by numeric answer
     const ceiling = competitionQuestion?.options[competitionAnswer]?.ceiling || 6.0;
 
     const cappedRating = Math.min(rawRating, ceiling);

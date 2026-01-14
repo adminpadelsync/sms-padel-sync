@@ -15,13 +15,11 @@ import {
     CheckCircle2,
     Clock,
     AlertCircle,
-    RotateCcw,
     ArrowLeft,
     ArrowRightLeft,
     History,
     Trash2,
     Check,
-    X,
     RefreshCw,
     UserPlus
 } from 'lucide-react'
@@ -118,7 +116,7 @@ export default function MatchDetailPage() {
     // For inline score editing
     const [isEditingResults, setIsEditingResults] = useState(false)
     const [setScores, setSetScores] = useState<string[][]>([['', ''], ['', ''], ['', '']])
-    const [correctedWinner, setCorrectedWinner] = useState<number | undefined>(undefined)
+    const [_correctedWinner, setCorrectedWinner] = useState<number | undefined>(undefined)
     const [editTeam1Players, setEditTeam1Players] = useState<string[]>([])
     const [editTeam2Players, setEditTeam2Players] = useState<string[]>([])
 
@@ -642,7 +640,7 @@ export default function MatchDetailPage() {
                                                         <tbody className="divide-y divide-gray-50">
                                                             {[1, 2].map((teamNum) => {
                                                                 const teamPlayerIds = teamNum === 1 ? editTeam1Players : editTeam2Players
-                                                                const teamPlayers = teamPlayerIds.map(id => allPlayers.find(p => p.player_id === id)).filter(Boolean)
+                                                                const teamPlayers = teamPlayerIds.map(id => allPlayers.find(p => p.player_id === id)).filter((p): p is Player => !!p)
                                                                 const calculatedWinner = calculateWinnerFromScores(setScores)
                                                                 const isWinner = calculatedWinner === teamNum
 
@@ -650,7 +648,7 @@ export default function MatchDetailPage() {
                                                                     <tr key={teamNum} className={`${isWinner ? 'bg-green-50/30' : ''} transition-colors group`}>
                                                                         <td className="px-8 py-6 border-r border-gray-50">
                                                                             <div className="space-y-4">
-                                                                                {teamPlayers.map((p: any) => (
+                                                                                {teamPlayers.map((p: Player) => (
                                                                                     <div key={p.player_id} className="flex items-center gap-4 group/row">
                                                                                         <button
                                                                                             onClick={() => handleSwapPlayer(p.player_id)}
@@ -756,7 +754,7 @@ export default function MatchDetailPage() {
                                                                     <tr key={teamNum} className={`${isWinner ? 'bg-indigo-50/20' : ''} transition-colors`}>
                                                                         <td className="px-8 py-6 text-left border-r border-gray-50">
                                                                             <div className="flex flex-col gap-1">
-                                                                                {players?.map((p: any) => (
+                                                                                {players?.map((p: Player) => (
                                                                                     <p key={p.player_id} className={`text-base font-black tracking-tight ${isWinner ? 'text-indigo-900' : 'text-gray-900'}`}>{p.name}</p>
                                                                                 ))}
                                                                             </div>
@@ -912,7 +910,7 @@ export default function MatchDetailPage() {
                                                                                                 <div className="group relative">
                                                                                                     <MessageSquare className="w-3 h-3 text-gray-300 cursor-help" />
                                                                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none shadow-xl">
-                                                                                                        "{fb.comment}"
+                                                                                                        &quot;{fb.comment}&quot;
                                                                                                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900" />
                                                                                                     </div>
                                                                                                 </div>
@@ -1154,7 +1152,7 @@ export default function MatchDetailPage() {
                                                             <UserPlus className="w-6 h-6 text-gray-300" />
                                                         </div>
                                                         <p className="text-sm font-bold text-gray-500">No players invited yet</p>
-                                                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-black">Click "Send More Invites" to start outreach</p>
+                                                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-black">Click &quot;Send More Invites&quot; to start outreach</p>
                                                     </div>
                                                 )}
                                             </div>

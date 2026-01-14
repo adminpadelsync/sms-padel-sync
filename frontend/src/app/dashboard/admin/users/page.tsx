@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { authFetch } from '@/utils/auth-fetch'
 import {
     Users,
     Search,
-    Filter,
     Shield,
     Building2,
     Edit2,
@@ -196,7 +194,7 @@ export default function UserManagementPage() {
                         <p className="text-sm font-black uppercase tracking-widest mb-1">Authorization Error</p>
                         <p className="text-sm opacity-80 font-bold">{error}</p>
                         <p className="text-[10px] mt-2 text-red-400 font-bold uppercase tracking-wider italic">
-                            Check the Vercel logs for "DEBUG: Auth Error" to see more details.
+                            Check the Vercel logs for &quot;DEBUG: Auth Error&quot; to see more details.
                         </p>
                     </div>
                     <button

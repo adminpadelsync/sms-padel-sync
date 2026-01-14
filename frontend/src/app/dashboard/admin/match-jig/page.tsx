@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { PlayerColumn } from '../simulator/player-column'
 import { authFetch } from '@/utils/auth-fetch'
 
@@ -198,9 +198,10 @@ export default function MatchJigPage() {
                 const errorMessage = typeof err.detail === 'string' ? err.detail : (err.message || 'Failed to form match');
                 alert(`Error: ${errorMessage}`)
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error forming match:', error)
-            alert(`Failed to form match: ${error.message || 'Unknown error'}`)
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Failed to form match: ${errorMessage}`)
         } finally {
             setIsLoading(false)
         }
@@ -414,10 +415,10 @@ export default function MatchJigPage() {
                     <p className="font-bold mb-1">How to test:</p>
                     <ol className="list-decimal ml-4 space-y-1">
                         <li>Select 4 players and click <strong>Form Match</strong>.</li>
-                        <li>In <strong>Player 1's Phone</strong>, type: <i>"We won 6-3 6-4"</i> or <i>"Billy and I won"</i>.</li>
+                        <li>In <strong>Player 1&apos;s Phone</strong>, type: <i>&quot;We won 6-3 6-4&quot;</i> or <i>&quot;Billy and I won&quot;</i>.</li>
                         <li>Verify the <strong>Status</strong> above changes to COMPLETED.</li>
                         <li>Click <strong>Trigger Feedback SMS</strong>.</li>
-                        <li>In each phone, reply with scores like <i>"8 9 9"</i>.</li>
+                        <li>In each phone, reply with scores like <i>&quot;8 9 9&quot;</i>.</li>
                     </ol>
                 </div>
             </div>

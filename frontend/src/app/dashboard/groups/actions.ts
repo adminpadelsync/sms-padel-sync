@@ -4,6 +4,16 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 
+interface Player {
+    player_id: string
+    name: string
+    phone_number: string
+    declared_skill_level: number
+    adjusted_skill_level: number
+    gender?: string
+    active_status: boolean
+}
+
 async function getBaseUrl() {
     // In development, Next.js rewrites handle /api via http://localhost:8001
     // But server-side fetch needs the absolute URL.
@@ -158,11 +168,15 @@ export async function getGroupDetails(groupId: string) {
 
     // Flatten and sort
     const members = memberships
-        .map((m: any) => ({
-            ...m.player,
-            added_at: m.added_at
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((m: { added_at: string, player: Player | Player[] }) => {
+            const p = Array.isArray(m.player) ? m.player[0] : m.player;
+            return {
+                ...(p as Player),
+                added_at: m.added_at
+            }
+        })
+        .filter(m => m.player_id) // Filter out any failed joins
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
     return { group, members }
 }
@@ -233,7 +247,9 @@ export async function getClubPlayers(clubId: string) {
         return []
     }
 
-    return (data || []).map((m: any) => m.players)
+    return (data || []).map((m: { players: Player | Player[] }) => {
+        return Array.isArray(m.players) ? m.players[0] : m.players
+    })
 }
 
 export async function getSuggestedNumbers(groupId: string) {

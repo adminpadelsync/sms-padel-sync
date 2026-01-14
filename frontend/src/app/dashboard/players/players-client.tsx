@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { PlayerActions } from '../player-management'
 import { CreatePlayerButton } from '../create-player-button'
 import { MatchWizard } from '../create-match-wizard'
@@ -173,39 +173,41 @@ export function PlayersClient({
     }
 
     // Filter data by selected club
-    let filteredPlayers = initialPlayers.filter(p => p.club_id === userClubId)
+    const filteredPlayers = useMemo(() => {
+        let result = initialPlayers.filter((p: Player) => p.club_id === userClubId)
 
-    // Apply skill level filter
-    if (targetLevel !== null) {
-        const minLevel = targetLevel - levelRange
-        const maxLevel = targetLevel + levelRange
-        filteredPlayers = filteredPlayers.filter(p =>
-            p.declared_skill_level >= minLevel && p.declared_skill_level <= maxLevel
-        )
-    }
-
-    // Apply gender filter
-    if (genderFilter !== 'all') {
-        if (genderFilter === 'verified') {
-            filteredPlayers = filteredPlayers.filter(p => p.pro_verified)
-        } else {
-            filteredPlayers = filteredPlayers.filter(p =>
-                p.gender?.toLowerCase() === genderFilter.toLowerCase()
+        // Apply skill level filter
+        if (targetLevel !== null) {
+            const minLevel = targetLevel - levelRange
+            const maxLevel = targetLevel + levelRange
+            result = result.filter((p: Player) =>
+                p.declared_skill_level >= minLevel && p.declared_skill_level <= maxLevel
             )
         }
-    }
 
-    // Apply search filter
-    if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        filteredPlayers = filteredPlayers.filter(p =>
-            p.name.toLowerCase().includes(query) ||
-            p.phone_number.includes(query)
-        )
-    }
+        // Apply gender filter
+        if (genderFilter !== 'all') {
+            if (genderFilter === 'verified') {
+                result = result.filter((p: Player) => p.pro_verified)
+            } else {
+                result = result.filter((p: Player) =>
+                    p.gender?.toLowerCase() === genderFilter.toLowerCase()
+                )
+            }
+        }
 
-    // Sort by name (alphabetically)
-    filteredPlayers = filteredPlayers.sort((a, b) => a.name.localeCompare(b.name))
+        // Apply search filter
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase()
+            result = result.filter((p: Player) =>
+                p.name.toLowerCase().includes(query) ||
+                p.phone_number.includes(query)
+            )
+        }
+
+        // Sort by name (alphabetically)
+        return result.sort((a, b) => a.name.localeCompare(b.name))
+    }, [initialPlayers, userClubId, targetLevel, levelRange, genderFilter, searchQuery])
 
     useEffect(() => {
         setCurrentPage(1)
@@ -221,11 +223,11 @@ export function PlayersClient({
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked) {
             const newSelected = new Set(selectedPlayerIds)
-            currentPlayers.forEach(p => newSelected.add(p.player_id))
+            currentPlayers.forEach((p: Player) => newSelected.add(p.player_id))
             setSelectedPlayerIds(newSelected)
         } else {
             const newSelected = new Set(selectedPlayerIds)
-            currentPlayers.forEach(p => newSelected.delete(p.player_id))
+            currentPlayers.forEach((p: Player) => newSelected.delete(p.player_id))
             setSelectedPlayerIds(newSelected)
         }
     }
@@ -374,7 +376,7 @@ export function PlayersClient({
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {currentPlayers && currentPlayers.length > 0 ? (
-                                currentPlayers.map((player) => (
+                                currentPlayers.map((player: Player) => (
                                     <React.Fragment key={player.player_id}>
                                         <tr className={selectedPlayerIds.has(player.player_id) ? 'bg-indigo-50' : ''}>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -464,7 +466,7 @@ export function PlayersClient({
                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                 {player.groups && player.groups.length > 0 ? (
                                                     <ul className="list-disc pl-4 space-y-0.5">
-                                                        {player.groups.map(group => (
+                                                        {player.groups.map((group: { group_id: string; name: string }) => (
                                                             <li key={group.group_id} className="text-gray-600">
                                                                 {group.name}
                                                             </li>

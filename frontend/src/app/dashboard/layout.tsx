@@ -36,12 +36,13 @@ export default async function DashboardLayout({
             `)
             .eq('user_id', userClub.user_id)
 
-        clubs = (userClubsData || []).map(uc => ({
-            //@ts-ignore
-            club_id: uc.club_id,
-            //@ts-ignore
-            name: uc.clubs?.name || 'Unknown Club'
-        })).sort((a, b) => a.name.localeCompare(b.name))
+        clubs = (userClubsData || []).map(uc => {
+            const clubsInfo = uc.clubs as unknown as { name: string } | null;
+            return {
+                club_id: uc.club_id,
+                name: clubsInfo?.name || 'Unknown Club'
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name))
     }
 
     return (

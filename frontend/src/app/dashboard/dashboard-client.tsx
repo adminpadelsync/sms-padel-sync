@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { AnalyticsDashboard } from './analytics/analytics-dashboard'
 
 interface Player {
@@ -33,21 +33,21 @@ export function DashboardClient({
     const [openInvites, setOpenInvites] = useState(0)
 
     // Filter data by selected club
-    const clubPlayers = initialPlayers.filter(p => p.club_id === userClubId)
-    const clubMatches = initialMatches.filter(m => m.club_id === userClubId)
+    const clubPlayers = useMemo(() => initialPlayers.filter(p => p.club_id === userClubId), [initialPlayers, userClubId])
+    const clubMatches = useMemo(() => initialMatches.filter(m => m.club_id === userClubId), [initialMatches, userClubId])
 
     // Calculate summary stats
-    const activePlayersCount = clubPlayers.filter(p => p.active_status).length
+    const activePlayersCount = clubPlayers.filter((p: Player) => p.active_status).length
     const now = new Date()
-    const upcomingMatchesCount = clubMatches.filter(m => m.status === 'confirmed' && new Date(m.scheduled_time) > now).length
-    const pendingMatchesCount = clubMatches.filter(m => m.status === 'pending' && new Date(m.scheduled_time) > now).length
+    const upcomingMatchesCount = clubMatches.filter((m: Match) => m.status === 'confirmed' && new Date(m.scheduled_time) > now).length
+    const pendingMatchesCount = clubMatches.filter((m: Match) => m.status === 'pending' && new Date(m.scheduled_time) > now).length
 
     useEffect(() => {
         async function fetchOpenInvites() {
             try {
                 const pendingMatchIds = clubMatches
-                    .filter(m => m.status === 'pending' && new Date(m.scheduled_time) > new Date())
-                    .map(m => m.match_id)
+                    .filter((m: Match) => m.status === 'pending' && new Date(m.scheduled_time) > new Date())
+                    .map((m: Match) => m.match_id)
 
                 if (pendingMatchIds.length === 0) {
                     setOpenInvites(0)

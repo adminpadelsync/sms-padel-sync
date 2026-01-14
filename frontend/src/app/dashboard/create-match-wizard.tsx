@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getUserClub } from './get-user-club'
-import { getClubs } from './get-clubs'
 import { searchPlayers } from './search-players'
 import { formatLocalizedTime } from '@/utils/time-utils'
 

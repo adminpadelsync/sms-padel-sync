@@ -5,13 +5,21 @@ import { Trophy, ChevronLeft, Target, Award, Info, AlertTriangle } from 'lucide-
 
 import { QUESTIONS, calculateRating, getRatingDescription, getMatchRange } from '@/utils/assessment-constants';
 
+interface AssessmentBreakdown {
+    rating: number;
+    rawRating: number;
+    ceiling: number;
+    wasCapped: boolean;
+    percentage: number;
+}
+
 
 export function PadelAssessment() {
     const [currentQuestion, setCurrentQuestion] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [showResult, setShowResult] = useState(false);
     const [rating, setRating] = useState<number | null>(null);
-    const [breakdown, setBreakdown] = useState<any>(null);
+    const [breakdown, setBreakdown] = useState<AssessmentBreakdown | null>(null);
     const [name, setName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSaved, setIsSaved] = useState(false);

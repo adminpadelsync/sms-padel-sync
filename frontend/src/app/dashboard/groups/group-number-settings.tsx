@@ -25,8 +25,8 @@ export function GroupNumberSettings({ group }: GroupNumberSettingsProps) {
         try {
             const { numbers } = await getSuggestedNumbers(group.group_id)
             setSuggestedNumbers(numbers)
-        } catch (err: any) {
-            setError(err.message || 'Failed to search numbers')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to search numbers')
         } finally {
             setIsSearching(false)
         }
@@ -40,8 +40,8 @@ export function GroupNumberSettings({ group }: GroupNumberSettingsProps) {
         try {
             await provisionGroupNumber(group.group_id, number)
             window.location.reload()
-        } catch (err: any) {
-            setError(err.message || 'Failed to provision number')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to provision number')
         } finally {
             setIsLoading(false)
         }
@@ -55,8 +55,8 @@ export function GroupNumberSettings({ group }: GroupNumberSettingsProps) {
         try {
             await releaseGroupNumber(group.group_id)
             window.location.reload()
-        } catch (err: any) {
-            setError(err.message || 'Failed to release number')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to release number')
         } finally {
             setIsLoading(false)
         }

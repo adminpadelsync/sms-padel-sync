@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { updatePlayer, createPlayer, togglePlayerStatus, removePlayerFromClub } from './actions'
-import { getClubs } from './get-clubs'
 
 interface Player {
     player_id: string
@@ -146,7 +145,7 @@ export function PlayerModal({ player, isOpen, onClose, mode, clubId }: PlayerMod
                                 const val = e.target.value;
                                 // Allow empty, numbers, and a single decimal point
                                 if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                    setFormData({ ...formData, declared_skill_level: val as any });
+                                    setFormData({ ...formData, declared_skill_level: val as unknown as number });
                                 }
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
