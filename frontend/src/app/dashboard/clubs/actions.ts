@@ -83,9 +83,15 @@ export async function createClub(data: CreateClubData) {
             try {
                 // Call the backend API we just created
                 const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
+                const { data: { session } } = await supabase.auth.getSession()
+                const token = session?.access_token
                 const provisionRes = await fetch(`${baseUrl}/api/clubs/${club.club_id}/provision-number`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+                    },
                     body: JSON.stringify({ phone_number: data.selected_provision_number })
                 })
 
@@ -143,7 +149,10 @@ export async function getAvailableNumbers(areaCode: string) {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
     console.log(`[getAvailableNumbers] Fetching from: ${baseUrl}/api/clubs/available-numbers`)
     const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+        }
     })
     if (!res.ok) {
         const errorBody = await res.text()
@@ -163,7 +172,8 @@ export async function provisionClubNumber(clubId: string, phoneNumber: string) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
         },
         body: JSON.stringify({ phone_number: phoneNumber })
     })
