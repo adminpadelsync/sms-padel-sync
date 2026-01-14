@@ -144,7 +144,11 @@ export async function getAvailableNumbers(areaCode: string) {
     const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (!res.ok) throw new Error('Failed to fetch available numbers')
+    if (!res.ok) {
+        const errorBody = await res.text()
+        console.error(`Backend error (${res.status}):`, errorBody)
+        throw new Error(`Failed to fetch available numbers (${res.status}): ${errorBody.substring(0, 100)}`)
+    }
     return res.json()
 }
 

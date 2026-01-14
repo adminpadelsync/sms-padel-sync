@@ -72,8 +72,10 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
         )
         
     except Exception as e:
-        print(f"Auth Error: {e}")
-        raise HTTPException(status_code=401, detail=str(e))
+        import traceback
+        print(f"CRITICAL Auth Error for token {token[:10]}...: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 def require_superuser(user: UserContext = Depends(get_current_user)):
     if not user.is_superuser:
