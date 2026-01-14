@@ -17,6 +17,12 @@ export interface CreateClubData {
     admin_email?: string // Optional initial admin to assign
 }
 
+const getBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+    return 'http://localhost:8001'
+}
+
 
 export async function createClub(data: CreateClubData) {
     const supabase = await createClient()
@@ -80,7 +86,7 @@ export async function createClub(data: CreateClubData) {
         if (data.selected_provision_number) {
             try {
                 // Call the backend API we just created
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+                const baseUrl = getBaseUrl()
                 const provisionRes = await fetch(`${baseUrl}/api/clubs/${club.club_id}/provision-number`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -138,7 +144,7 @@ export async function getAvailableNumbers(areaCode: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+    const baseUrl = getBaseUrl()
     const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -151,7 +157,7 @@ export async function provisionClubNumber(clubId: string, phoneNumber: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+    const baseUrl = getBaseUrl()
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/provision-number`, {
         method: 'POST',
         headers: {
@@ -169,7 +175,7 @@ export async function releaseClubNumber(clubId: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+    const baseUrl = getBaseUrl()
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/release-number`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
