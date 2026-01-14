@@ -82,7 +82,7 @@ export async function createClub(data: CreateClubData) {
         if (data.selected_provision_number) {
             try {
                 // Call the backend API we just created
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
+                const baseUrl = (process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')).replace(/\/$/, '')
                 const { data: { session } } = await supabase.auth.getSession()
                 const token = session?.access_token
                 const provisionRes = await fetch(`${baseUrl}/api/clubs/${club.club_id}/provision-number`, {
@@ -146,7 +146,7 @@ export async function getAvailableNumbers(areaCode: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')).replace(/\/$/, '')
     console.log(`[getAvailableNumbers] Fetching from: ${baseUrl}/api/clubs/available-numbers`)
     console.log(`[getAvailableNumbers] Bypass secret present: ${!!process.env.VERCEL_AUTOMATION_BYPASS_SECRET} (Length: ${process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.length || 0})`)
 
