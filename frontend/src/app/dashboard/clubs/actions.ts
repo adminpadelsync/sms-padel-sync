@@ -141,6 +141,7 @@ export async function getAvailableNumbers(areaCode: string) {
     const token = session?.access_token
 
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
+    console.log(`[getAvailableNumbers] Fetching from: ${baseUrl}/api/clubs/available-numbers`)
     const res = await fetch(`${baseUrl}/api/clubs/available-numbers?area_code=${areaCode}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     })
