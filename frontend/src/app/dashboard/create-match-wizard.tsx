@@ -12,6 +12,7 @@ interface Player {
     adjusted_skill_level?: number
     gender?: string
     match_score?: number
+    club_id?: string
 }
 
 interface MatchWizardProps {
@@ -65,7 +66,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
     // Player search depends on clubId
     useEffect(() => {
         if (clubId && playerSearchTerm.length >= 2) {
-            searchPlayers(clubId, playerSearchTerm).then(setPlayerSearchResults)
+            searchPlayers(clubId, playerSearchTerm).then(results => setPlayerSearchResults(results as Player[]))
         } else {
             setPlayerSearchResults([])
         }
