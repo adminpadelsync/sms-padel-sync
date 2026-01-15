@@ -21,13 +21,10 @@ async function getBaseUrl() {
         return 'http://localhost:8001'
     }
 
-    // In production (Vercel), we can use the API_URL env if provided, 
-    // or fallback to the current host.
-    const apiUrl = process.env.API_URL
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
     if (apiUrl) return apiUrl
 
-    const host = (await headers()).get('host')
-    return `https://${host}`
+    throw new Error('CRITICAL CONFIG ERROR: NEXT_PUBLIC_API_URL is not defined. Server-side fetch will fail.');
 }
 
 export async function getClubGroups(clubId: string) {

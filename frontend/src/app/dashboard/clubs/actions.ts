@@ -17,7 +17,16 @@ export interface CreateClubData {
     admin_email?: string // Optional initial admin to assign
 }
 
+async function getBaseUrl() {
+    if (process.env.NODE_ENV === 'development') {
+        return 'http://localhost:8001'
+    }
 
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    if (apiUrl) return apiUrl.replace(/\/$/, '')
+
+    throw new Error('CRITICAL CONFIG ERROR: NEXT_PUBLIC_API_URL is not defined. Server-side fetch will fail.');
+}
 
 
 export async function createClub(data: CreateClubData) {
@@ -82,7 +91,7 @@ export async function createClub(data: CreateClubData) {
         if (data.selected_provision_number) {
             try {
                 // Call the backend API we just created
-                const baseUrl = (process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')).replace(/\/$/, '')
+                const baseUrl = await getBaseUrl()
                 const { data: { session } } = await supabase.auth.getSession()
                 const token = session?.access_token
                 const provisionRes = await fetch(`${baseUrl}/api/clubs/${club.club_id}/provision-number`, {
@@ -148,7 +157,7 @@ export async function getAvailableNumbers(areaCode: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')).replace(/\/$/, '')
+    const baseUrl = await getBaseUrl()
     console.log(`[getAvailableNumbers] Fetching from: ${baseUrl}/api/clubs/available-numbers`)
     console.log(`[getAvailableNumbers] Bypass secret present: ${!!process.env.VERCEL_AUTOMATION_BYPASS_SECRET} (Length: ${process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.length || 0})`)
 
@@ -182,7 +191,7 @@ export async function provisionClubNumber(clubId: string, phoneNumber: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
+    const baseUrl = await getBaseUrl()
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/provision-number`, {
         method: 'POST',
         headers: {
@@ -201,7 +210,7 @@ export async function releaseClubNumber(clubId: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8001')
+    const baseUrl = await getBaseUrl()
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/release-number`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }

@@ -4,134 +4,90 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   async rewrites() {
-    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    // Strict verification for non-development environments
+    if (process.env.NODE_ENV !== 'development' && !apiUrl) {
+      throw new Error('CRITICAL CONFIG ERROR: NEXT_PUBLIC_API_URL is not defined in this environment. Rewrites will fail.');
+    }
+
+    const targetUrl = process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8001'
+      : apiUrl;
+
     return [
       {
         source: '/api/matches/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/matches/:path*'
-            : `${apiUrl || ''}/api/matches/:path*`,
+        destination: `${targetUrl}/api/matches/:path*`,
       },
       {
         source: '/api/recommendations',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/recommendations'
-            : `${apiUrl || ''}/api/recommendations`,
+        destination: `${targetUrl}/api/recommendations`,
       },
       {
         source: '/api/outreach',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/outreach'
-            : `${apiUrl || ''}/api/outreach`,
+        destination: `${targetUrl}/api/outreach`,
       },
       {
         source: '/api/webhook/sms',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/webhook/sms'
-            : `${apiUrl || ''}/api/webhook/sms`,
+        destination: `${targetUrl}/api/webhook/sms`,
       },
       {
         source: '/api/sms-outbox/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/sms-outbox/:path*'
-            : `${apiUrl || ''}/api/sms-outbox/:path*`,
+        destination: `${targetUrl}/api/sms-outbox/:path*`,
       },
       {
         source: '/api/sms-inbox',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/sms-inbox'
-            : `${apiUrl || ''}/api/sms-inbox`,
+        destination: `${targetUrl}/api/sms-inbox`,
       },
       {
         source: '/api/players/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/players/:path*'
-            : `${apiUrl || ''}/api/players/:path*`,
+        destination: `${targetUrl}/api/players/:path*`,
       },
       {
         source: '/api/clubs/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/clubs/:path*'
-            : `${apiUrl || ''}/api/clubs/:path*`,
+        destination: `${targetUrl}/api/clubs/:path*`,
       },
       {
         source: '/api/clubs',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/clubs'
-            : `${apiUrl || ''}/api/clubs`,
+        destination: `${targetUrl}/api/clubs`,
       },
 
       {
         source: '/api/cron/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/cron/:path*'
-            : `${apiUrl || ''}/api/cron/:path*`,
+        destination: `${targetUrl}/api/cron/:path*`,
       },
       {
         source: '/api/groups/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/groups/:path*'
-            : `${apiUrl || ''}/api/groups/:path*`,
+        destination: `${targetUrl}/api/groups/:path*`,
       },
       {
         source: '/api/debug-routing',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/debug-routing'
-            : `${apiUrl || ''}/api/debug-routing`,
+        destination: `${targetUrl}/api/debug-routing`,
       },
       {
         source: '/api/insights/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/insights/:path*'
-            : `${apiUrl || ''}/api/insights/:path*`,
+        destination: `${targetUrl}/api/insights/:path*`,
       },
       {
         source: '/api/test/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/test/:path*'
-            : `${apiUrl || ''}/api/test/:path*`,
+        destination: `${targetUrl}/api/test/:path*`,
       },
       {
         source: '/api/debug-routes',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/debug-routes'
-            : `${apiUrl || ''}/api/debug-routes`,
+        destination: `${targetUrl}/api/debug-routes`,
       },
       {
         source: '/api/admin/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/admin/:path*'
-            : `${apiUrl || ''}/api/admin/:path*`,
+        destination: `${targetUrl}/api/admin/:path*`,
       },
       {
         source: '/api/assessment/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/assessment/:path*'
-            : `${apiUrl || ''}/api/assessment/:path*`,
+        destination: `${targetUrl}/api/assessment/:path*`,
       },
       {
         source: '/api/training/:path*',
-        destination:
-          process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8001/api/training/:path*'
-            : `${apiUrl || ''}/api/training/:path*`,
+        destination: `${targetUrl}/api/training/:path*`,
       },
     ]
   },
