@@ -11,9 +11,11 @@ const nextConfig: NextConfig = {
       throw new Error('CRITICAL CONFIG ERROR: NEXT_PUBLIC_API_URL is not defined in this environment. Rewrites will fail.');
     }
 
-    const targetUrl = process.env.NODE_ENV === 'development'
+    const rawUrl = process.env.NODE_ENV === 'development'
       ? 'http://localhost:8001'
       : apiUrl;
+
+    const targetUrl = rawUrl?.replace(/\/$/, '');
 
     return [
       {

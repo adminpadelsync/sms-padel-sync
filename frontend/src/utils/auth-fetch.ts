@@ -23,6 +23,9 @@ export async function authFetch(url: string, options: RequestInit = {}) {
         ...(session?.access_token ? {
             'Authorization': `Bearer ${session.access_token}`,
             'X-Padel-Token': session.access_token
+        } : {}),
+        ...(process.env.NEXT_PUBLIC_VERCEL_AUTOMATION_BYPASS_SECRET ? {
+            'x-vercel-protection-bypass': process.env.NEXT_PUBLIC_VERCEL_AUTOMATION_BYPASS_SECRET
         } : {})
     }
 
