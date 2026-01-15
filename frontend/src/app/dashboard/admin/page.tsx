@@ -12,6 +12,7 @@ interface Club {
 export default function AdminPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
+    const [error, setError] = useState<string | null>(null)
     const [clubs, setClubs] = useState<Club[]>([])
     const [isFetchingClubs, setIsFetchingClubs] = useState(true)
     const [clubToDelete, setClubToDelete] = useState<Club | null>(null)
@@ -22,10 +23,7 @@ export default function AdminPage() {
 
     const formatPhoneNumber = (phone: string) => {
         if (!phone) return '';
-        // Strip everything but digits
         const digits = phone.replace(/\D/g, '');
-
-        // If it's a 11-digit number starting with 1 (US format) or 10-digit number
         if (digits.length === 11 && digits.startsWith('1')) {
             return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
         }
@@ -41,14 +39,27 @@ export default function AdminPage() {
 
     const fetchClubs = async () => {
         setIsFetchingClubs(true)
+        setError(null)
         try {
             const res = await authFetch('/api/clubs')
-            const data = await res.json()
-            if (res.ok) {
+            const text = await res.text()
+
+            if (!res.ok) {
+                console.error(`Fetch clubs failed (${res.status}):`, text)
+                setError(`Failed to fetch clubs (${res.status}): ${text.substring(0, 100)}`)
+                return
+            }
+
+            try {
+                const data = JSON.parse(text)
                 setClubs(data.clubs || [])
+            } catch (e) {
+                console.error('Failed to parse clubs JSON:', text)
+                setError('Backend returned invalid JSON response.')
             }
         } catch (err: unknown) {
             console.error('Error fetching clubs:', err)
+            setError(err instanceof Error ? err.message : 'An unknown error occurred while fetching clubs.')
         } finally {
             setIsFetchingClubs(false)
         }
@@ -157,6 +168,18 @@ export default function AdminPage() {
                     </div>
 
                     <div className="mt-6 border-t border-gray-100 pt-4">
+                        {error && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm text-red-600 font-medium">Error loading clubs</p>
+                                <p className="text-xs text-red-500 mt-1">{error}</p>
+                                <button
+                                    onClick={fetchClubs}
+                                    className="text-xs font-bold text-red-700 mt-2 hover:underline"
+                                >
+                                    Try Again
+                                </button>
+                            </div>
+                        )}
                         <div className="mb-4 relative">
                             <input
                                 type="text"
