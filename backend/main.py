@@ -35,40 +35,36 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # For Vercel, requests come in at /api/* so we need to handle that
-is_vercel = os.environ.get('VERCEL', False)
-
-app = FastAPI(root_path="/api" if is_vercel else "")
+app = FastAPI()
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routes - remove /api prefix when on Vercel since /api is already in the path
-import analytics_routes
+# Use a fixed /api prefix for all routes to match Next.js rewrites perfectly.
+api_prefix = "/api"
 
-# Include routes - remove /api prefix when on Vercel since /api is already in the path
-prefix = "" if is_vercel else "/api"
-app.include_router(api_routes.router, prefix=prefix)
-app.include_router(analytics_routes.router, prefix=f"{prefix}/insights")
+import analytics_routes
 import training_routes
-app.include_router(training_routes.router, prefix=prefix)
+
+app.include_router(api_routes.router, prefix=api_prefix)
+app.include_router(analytics_routes.router, prefix=f"{api_prefix}/insights")
+app.include_router(training_routes.router, prefix=api_prefix)
 
 @app.get("/")
+@app.get("/api")
+@app.get("/api/health")
 async def root():
-    return {"message": "SMS Padel Sync API"}
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "service": "SMS Padel Sync API"}
 
 from sms_handler import handle_incoming_sms
 
-@app.post(f"{prefix}/webhook/sms")
+@app.post(f"{api_prefix}/webhook/sms")
 async def sms_webhook(From: str = Form(...), Body: str = Form(...), To: str = Form(...)):
     """
     Handle incoming SMS from Twilio.
@@ -90,9 +86,8 @@ class InboxMessage(BaseModel):
     to_number: Optional[str] = None  # Club's Twilio number (optional for backward compat)
 
 # SMS test mode routes - path depends on environment
-sms_prefix = "" if os.environ.get('VERCEL', False) else "/api"
 
-@app.get(f"{sms_prefix}/sms-outbox")
+@app.get(f"{api_prefix}/sms-outbox")
 async def get_sms_outbox(phone_number: Optional[str] = None):
     """
     Get pending outbound SMS messages (test mode only).
@@ -104,14 +99,14 @@ async def get_sms_outbox(phone_number: Optional[str] = None):
     result = query.execute()
     return {"messages": result.data}
 
-@app.post(f"{sms_prefix}/sms-outbox/{{message_id}}/read")
+@app.post(f"{api_prefix}/sms-outbox/{{message_id}}/read")
 async def mark_message_read(message_id: str):
     """Mark a message as read."""
     from logic_utils import get_now_utc
     supabase.table("sms_outbox").update({"read_at": get_now_utc().isoformat()}).eq("id", message_id).execute()
     return {"status": "ok"}
 
-@app.post(f"{sms_prefix}/sms-inbox")
+@app.post(f"{api_prefix}/sms-inbox")
 async def post_sms_inbox(message: InboxMessage):
     """
     Simulate an incoming SMS (test mode).
@@ -126,7 +121,7 @@ async def post_sms_inbox(message: InboxMessage):
     handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
 
-@app.api_route(f"{prefix}/cron/recalculate-scores", methods=["GET", "POST"])
+@app.api_route(f"{api_prefix}/cron/recalculate-scores", methods=["GET", "POST"])
 async def trigger_score_recalculation_direct():
     """Direct cron endpoint to debug routing issues."""
     from fastapi import HTTPException
@@ -141,7 +136,7 @@ async def trigger_score_recalculation_direct():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.api_route(f"{prefix}/debug-routing", methods=["GET", "POST"])
+@app.api_route(f"{api_prefix}/debug-routing", methods=["GET", "POST"])
 async def debug_routing(request: Request):
     return {
         "root_path": request.scope.get("root_path"),
@@ -151,7 +146,7 @@ async def debug_routing(request: Request):
         "is_vercel": os.environ.get('VERCEL')
     }
 
-@app.api_route(f"{prefix}/debug-routes", methods=["GET"])
+@app.api_route(f"{api_prefix}/debug-routes", methods=["GET"])
 async def list_routes():
     routes = []
     for route in app.routes:
