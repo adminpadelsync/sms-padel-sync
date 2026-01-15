@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   async rewrites() {
-    const apiUrl = process.env.API_URL;
+    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
     return [
       {
         source: '/api/matches/:path*',
@@ -124,7 +124,7 @@ const nextConfig: NextConfig = {
         destination:
           process.env.NODE_ENV === 'development'
             ? 'http://localhost:8001/api/assessment/:path*'
-            : `${process.env.API_URL || ''}/api/assessment/:path*`,
+            : `${apiUrl || ''}/api/assessment/:path*`,
       },
       {
         source: '/api/training/:path*',
