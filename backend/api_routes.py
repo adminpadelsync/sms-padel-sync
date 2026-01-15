@@ -92,6 +92,7 @@ class UserCreateRequest(BaseModel):
     send_email: bool = True
 
 @router.get("/clubs")
+@router.get("/clubs/")
 async def get_clubs(user: UserContext = Depends(require_superuser)):
     """Get all active clubs. Restricted to superusers."""
 

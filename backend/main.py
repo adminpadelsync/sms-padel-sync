@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # For Vercel, requests come in at /api/* so we need to handle that
-app = FastAPI()
+app = FastAPI(redirect_slashes=False)
 
 # Configure CORS
 app.add_middleware(
