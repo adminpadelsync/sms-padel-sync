@@ -104,20 +104,21 @@ export async function createClub(data: CreateClubData) {
             }
         }
 
-        // 4. Assign initial admin if provided
-        if (data.admin_email) {
+        // 4. Assign initial admin (defaults to current user if no email provided)
+        const targetEmail = data.admin_email || user.email
+        if (targetEmail) {
             try {
                 // Find user in users table (synced from Auth)
                 const { data: targetUser } = await supabase
                     .from('users')
                     .select('user_id')
-                    .eq('email', data.admin_email)
+                    .eq('email', targetEmail)
                     .single()
 
                 if (targetUser) {
                     const { error: userClubError } = await supabase
                         .from('user_clubs')
-                        .insert({
+                        .upsert({
                             user_id: targetUser.user_id,
                             club_id: club.club_id,
                             role: 'club_admin'
@@ -127,7 +128,7 @@ export async function createClub(data: CreateClubData) {
                         console.error('Error assigning initial manager:', userClubError)
                     }
                 } else {
-                    console.warn(`Initial manager email ${data.admin_email} not found in users table. Skipping assignment.`)
+                    console.warn(`Initial manager email ${targetEmail} not found in users table. Skipping assignment.`)
                 }
             } catch (err) {
                 console.error('Failed to process initial manager assignment:', err)

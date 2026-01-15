@@ -99,6 +99,30 @@ export async function getUserClub(): Promise<UserClub | null> {
         }
     }
 
+    // 4. Global Fallback for Superusers
+    // If a superuser still has no club context, give them the first active club in the system
+    // so they aren't greeted with an empty dashboard.
+    if (userData.is_superuser && !finalClubId) {
+        const { data: firstClub } = await supabase
+            .from('clubs')
+            .select('club_id, name, timezone')
+            .eq('active', true)
+            .order('name')
+            .limit(1)
+            .maybeSingle()
+
+        if (firstClub) {
+            return {
+                user_id: user.id,
+                club_id: firstClub.club_id,
+                club_name: firstClub.name,
+                club_timezone: (firstClub as any).timezone || null,
+                is_superuser: userData.is_superuser,
+                role: userData.role
+            }
+        }
+    }
+
     return {
         user_id: user.id,
         club_id: finalClubId,
