@@ -60,16 +60,16 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
             c = club_res.data[0]
             return (str(c["club_id"]), c["name"], None, None, c.get("booking_system") or "Playtomic")
         
-        # Unknown/Unconfigured Number?
-        # Fallback to first club if unknown number received msg (Legacy behavior)
-        # Or should we warn?
-        print(f"[WARNING] Unknown Twilio number {to_number}, falling back to default club.")
+        # Unknown/Unconfigured Number
+        print(f"[ERROR] SMS received on unknown Twilio number {to_number}. No club context found.")
+        return (None, "the club", None, None, "Playtomic")
 
-    # 3. Fallback (First Club)
-    fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
-    if fallback.data:
-        c = fallback.data[0]
-        return (str(c["club_id"]), c.get("name", "the club"), None, None, c.get("booking_system") or "Playtomic")
+    # 3. Fallback (Only if to_number was NOT provided - e.g. manual trigger without number context)
+    if not to_number:
+        fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
+        if fallback.data:
+            c = fallback.data[0]
+            return (str(c["club_id"]), c.get("name", "the club"), None, None, c.get("booking_system") or "Playtomic")
     
     # 4. Total failure
     return (None, "the club", None, None, "Playtomic")

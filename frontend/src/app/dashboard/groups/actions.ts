@@ -250,17 +250,34 @@ export async function getClubPlayers(clubId: string) {
 }
 
 export async function getSuggestedNumbers(groupId: string) {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
     const baseUrl = await getBaseUrl()
-    const res = await fetch(`${baseUrl}/api/groups/${groupId}/suggested-numbers`)
+    const res = await fetch(`${baseUrl}/api/groups/${groupId}/suggested-numbers`, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+        }
+    })
     if (!res.ok) throw new Error('Failed to fetch suggested numbers')
     return res.json()
 }
 
 export async function provisionGroupNumber(groupId: string, phoneNumber: string) {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
     const baseUrl = await getBaseUrl()
     const res = await fetch(`${baseUrl}/api/groups/${groupId}/provision-number`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+        },
         body: JSON.stringify({ phone_number: phoneNumber })
     })
     if (!res.ok) {
@@ -273,9 +290,17 @@ export async function provisionGroupNumber(groupId: string, phoneNumber: string)
 }
 
 export async function releaseGroupNumber(groupId: string) {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
     const baseUrl = await getBaseUrl()
     const res = await fetch(`${baseUrl}/api/groups/${groupId}/release-number`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+        }
     })
     if (!res.ok) throw new Error('Failed to release number')
     revalidatePath(`/dashboard/groups/${groupId}`)

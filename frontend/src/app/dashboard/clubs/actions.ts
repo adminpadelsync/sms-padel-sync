@@ -213,7 +213,10 @@ export async function releaseClubNumber(clubId: string) {
     const baseUrl = await getBaseUrl()
     const res = await fetch(`${baseUrl}/api/clubs/${clubId}/release-number`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+        }
     })
     if (!res.ok) throw new Error('Failed to release number')
     return res.json()

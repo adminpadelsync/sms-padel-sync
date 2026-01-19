@@ -184,9 +184,16 @@ class IntentDispatcher:
                 send_sms(from_number, reply, club_id=cid)
                 return
 
-            # B. Check Onboarding
+            # B. Check Onboarding / New Member
             if not current_state:
+                if not cid:
+                    print(f"[DISPATCHER] Unknown club context for number {to_number}. Likely environment mismatch.")
+                    # We can't send a helpful SMS because send_sms requires a club_id
+                    # But if we really want to be helpful, we could try to send one using a system ID if we had one
+                    return
+
                 if player and player.get("is_member"): return
+                
                 send_sms(from_number, msg.MSG_WELCOME_NEW.format(club_name=cname, booking_system=booking_sys), club_id=cid)
                 set_user_state(from_number, msg.STATE_WAITING_NAME, {"club_id": cid, "club_name": cname})
                 return
