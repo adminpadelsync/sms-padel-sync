@@ -342,7 +342,8 @@ def process_batch_refills():
     """
     print("Processing batch refills...")
     
-    now = get_now_utc().isoformat()
+    from logic_utils import get_now_utc_iso
+    now = get_now_utc_iso()
     
     # Find sent invites that have passed their expires_at and haven't been refilled
     # We only refill if refilled_at is NULL

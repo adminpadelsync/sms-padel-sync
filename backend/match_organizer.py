@@ -179,8 +179,8 @@ def get_match_details(match_id: str) -> dict:
     Returns:
         Match dictionary with player details
     """
-    # Get match with club details
-    match_result = supabase.table("matches").select("*, clubs(name, timezone)").eq("match_id", match_id).execute()
+    # Get match with club details and group name if applicable
+    match_result = supabase.table("matches").select("*, clubs(name, timezone), player_groups(name)").eq("match_id", match_id).execute()
     if not match_result.data:
         raise Exception(f"Match {match_id} not found")
     

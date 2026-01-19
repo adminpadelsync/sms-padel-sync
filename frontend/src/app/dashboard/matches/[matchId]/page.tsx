@@ -61,9 +61,13 @@ interface Match {
     score_text?: string
     winner_team?: number
     feedback_collected?: boolean
+    created_at: string
     clubs?: {
         name: string
         timezone: string
+    }
+    player_groups?: {
+        name: string
     }
 }
 
@@ -133,6 +137,41 @@ export default function MatchDetailPage() {
         if (!match?.scheduled_time) return false
         return isPastTime(match.scheduled_time)
     }, [match?.scheduled_time])
+
+    const allPlayers = useMemo(() => [
+        ...(match?.team_1_player_details || []),
+        ...(match?.team_2_player_details || [])
+    ], [match?.team_1_player_details, match?.team_2_player_details])
+
+    const formattedTime = match ? formatLocalizedTime(match.scheduled_time, match.clubs?.timezone) : ''
+
+    // Merge confirmed players who might not have an invite record (e.g. the originator)
+    const displayInvites = useMemo(() => {
+        if (!match) return []
+        const merged = [...invites]
+
+        allPlayers.forEach(player => {
+            if (!merged.find(i => i.player_id === player.player_id)) {
+                // Add synthetic "accepted" invite for this confirmed player
+                merged.push({
+                    invite_id: `confirmed-${player.player_id}`,
+                    match_id: match.match_id,
+                    player_id: player.player_id,
+                    status: 'accepted',
+                    sent_at: match.created_at,
+                    responded_at: match.created_at,
+                    player: player
+                })
+            }
+        })
+
+        // Sort: Accepted first, then by sent_at
+        return merged.sort((a, b) => {
+            if (a.status === 'accepted' && b.status !== 'accepted') return -1
+            if (a.status !== 'accepted' && b.status === 'accepted') return 1
+            return new Date(b.sent_at || 0).getTime() - new Date(a.sent_at || 0).getTime()
+        })
+    }, [invites, allPlayers, match?.match_id, match?.created_at])
 
     // Effect to handle default collapse state
     useEffect(() => {
@@ -504,12 +543,7 @@ export default function MatchDetailPage() {
         )
     }
 
-    const allPlayers = [
-        ...(match.team_1_player_details || []),
-        ...(match.team_2_player_details || [])
-    ]
 
-    const formattedTime = formatLocalizedTime(match.scheduled_time, match.clubs?.timezone)
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -535,6 +569,11 @@ export default function MatchDetailPage() {
                                     }`}>
                                     {match.status}
                                 </span>
+                                {match.player_groups?.name && (
+                                    <span className="px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                        Group: {match.player_groups.name}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex items-center gap-4 text-sm text-gray-500">
                                 <span className="flex items-center gap-1.5 font-medium">
@@ -1101,8 +1140,8 @@ export default function MatchDetailPage() {
                                             )}
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {invites.length > 0 ? (
-                                                    invites.map(invite => {
+                                                {displayInvites.length > 0 ? (
+                                                    displayInvites.map(invite => {
                                                         const config = statusConfig[invite.status] || statusConfig.sent
                                                         return (
                                                             <div key={invite.invite_id} className="group relative flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-indigo-100 hover:shadow-md transition-all">
