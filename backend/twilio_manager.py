@@ -114,6 +114,10 @@ def provision_group_number(group_id, phone_number):
 def provision_club_number(club_id, phone_number):
     """Purchase a number and link it to the club and messaging service."""
     client = get_twilio_client()
+    print(f"[DEBUG] Provisioning club {club_id} number {phone_number}")
+    print(f"[DEBUG] Global webhook_url: {webhook_url}")
+    print(f"[DEBUG] Global messaging_service_sid: {messaging_service_sid}")
+    
     if not client:
         return False, "Twilio configuration error"
     
