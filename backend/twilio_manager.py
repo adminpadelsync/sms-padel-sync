@@ -2,10 +2,10 @@ import os
 from twilio.rest import Client
 from database import supabase
 
-account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-messaging_service_sid = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
-webhook_url = os.environ.get("TWILIO_WEBHOOK_URL")
+account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+auth_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+messaging_service_sid = os.environ.get("TWILIO_MESSAGING_SERVICE_SID", "").strip()
+webhook_url = os.environ.get("TWILIO_WEBHOOK_URL", "").strip()
 
 def get_twilio_client():
     if not account_sid or not auth_token:
@@ -115,8 +115,9 @@ def provision_club_number(club_id, phone_number):
     """Purchase a number and link it to the club and messaging service."""
     client = get_twilio_client()
     print(f"[DEBUG] Provisioning club {club_id} number {phone_number}")
-    print(f"[DEBUG] Global webhook_url: {webhook_url}")
-    print(f"[DEBUG] Global messaging_service_sid: {messaging_service_sid}")
+    # Fetch and sanitize config
+    webhook_url = os.environ.get("TWILIO_WEBHOOK_URL", "").strip()
+    messaging_service_sid = os.environ.get("TWILIO_MESSAGING_SERVICE_SID", "").strip()
     
     if not client:
         return False, "Twilio configuration error"
