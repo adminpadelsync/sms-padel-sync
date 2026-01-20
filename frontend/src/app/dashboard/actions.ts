@@ -107,38 +107,64 @@ export async function createPlayer(data: {
         throw new Error('No club associated with user')
     }
 
-    const { data: newPlayerData, error: createError } = await supabase
+    const { data: existingPlayer } = await supabase
         .from('players')
-        .insert({
-            name: data.name,
-            phone_number: data.phone_number,
-            declared_skill_level: data.declared_skill_level,
-            adjusted_skill_level: data.declared_skill_level,
-            gender: data.gender,
-            club_id: club_id,
-            active_status: data.active_status ?? true,
-            avail_weekday_morning: data.avail_weekday_morning ?? false,
-            avail_weekday_afternoon: data.avail_weekday_afternoon ?? false,
-            avail_weekday_evening: data.avail_weekday_evening ?? false,
-            avail_weekend_morning: data.avail_weekend_morning ?? false,
-            avail_weekend_afternoon: data.avail_weekend_afternoon ?? false,
-            avail_weekend_evening: data.avail_weekend_evening ?? false,
-        })
-        .select()
-        .single()
+        .select('player_id')
+        .eq('phone_number', data.phone_number)
+        .maybeSingle()
 
-    if (createError) {
-        console.error('Error creating player:', createError)
-        throw createError
+    let playerId: string
+
+    if (existingPlayer) {
+        playerId = existingPlayer.player_id
+    } else {
+        const { data: newPlayerData, error: createError } = await supabase
+            .from('players')
+            .insert({
+                name: data.name,
+                phone_number: data.phone_number,
+                declared_skill_level: data.declared_skill_level,
+                adjusted_skill_level: data.declared_skill_level,
+                gender: data.gender,
+                active_status: data.active_status ?? true,
+                avail_weekday_morning: data.avail_weekday_morning ?? false,
+                avail_weekday_afternoon: data.avail_weekday_afternoon ?? false,
+                avail_weekday_evening: data.avail_weekday_evening ?? false,
+                avail_weekend_morning: data.avail_weekend_morning ?? false,
+                avail_weekend_afternoon: data.avail_weekend_afternoon ?? false,
+                avail_weekend_evening: data.avail_weekend_evening ?? false,
+            })
+            .select()
+            .single()
+
+        if (createError) {
+            console.error('Error creating player:', createError)
+            throw createError
+        }
+        playerId = newPlayerData.player_id
     }
 
-    // Record Initial History
+    // 2. Add to club_members
+    const { error: memberError } = await supabase
+        .from('club_members')
+        .upsert({
+            player_id: playerId,
+            club_id: club_id,
+        })
+
+    if (memberError) {
+        console.error('Error adding player to club:', memberError)
+        throw memberError
+    }
+
+    // 3. Record Rating History (only if new or if level changed significantly)
+    // For simplicity, always record if it's a manual creation
     await supabase.from('player_rating_history').insert({
-        player_id: newPlayerData.player_id,
+        player_id: playerId,
         new_elo_rating: (data.declared_skill_level * 400) + 500,
         new_sync_rating: data.declared_skill_level,
-        change_type: 'onboarding',
-        notes: 'Manually created via dashboard'
+        change_type: existingPlayer ? 'manual_adjustment' : 'onboarding',
+        notes: existingPlayer ? 'Added to club via dashboard' : 'Manually created via dashboard'
     })
 
     revalidatePath('/dashboard')

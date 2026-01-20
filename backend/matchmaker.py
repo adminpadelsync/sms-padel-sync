@@ -1,7 +1,8 @@
 from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta, timezone
-from logic_utils import is_quiet_hours, parse_iso_datetime, get_now_utc, format_sms_datetime
+import pytz
+from logic_utils import is_quiet_hours, parse_iso_datetime, get_now_utc, format_sms_datetime, get_club_timezone
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
 
@@ -291,8 +292,9 @@ def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
             except:
                 pass
 
+        organizer_name = requester['name'] if requester else "An organizer"
         return (
-            f"🎾 {club_name}: {requester['name']} wants to play on {day_str}.\n"
+            f"🎾 {club_name}: {organizer_name} wants to play on {day_str}.\n"
             f"Options:\n{opt_str}"
             f"Reply with letter(s) (e.g. 'A' or 'AB') to vote."
         )
@@ -305,7 +307,7 @@ def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
             time_str = match['scheduled_time']
         
         organizer_name = requester['name'] if requester else "An organizer"
-        skill_str = f" ({requester['declared_skill_level']})" if requester else ""
+        skill_str = f" ({requester.get('declared_skill_level', '')})" if requester and requester.get('declared_skill_level') else ""
 
         return (
             f"🎾 {club_name}: {organizer_name}{skill_str} wants to play "
@@ -349,6 +351,7 @@ def process_batch_refills():
     # We only refill if refilled_at is NULL
     stale_invites = supabase.table("match_invites").select("invite_id, match_id, player_id, batch_number")\
         .eq("status", "sent")\
+        .not_.is_("match_id", "null")\
         .filter("expires_at", "lt", now)\
         .is_("refilled_at", "null")\
         .execute()
@@ -500,7 +503,10 @@ def process_pending_matches():
     
     # --- Part 1: Dispatch pending_sms invites ---
     # Find all pending_sms invites
-    pending_invites = supabase.table("match_invites").select("*, players(phone_number, name)").eq("status", "pending_sms").execute()
+    pending_invites = supabase.table("match_invites").select("*, players(phone_number, name)")\
+        .eq("status", "pending_sms")\
+        .not_.is_("match_id", "null")\
+        .execute()
     
     total_dispatched = 0
     if pending_invites.data:
@@ -524,12 +530,16 @@ def process_pending_matches():
                 from logic_utils import get_match_participants
                 parts = get_match_participants(match_id)
                 req_id = parts["team_1"][0] if parts["team_1"] else m_data.get("originator_id")
-                req_res = supabase.table("players").select("*").eq("player_id", req_id).execute()
-                if not req_res.data: continue
+                
+                requester = None
+                if req_id:
+                    req_res = supabase.table("players").select("*").eq("player_id", req_id).execute()
+                    if req_res.data:
+                        requester = req_res.data[0]
                 
                 matches_cache[match_id] = {
                     "match": m_data,
-                    "requester": req_res.data[0],
+                    "requester": requester,
                     "club_name": m_data.get("clubs", {}).get("name") or "the club"
                 }
 
@@ -544,9 +554,11 @@ def process_pending_matches():
                 # Update status to 'sent' and refresh expires_at
                 # Use club settings for timeout
                 invite_timeout = INVITE_TIMEOUT_MINUTES
-                club_res = supabase.table("clubs").select("settings").eq("club_id", m_info["match"].get("club_id")).execute()
-                if club_res.data:
-                    invite_timeout = (club_res.data[0].get("settings") or {}).get("invite_timeout_minutes", INVITE_TIMEOUT_MINUTES)
+                c_id = m_info["match"].get("club_id")
+                if c_id:
+                    club_res = supabase.table("clubs").select("settings").eq("club_id", c_id).execute()
+                    if club_res.data:
+                        invite_timeout = (club_res.data[0].get("settings") or {}).get("invite_timeout_minutes", INVITE_TIMEOUT_MINUTES)
                 
                 new_expires_at = (get_now_utc() + timedelta(minutes=invite_timeout)).isoformat()
                 
@@ -563,7 +575,11 @@ def process_pending_matches():
                 # (Can implement a flag in match or just check if it's the first invite in this batch)
 
     # --- Part 2: Start matches with NO invites ---
-    matches = supabase.table("matches").select("match_id, status").in_("status", ["pending", "voting"]).execute()
+    matches = supabase.table("matches").select("match_id, status")\
+        .in_("status", ["pending", "voting"])\
+        .not_.is_("match_id", "null")\
+        .not_.is_("scheduled_time", "null")\
+        .execute()
     
     total_new_starts = 0
     if matches.data:

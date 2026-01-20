@@ -586,6 +586,8 @@ async def get_players(request: Request, user: UserContext = Depends(get_current_
             print(f"DEBUG: Applying club_id filter via club_members: {club_id}")
             members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
             member_ids = [m["player_id"] for m in (members_res.data or [])]
+            if not member_ids:
+                return {"players": []}
             query = query.in_("player_id", member_ids)
         
         result = query.eq("active_status", True).order("name").execute()
