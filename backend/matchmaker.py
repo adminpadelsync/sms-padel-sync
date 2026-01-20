@@ -267,6 +267,11 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             print(f"Error inviting {p['name']}: {e}")
             continue
     
+    # If this is the first batch and we couldn't find at least 3 people
+    # (to make 4 total), check if we should notify about a deadpool.
+    if batch_number == 1 and not skip_filters and invite_count < 3:
+        _check_match_deadpool(match_id)
+        
     return invite_count
 
 
@@ -426,8 +431,6 @@ def _check_match_deadpool(match_id: str):
         return
 
     target_group_id = match.get("target_group_id")
-    if not target_group_id:
-        return
 
     # 2. Count current players and active invites
     parts_res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).execute()
@@ -484,11 +487,19 @@ def _check_match_deadpool(match_id: str):
             if club_res.data:
                 club_name = club_res.data["name"]
 
-        sms_msg = msg.MSG_DEADPOOL_NOTIFICATION.format(
-            club_name=club_name,
-            group_name=group_name,
-            time=time_str
-        )
+        if target_group_id:
+            # Group-to-Club broadening message
+            sms_msg = msg.MSG_DEADPOOL_NOTIFICATION.format(
+                club_name=club_name,
+                group_name=group_name,
+                time=time_str
+            )
+        else:
+            # Club-wide level range broadening message
+            sms_msg = msg.MSG_DEADPOOL_CLUB_WIDE.format(
+                club_name=club_name,
+                time=time_str
+            )
         
         send_sms(originator["phone_number"], sms_msg, club_id=club_id)
         set_user_state(originator["phone_number"], msg.STATE_DEADPOOL_REFILL, {"match_id": match_id})

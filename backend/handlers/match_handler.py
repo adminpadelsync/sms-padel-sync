@@ -534,13 +534,13 @@ def _create_match(
             elif skip_filters and group_name:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_GROUP.format(
                     club_name=get_club_name(), 
-                    time=friendly_time, 
+                    time=friendly_time or scheduled_time_human, 
                     count=max(0, count),
                     group_name=group_name
                 ), club_id=player["club_id"])
             else:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_CONFIRMED.format(
-                    club_name=get_club_name(), time=friendly_time, count=max(0, count)
+                    club_name=get_club_name(), time=friendly_time or scheduled_time_human, count=max(0, count)
                 ), club_id=player["club_id"])
         else:
             send_sms(from_number, msg.MSG_MATCH_TRIGGER_FAIL, club_id=player.get("club_id"))
@@ -642,6 +642,62 @@ def _handle_range_match(from_number: str, date_str: str, player: dict):
 
     except ValueError:
         send_sms(from_number, msg.MSG_INVALID_RANGE_FORMAT, club_id=player.get("club_id"))
+        
+def handle_deadpool_response(from_number: str, body: str, player: dict, state_data: dict, cid: str = None):
+    """
+    Handle response to a broad-search/deadpool nudge.
+    If YES:
+      - If match was group-targeted: clear target_group_id (broaden to club).
+      - If match was club-wide: expand the level range by 0.25 on each side.
+    """
+    response = body.strip().lower()
+    match_id = state_data.get("match_id")
+    
+    if any(word in response for word in ["yes", "y", "sure", "broaden", "ok"]):
+        # Fetch match details to know how to broaden
+        match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+        if not match_res.data:
+            send_sms(from_number, "I couldn't find that match anymore.", club_id=cid or player.get("club_id"))
+            clear_user_state(from_number)
+            return
+            
+        match = match_res.data[0]
+        updates = {}
+        msg_text = ""
+        
+        target_group_id = match.get("target_group_id")
+        if target_group_id:
+            # Broaden from group to club
+            updates["target_group_id"] = None
+            msg_text = "Got it! Expanding the search to the entire club. Inviting more players now..."
+        else:
+            # Broaden level range
+            l_min = match.get("level_range_min") or 3.0
+            l_max = match.get("level_range_max") or 4.0
+            new_min = max(2.0, l_min - 0.25)
+            new_max = min(5.5, l_max + 0.25)
+            
+            updates["level_range_min"] = new_min
+            updates["level_range_max"] = new_max
+            msg_text = f"Expanding your skill range to {new_min}-{new_max}. Inviting more players now..."
+            
+        # Apply updates
+        supabase.table("matches").update(updates).eq("match_id", match_id).execute()
+        
+        # Notify user and re-trigger matchmaker
+        send_sms(from_number, f"🎾 {msg_text}", club_id=cid or player.get("club_id"))
+        
+        from matchmaker import find_and_invite_players
+        find_and_invite_players(match_id)
+        
+        clear_user_state(from_number)
+        
+    elif any(word in response for word in ["no", "n", "cancel", "nope"]):
+        send_sms(from_number, "No problem, we'll keep the current settings. Good luck!", club_id=cid or player.get("club_id"))
+        clear_user_state(from_number)
+    else:
+        send_sms(from_number, "I didn't quite catch that. Reply YES to broaden the search, or NO to stick with the current settings.", club_id=cid or player.get("club_id"))
+
 
 
 

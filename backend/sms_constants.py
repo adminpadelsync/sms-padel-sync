@@ -100,6 +100,10 @@ MSG_DEADPOOL_NOTIFICATION = (
     "🎾 {club_name}: It looks like we've run out of players in the '{group_name}' group who can play at {time}.\n\n"
     "Would you like to broaden the search and invite everyone in the club? (Reply YES to broaden, or NO to cancel)"
 )
+MSG_DEADPOOL_CLUB_WIDE = (
+    "🎾 {club_name}: I'm struggling to find enough players for {time} within your skill range.\n\n"
+    "Would you like to broaden your level range to ±0.50 and try again? (Reply YES to broaden, or NO to cancel)"
+)
 
 # Group Management
 MSG_ASK_GROUPS_ONBOARDING = "Would you like to join any player groups? (Reply with numbers, e.g. 1 3, or SKIP)\n\n{groups_list}"

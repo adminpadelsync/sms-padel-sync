@@ -151,9 +151,9 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
             
             # Check if match is already full
             if current_players >= 4:
-                # Mark invite as expired so we don't keep picking it up
+                # We no longer mark as 'expired' - we just inform them it's full.
+                # The invite remains 'sent' in the DB.
                 supabase.table("match_invites").update({
-                    "status": "expired",
                     "responded_at": get_now_utc().isoformat()
                 }).eq("invite_id", invite["invite_id"]).execute()
                 
@@ -239,11 +239,9 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                     "confirmed_at": get_now_utc().isoformat()
                 }).eq("match_id", match_id).execute()
 
-                # Mark all other invites for this match as expired so they don't show up in dashboard/refills
-                supabase.table("match_invites").update({"status": "expired"})\
-                    .eq("match_id", match_id)\
-                    .in_("status", ["sent", "pending_sms"])\
-                    .execute()
+                # No longer marking others as expired. 
+                # They stay 'sent' but the match status 'confirmed' will prevent joins.
+                pass
                 
                 # Fetch updated match for player list and time
                 updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
@@ -328,9 +326,8 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
     elif match["status"] == "confirmed":
         # Match is already confirmed - handle late responses
         if cmd == "yes":
-            # Mark this invite as expired so we don't keep picking it up
+            # Just record the response time, don't change status to expired
             supabase.table("match_invites").update({
-                "status": "expired",
                 "responded_at": get_now_utc().isoformat()
             }).eq("invite_id", invite["invite_id"]).execute()
             

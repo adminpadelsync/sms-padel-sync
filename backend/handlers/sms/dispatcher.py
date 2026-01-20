@@ -240,9 +240,10 @@ class IntentDispatcher:
             elif current_state == msg.STATE_MATCH_GROUP_SELECTION:
                 handle_group_selection(from_number, body, player, state_data, entities, cid=cid)
                 return
-            elif current_state == "DEADPOOL_REFILL": # msg.STATE_DEADPOOL_REFILL
-                # Dead pool logic
-                pass # Implement inline or helper
+            elif current_state == msg.STATE_DEADPOOL_REFILL:
+                from handlers.match_handler import handle_deadpool_response
+                handle_deadpool_response(from_number, body, player, state_data, cid)
+                return
             elif current_state == msg.STATE_WAITING_FEEDBACK:
                 handle_feedback_response(from_number, body, player, state_data, cid=cid)
                 return
