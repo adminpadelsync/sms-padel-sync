@@ -117,10 +117,17 @@ export async function createPlayer(data: {
 
     if (existingPlayer) {
         playerId = existingPlayer.player_id
+        console.log('Found existing player by phone number:', playerId)
     } else {
-        const { data: newPlayerData, error: createError } = await supabase
+        // Create new player if they don't exist
+        // Generate UUID manually to avoid needing to .select() it back (which can hit RLS Select policies)
+        playerId = crypto.randomUUID()
+        console.log('Creating new universal player with ID:', playerId)
+
+        const { error: createError } = await supabase
             .from('players')
             .insert({
+                player_id: playerId,
                 name: data.name,
                 phone_number: data.phone_number,
                 declared_skill_level: data.declared_skill_level,
@@ -134,14 +141,11 @@ export async function createPlayer(data: {
                 avail_weekend_afternoon: data.avail_weekend_afternoon ?? false,
                 avail_weekend_evening: data.avail_weekend_evening ?? false,
             })
-            .select()
-            .single()
 
         if (createError) {
-            console.error('Error creating player:', createError)
+            console.error('Error creating player in database:', createError)
             throw createError
         }
-        playerId = newPlayerData.player_id
     }
 
     // 2. Add to club_members
