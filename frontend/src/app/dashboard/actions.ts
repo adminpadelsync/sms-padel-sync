@@ -107,7 +107,14 @@ export async function createPlayer(data: {
         throw new Error('No club associated with user')
     }
 
-    const { data: existingPlayer } = await supabase
+    // Use admin client for players table operations because players are universal
+    // and a club admin might not have RLS permission to see a player who exists 
+    // but isn't yet in their club.
+    const { createAdminClient } = await import('@/utils/supabase/admin')
+    const adminSupabase = createAdminClient()
+
+    // Check if player already exists by phone number (using admin to bypass RLS)
+    const { data: existingPlayer } = await adminSupabase
         .from('players')
         .select('player_id')
         .eq('phone_number', data.phone_number)
@@ -117,14 +124,13 @@ export async function createPlayer(data: {
 
     if (existingPlayer) {
         playerId = existingPlayer.player_id
-        console.log('Found existing player by phone number:', playerId)
+        console.log('Found existing player by phone number (via admin):', playerId)
     } else {
         // Create new player if they don't exist
-        // Generate UUID manually to avoid needing to .select() it back (which can hit RLS Select policies)
         playerId = crypto.randomUUID()
-        console.log('Creating new universal player with ID:', playerId)
+        console.log('Creating new universal player with ID (via admin):', playerId)
 
-        const { error: createError } = await supabase
+        const { error: createError } = await adminSupabase
             .from('players')
             .insert({
                 player_id: playerId,
@@ -143,7 +149,7 @@ export async function createPlayer(data: {
             })
 
         if (createError) {
-            console.error('Error creating player in database:', createError)
+            console.error('Error creating player via admin:', createError)
             throw createError
         }
     }
