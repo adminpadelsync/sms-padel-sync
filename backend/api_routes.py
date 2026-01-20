@@ -403,20 +403,28 @@ async def create_user_admin(request: UserCreateRequest, user: UserContext = Depe
 async def delete_user_admin(user_id: str, user: UserContext = Depends(require_superuser)):
     """Permanently delete a user from Auth and public tables."""
     try:
-        # Note: supabase.auth.admin.delete_user will trigger ON DELETE CASCADE 
-        # for our public.users and public.user_clubs tables.
-        res = supabase.auth.admin.delete_user(user_id)
+        # 1. Try to delete from Auth
+        try:
+            supabase.auth.admin.delete_user(user_id)
+            print(f"User {user_id} deleted from Auth.")
+        except Exception as auth_e:
+            # If user not found in Auth, they might already be gone (orphaned)
+            # We continue to ensure public tables are cleaned up.
+            print(f"Auth delete note for {user_id}: {str(auth_e)}")
+
+        # 2. Explicitly delete from public tables just in case CASCADE is missing/broken
+        # This is especially important in Test environments where migrations might be inconsistent.
+        supabase.table("user_clubs").delete().eq("user_id", user_id).execute()
+        supabase.table("users").delete().eq("user_id", user_id).execute()
         
-        # res has no .data or .error in the current supabase-py admin response, 
-        # it just returns the user or raises an Exception.
-        print(f"User {user_id} deleted from Auth and public tables.")
+        print(f"User {user_id} and assignments deleted from public tables.")
         
         return {
             "success": True,
             "message": f"User {user_id} deleted successfully."
         }
     except Exception as e:
-        print(f"Error deleting user {user_id}: {str(e)}")
+        print(f"Error during user deletion {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
