@@ -1874,12 +1874,16 @@ async def mark_message_read(message_id: str, user: UserContext = Depends(get_cur
 async def post_sms_inbox(message: InboxMessage, user: UserContext = Depends(get_current_user)):
     """Simulate an incoming SMS (test mode)."""
     from sms_handler import handle_incoming_sms
+    from twilio_client import set_force_test_mode
+    
     # Default to first club's number if not specified
     to_number = message.to_number
     if not to_number:
         club_res = supabase.table("clubs").select("phone_number").limit(1).execute()
         to_number = club_res.data[0]["phone_number"] if club_res.data else None
     
+    # Force test mode so all replies are trapped in sms_outbox
+    set_force_test_mode(True)
     handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
 

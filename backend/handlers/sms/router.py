@@ -17,6 +17,9 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
     booking_system = "Playtomic"
 
     # Set reply-from context early if possible
+    from twilio_client import normalize_phone_number
+    to_number = normalize_phone_number(to_number)
+    
     if to_number:
         set_reply_from(to_number)
 
@@ -30,7 +33,7 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
             
             # If to_number was missing, try to set it from club record
             if not to_number:
-                to_number = club_data.get("phone_number")
+                to_number = normalize_phone_number(club_data.get("phone_number"))
                 if to_number:
                     set_reply_from(to_number)
         return (club_id, club_name, group_id, group_name, booking_system)
@@ -61,17 +64,16 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
             return (str(c["club_id"]), c["name"], None, None, c.get("booking_system") or "Playtomic")
         
         # Unknown/Unconfigured Number
-        print(f"[ERROR] SMS received on unknown Twilio number {to_number}. No club context found.")
-        return (None, "the club", None, None, "Playtomic")
+        print(f"[WARNING] SMS received on unknown Twilio number {to_number}. Falling back to first available club.")
 
-    # 3. Fallback (Only if to_number was NOT provided - e.g. manual trigger without number context)
-    if not to_number:
-        fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
-        if fallback.data:
-            c = fallback.data[0]
-            return (str(c["club_id"]), c.get("name", "the club"), None, None, c.get("booking_system") or "Playtomic")
+    # 3. Fallback (If no club found by to_number, or to_number missing)
+    fallback = supabase.table("clubs").select("club_id, name, booking_system").limit(1).execute()
+    if fallback.data:
+        c = fallback.data[0]
+        return (str(c["club_id"]), c.get("name", "Padel Sync Club"), None, None, c.get("booking_system") or "Playtomic")
     
-    # 4. Total failure
+    # 4. Total failure (No clubs in DB at all)
+    print(f"[CRITICAL] No clubs found in database. Cannot resolve context.")
     return (None, "the club", None, None, "Playtomic")
 
 

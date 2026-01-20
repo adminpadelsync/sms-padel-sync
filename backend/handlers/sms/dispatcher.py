@@ -32,6 +32,10 @@ class IntentDispatcher:
         if dry_run:
             set_dry_run(True)
 
+        from twilio_client import normalize_phone_number
+        from_number = normalize_phone_number(from_number)
+        to_number = normalize_phone_number(to_number)
+
         intent = "UNKNOWN"
         confidence = 0.0
         entities = {}

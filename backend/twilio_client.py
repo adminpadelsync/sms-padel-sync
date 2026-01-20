@@ -15,6 +15,7 @@ default_from_number = os.environ.get("TWILIO_PHONE_NUMBER")
 _reply_from_context: ContextVar[str] = ContextVar("_reply_from_context", default=None)
 _club_name_context: ContextVar[str] = ContextVar("_club_name_context", default=None)
 _dry_run_context: ContextVar[bool] = ContextVar("_dry_run_context", default=False)
+_force_test_mode_context: ContextVar[bool] = ContextVar("_force_test_mode_context", default=False)
 _dry_run_responses: ContextVar[List[dict]] = ContextVar("_dry_run_responses", default=[])
 def set_reply_from(phone_number: str):
     """Set the reply-from phone number for the current request context."""
@@ -53,7 +54,31 @@ def get_dry_run_responses() -> List[dict]:
     return _dry_run_responses.get()
 
 
+def set_force_test_mode(enabled: bool):
+    """Force test mode for the current context (traps SMS in outbox)."""
+    _force_test_mode_context.set(enabled)
 
+
+def get_force_test_mode() -> bool:
+    """Check if force test mode is enabled."""
+    return _force_test_mode_context.get()
+
+
+
+
+
+def normalize_phone_number(phone: str) -> str:
+    """Standardize phone numbers to +1XXXXXXXXXX format."""
+    if not phone:
+        return phone
+    clean = phone.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if clean.startswith("+"):
+        return clean
+    if clean.startswith("1") and len(clean) == 11:
+        return "+" + clean
+    if len(clean) == 10:
+        return "+1" + clean
+    return clean
 
 
 def store_in_outbox(to_number: str, body: str) -> bool:
@@ -94,11 +119,7 @@ def send_sms(to_number: str, body: str, reply_from: str = None, club_id: str = N
         raise ValueError("CRITICAL: send_sms called without club_id. All SMS must be tied to a club.")
 
     # Normalize to_number (ensure consistent format for simulator matching)
-    to_number = to_number.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    if to_number.startswith("1") and len(to_number) == 11:
-        to_number = "+" + to_number
-    elif not to_number.startswith("+"):
-        to_number = "+1" + to_number
+    to_number = normalize_phone_number(to_number)
 
     # Priority: explicit reply_from > context variable > club-specific lookup > default from env
     send_from = reply_from or get_reply_from()
@@ -150,8 +171,8 @@ def send_sms(to_number: str, body: str, reply_from: str = None, club_id: str = N
         return True
 
     # Full test mode: store all messages in outbox
-    if current_test_mode:
-        print(f"[SMS DEBUG] Routing to outbox (test_mode=True)")
+    if current_test_mode or get_force_test_mode():
+        print(f"[SMS DEBUG] Routing to outbox (test_mode={current_test_mode}, force_test_mode={get_force_test_mode()})")
         return store_in_outbox(to_number, body)
     
     # Whitelist mode: only send real SMS to whitelisted numbers
