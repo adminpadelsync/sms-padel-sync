@@ -326,11 +326,16 @@ async def create_user_admin(request: UserCreateRequest, user: UserContext = Depe
                 final_redirect = f"{base_url.rstrip('/')}/auth/setup-password"
                 print(f"DEBUG: INVITE_FLOW: Using base_url='{base_url}' -> final_redirect='{final_redirect}'")
                 
-                # Use only the standard redirectTo key for modern Supabase-py
-                auth_res = supabase.auth.admin.invite_user_by_email(request.email, {
+                # Use BOTH snake_case and camelCase to be absolutely safe across all auth client versions
+                # Also include final_redirect in the print to verify it's what we expect
+                options = {
                     "data": {"role": request.role},
+                    "redirect_to": final_redirect,
                     "redirectTo": final_redirect
-                })
+                }
+                print(f"DEBUG: INVITE_FLOW: Calling invite_user_by_email with options: {options}")
+                
+                auth_res = supabase.auth.admin.invite_user_by_email(request.email, options)
                 if auth_res.user:
                     new_user_id = auth_res.user.id
                     print(f"Invitation sent. User ID: {new_user_id}")
