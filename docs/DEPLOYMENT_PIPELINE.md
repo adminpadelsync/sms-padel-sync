@@ -72,6 +72,7 @@ The live system on `main`.
 | **Backend** | Preview | `TWILIO_WEBHOOK_URL` | `https://backend-git-preview-*.vercel.app/api/webhook/sms` |
 | **Backend** | All | `TWILIO_MESSAGING_SERVICE_SID` | `MG316cc77e9ef996c55d81a96c7cb0d06d` |
 | **Frontend** | Preview | `NEXT_PUBLIC_API_URL` | `https://backend-git-preview-*.vercel.app` |
+| **Frontend** | All | `SUPABASE_SERVICE_ROLE_KEY` | (Supabase Service Role Secret) |
 
 > [!CAUTION]
 > **Leading Tabs/Spaces**: Always ensure your environment variables (especially SIDs) do not have accidental spaces or tab characters at the beginning. The backend now performs automatic cleaning, but best practice is to keep the dashboard clean.
