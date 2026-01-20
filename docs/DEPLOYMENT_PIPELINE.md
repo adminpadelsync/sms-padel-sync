@@ -40,9 +40,13 @@ Used for testing real SMS flows and compliance before going live.
 2. Vercel generates unique URLs for Frontend and Backend.
 3. **Align Environment Variables** in the Vercel Dashboard:
     - **Frontend Preview**: `NEXT_PUBLIC_API_URL` -> Your **Backend Preview** URL.
+    - **Backend Preview**: `API_BASE_URL` -> Your **Frontend Preview** URL.
     - **Backend Preview**: `TWILIO_WEBHOOK_URL` -> Your **Backend Preview** URL + `/api/webhook/sms`.
     - **Backend Preview**: `TWILIO_MESSAGING_SERVICE_SID` -> `MG316cc77e9ef996c55d81a96c7cb0d06d`.
-4. **Provision**: Click "Provision Number" in your Preview Dashboard. The system will automatically:
+4. **Supabase Whitelisting**:
+    - Go to Supabase Dashboard (Test Project) > Authentication > URL Configuration.
+    - Add your **Frontend Preview URL** to the **Redirect URIs** (e.g., `https://*-preview-*.vercel.app/**`).
+5. **Provision**: Click "Provision Number" in your Preview Dashboard.
     - Purchase a number.
     - Register it for A2P compliance.
     - Point it to your specific Preview backend URL.

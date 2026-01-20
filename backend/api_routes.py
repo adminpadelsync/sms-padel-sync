@@ -323,7 +323,7 @@ async def create_user_admin(request: UserCreateRequest, user: UserContext = Depe
                 
                 # Ensure we have a valid setup-password path
                 redirect_url = f"{base_url.rstrip('/')}/auth/setup-password"
-                print(f"DEBUG: Invitation Redirect URL: {redirect_url}")
+                print(f"DEBUG: INVITE_FLOW: Using base_url='{base_url}' -> final_redirect='{redirect_url}'")
                 
                 # Revert to positional dictionary with both keys (known working method for token delivery)
                 auth_res = supabase.auth.admin.invite_user_by_email(request.email, {
