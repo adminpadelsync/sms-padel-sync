@@ -158,7 +158,7 @@ export default function SMSSimulatorPage() {
 
     const checkBackendHealth = useCallback(async () => {
         try {
-            const response = await authFetch('/api/ping')
+            const response = await authFetch('/api/simulator-check')
             setBackendHealthy(response.ok)
         } catch (error) {
             console.error('Backend health check failed:', error)

@@ -1882,3 +1882,9 @@ async def post_sms_inbox(message: InboxMessage, user: UserContext = Depends(get_
     
     handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
+
+@router.get("/simulator-check")
+@router.get("/simulator-check/")
+async def simulator_check():
+    """Health check for the simulator."""
+    return {"status": "ok", "service": "SMS Padel Sync Backend"}
