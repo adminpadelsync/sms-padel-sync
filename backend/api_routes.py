@@ -86,7 +86,7 @@ class InviteUserRequest(BaseModel):
 
 class UserCreateRequest(BaseModel):
     email: str
-    password: str
+    password: Optional[str] = None
     role: str = "club_admin"
     club_ids: List[str] = []
     send_email: bool = True

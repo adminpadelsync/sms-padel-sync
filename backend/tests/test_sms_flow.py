@@ -1,16 +1,16 @@
+def mock_send_sms(to, body, **kwargs):
+    print(f"\n[SMS to {to}]: {body} | kwargs: {kwargs}")
+
+# Monkey patch send_sms BEFORE importing anything else
+import twilio_client
+twilio_client.send_sms = mock_send_sms
+
 import time
 from sms_handler import handle_incoming_sms
 from redis_client import clear_user_state
 from database import supabase
 
 TEST_PHONE = "+15559998888"
-
-def mock_send_sms(to, body):
-    print(f"\n[SMS to {to}]: {body}")
-
-# Monkey patch send_sms for testing
-import twilio_client
-twilio_client.send_sms = mock_send_sms
 
 def test_flow():
     print("--- Starting SMS Flow Test ---")
@@ -19,9 +19,11 @@ def test_flow():
     # Delete Match Feedback (Foreign key dependency)
     supabase.table("match_feedback").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
     supabase.table("feedback_requests").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
+    # Delete Rating History (FK dependency)
+    supabase.table("player_rating_history").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
     # Delete Player Compatibility (FK dependency)
     supabase.table("player_compatibility").delete().neq("player_1_id", "00000000-0000-0000-0000-000000000000").execute()
-    # Delete match_participations (Phase 3 future proofing)
+    # Delete match_participations (FK dependency)
     supabase.table("match_participations").delete().neq("match_id", "00000000-0000-0000-0000-000000000000").execute()
     
     # Delete Invites
@@ -83,26 +85,27 @@ def test_flow():
         
         # 9. Verify Match
         print("\n--- Verifying Database (Match) ---")
-        # Fetch latest match for this player
-        # We need to query matches where team_1_players contains player_id
-        # Supabase/PostgREST syntax for array contains is 'cs' (contains)
-        matches_res = supabase.table("matches").select("*").contains("team_1_players", [p["player_id"]]).execute()
+        # Fetch latest match for this player via match_participations
+        parts_res = supabase.table("match_participations") \
+            .select("match_id, matches(*)") \
+            .eq("player_id", p["player_id"]) \
+            .order("created_at", desc=True) \
+            .limit(1) \
+            .execute()
         
-        if matches_res.data:
-            m = matches_res.data[-1] # Get last one
-            print(f"SUCCESS: Match created!")
+        if parts_res.data:
+            match_data = parts_res.data[0]
+            m = match_data["matches"]
+            print(f"SUCCESS: Match found via participations!")
             print(f"Match ID: {m['match_id']}")
             print(f"Scheduled: {m['scheduled_time']}")
             print(f"Status: {m['status']}")
             
-            # Phase 3 Verification
-            parts_res = supabase.table("match_participations").select("*").eq("match_id", m['match_id']).execute()
-            if parts_res.data:
-                print(f"SUCCESS: match_participations has {len(parts_res.data)} rows.")
-            else:
-                print("FAILURE: match_participations is empty.")
+            # Additional Verification
+            all_parts = supabase.table("match_participations").select("*").eq("match_id", m['match_id']).execute()
+            print(f"SUCCESS: match_participations has {len(all_parts.data)} rows for this match.")
         else:
-            print("FAILURE: Match not found")
+            print("FAILURE: Match participation not found")
 
     else:
         print("FAILURE: Player not found in DB")

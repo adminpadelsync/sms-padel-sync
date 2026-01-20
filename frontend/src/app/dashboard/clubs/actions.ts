@@ -113,31 +113,32 @@ export async function createClub(data: CreateClubData) {
             }
         }
 
-        // 4. Assign initial admin (defaults to current user if no email provided)
+        // 4. Assign initial admin (invites if they don't exist)
         const targetEmail = data.admin_email || user.email
         if (targetEmail) {
             try {
-                // Find user in users table (synced from Auth)
-                const { data: targetUser } = await supabase
-                    .from('users')
-                    .select('user_id')
-                    .eq('email', targetEmail)
-                    .single()
+                const baseUrl = await getBaseUrl()
+                const { data: { session } } = await supabase.auth.getSession()
+                const token = session?.access_token
 
-                if (targetUser) {
-                    const { error: userClubError } = await supabase
-                        .from('user_clubs')
-                        .upsert({
-                            user_id: targetUser.user_id,
-                            club_id: club.club_id,
-                            role: 'club_admin'
-                        })
+                const inviteRes = await fetch(`${baseUrl}/api/admin/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {})
+                    },
+                    body: JSON.stringify({
+                        email: targetEmail,
+                        role: 'club_admin',
+                        club_ids: [club.club_id],
+                        send_email: true
+                    })
+                })
 
-                    if (userClubError) {
-                        console.error('Error assigning initial manager:', userClubError)
-                    }
-                } else {
-                    console.warn(`Initial manager email ${targetEmail} not found in users table. Skipping assignment.`)
+                if (!inviteRes.ok) {
+                    const errBody = await inviteRes.text()
+                    console.error(`Failed to invite/assign admin (${inviteRes.status}):`, errBody)
                 }
             } catch (err) {
                 console.error('Failed to process initial manager assignment:', err)

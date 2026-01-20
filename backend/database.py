@@ -5,8 +5,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database initialization
-url: str = (os.environ.get("SUPABASE_URL") or "").strip()
-key: str = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+def get_config_var(name: str) -> str:
+    if os.environ.get("TESTING") == "true":
+        test_val = os.environ.get(f"{name}_TEST")
+        if test_val:
+            return test_val.strip()
+    return (os.environ.get(name) or "").strip()
+
+url: str = get_config_var("SUPABASE_URL")
+key: str = get_config_var("SUPABASE_SERVICE_ROLE_KEY")
 
 if not url:
     print("Warning: SUPABASE_URL not set")
