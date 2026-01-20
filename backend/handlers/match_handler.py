@@ -670,12 +670,17 @@ def handle_deadpool_response(from_number: str, body: str, player: dict, state_da
             # Broaden from group to club
             updates["target_group_id"] = None
             msg_text = "Got it! Expanding the search to the entire club. Inviting more players now..."
+        elif any(word in response for word in ["all levels", "all", "everybody", "everyone"]):
+            # Extreme broadening
+            updates["level_range_min"] = 2.5
+            updates["level_range_max"] = 5.0
+            msg_text = "Expanding search to ALL skill levels. Inviting more players now..."
         else:
             # Broaden level range
-            l_min = match.get("level_range_min") or 3.0
+            l_min = match.get("level_range_min") or 4.0
             l_max = match.get("level_range_max") or 4.0
-            new_min = max(2.0, l_min - 0.25)
-            new_max = min(5.5, l_max + 0.25)
+            new_min = max(2.5, l_min - 0.50) # Use 0.50 for more meaningful broadening
+            new_max = min(5.0, l_max + 0.50)
             
             updates["level_range_min"] = new_min
             updates["level_range_max"] = new_max

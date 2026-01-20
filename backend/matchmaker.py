@@ -141,12 +141,12 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
 
         # Exclude players already in match
         if p_id in players_in_match:
-            print(f"[DEBUG]   Excluded: Already in match")
+            print(f"[DEBUG]   Excluded {p_name}: Already in match")
             continue
         
         # Exclude already invited
         if p_id in already_invited:
-            print(f"[DEBUG]   Excluded: Already invited")
+            print(f"[DEBUG]   Excluded {p_name}: Already invited")
             continue
         
         # Check if player is muted
@@ -429,6 +429,18 @@ def _check_match_deadpool(match_id: str):
     
     if match["status"] not in ["pending", "voting"]:
         return
+
+    # Check if originator is already in a deadpool refill state - if so, don't nudge again immediately
+    originator_id = match.get("originator_id")
+    if originator_id:
+        orig_res = supabase.table("players").select("phone_number").eq("player_id", originator_id).execute()
+        if orig_res.data:
+            from redis_client import get_user_state
+            from sms_constants import STATE_DEADPOOL_REFILL
+            state = get_user_state(orig_res.data[0]["phone_number"])
+            if state and state.get("state") == STATE_DEADPOOL_REFILL:
+                print(f"Skipping deadpool nudge for match {match_id} - originator already in refill state.")
+                return
 
     target_group_id = match.get("target_group_id")
 
