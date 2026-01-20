@@ -443,20 +443,24 @@ def _check_match_deadpool(match_id: str):
     if needed <= 0:
         return
 
-    # 3. Check remaining eligible members in group
-    # Get group members
-    group_res = supabase.table("group_memberships").select("player_id").eq("group_id", target_group_id).execute()
-    group_member_ids = {row["player_id"] for row in (group_res.data or [])}
+    # 3. Check remaining eligible members
+    if target_group_id:
+        # Get group members
+        group_res = supabase.table("group_memberships").select("player_id").eq("group_id", target_group_id).execute()
+        pool_ids = {row["player_id"] for row in (group_res.data or [])}
+    else:
+        # For club-wide, pool is effectively empty since matchmaking already failed
+        pool_ids = set()
     
-    # Get all involvements (in match, invited, or declined/expired)
+    # Get all involvements (in match, invited, or declined)
     involvement_res = supabase.table("match_invites").select("player_id, status").eq("match_id", match_id).execute()
     already_involved = {inv["player_id"] for inv in (involvement_res.data or [])}
     already_involved.update({row["player_id"] for row in (parts_res.data or [])})
     
-    pool = [pid for pid in group_member_ids if pid not in already_involved]
+    pool = [pid for pid in pool_ids if pid not in already_involved]
     
     if len(pool) < needed:
-        print(f"Match {match_id} in deadpool! Needed {needed}, only {len(pool)} left in group.")
+        print(f"Match {match_id} in deadpool! Needed {needed}, only {len(pool)} left in pool.")
         
         # Notify originator
         originator_id = match.get("originator_id")
@@ -468,24 +472,26 @@ def _check_match_deadpool(match_id: str):
             return
         originator = orig_res.data[0]
         
-        # Get group name
-        g_name_res = supabase.table("player_groups").select("name").eq("group_id", target_group_id).maybe_single().execute()
-        group_name = g_name_res.data["name"] if g_name_res.data else "the group"
-        
-        # Format time
-        try:
-            scheduled_dt = parse_iso_datetime(match['scheduled_time'])
-            time_str = format_sms_datetime(scheduled_dt, club_id=club_id)
-        except:
-            time_str = "your requested time"
+        # Get group name if applicable
+        group_name = "the group"
+        if target_group_id:
+            g_name_res = supabase.table("player_groups").select("name").eq("group_id", target_group_id).maybe_single().execute()
+            group_name = g_name_res.data["name"] if g_name_res.data else "the group"
 
-        # Get club name
+        # Get club name & ID
         club_name = "the club"
         club_id = match.get("club_id")
         if club_id:
             club_res = supabase.table("clubs").select("name").eq("club_id", club_id).maybe_single().execute()
             if club_res.data:
                 club_name = club_res.data["name"]
+
+        # Format time
+        try:
+            scheduled_dt = parse_iso_datetime(match['scheduled_time'])
+            time_str = format_sms_datetime(scheduled_dt, club_id=club_id)
+        except:
+            time_str = "your requested time"
 
         if target_group_id:
             # Group-to-Club broadening message
@@ -503,6 +509,7 @@ def _check_match_deadpool(match_id: str):
         
         send_sms(originator["phone_number"], sms_msg, club_id=club_id)
         set_user_state(originator["phone_number"], msg.STATE_DEADPOOL_REFILL, {"match_id": match_id})
+
 
 
 def process_pending_matches():

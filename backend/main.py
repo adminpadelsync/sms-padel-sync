@@ -88,6 +88,7 @@ class InboxMessage(BaseModel):
 # SMS test mode routes - path depends on environment
 
 @app.get(f"{api_prefix}/sms-outbox")
+@app.get(f"{api_prefix}/sms-outbox/")
 async def get_sms_outbox(phone_number: Optional[str] = None):
     """
     Get pending outbound SMS messages (test mode only).
