@@ -91,6 +91,10 @@ const nextConfig: NextConfig = {
         source: '/api/training/:path*',
         destination: `${targetUrl}/api/training/:path*`,
       },
+      {
+        source: '/api/simulator-check',
+        destination: `${targetUrl}/api/simulator-check`,
+      },
     ]
   },
 };
