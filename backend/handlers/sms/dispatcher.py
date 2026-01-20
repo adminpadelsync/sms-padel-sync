@@ -188,12 +188,26 @@ class IntentDispatcher:
             if not current_state:
                 if not cid:
                     print(f"[DISPATCHER] Unknown club context for number {to_number}. Likely environment mismatch.")
-                    # We can't send a helpful SMS because send_sms requires a club_id
-                    # But if we really want to be helpful, we could try to send one using a system ID if we had one
                     return
 
                 if player and player.get("is_member"): return
                 
+                # UNIVERSAL PLAYER: If they already exist in the system, just add them to this club
+                if player:
+                    print(f"[DISPATCHER] Player {from_number} exists, adding to club {cid}")
+                    try:
+                        supabase.table("club_members").insert({
+                            "club_id": cid,
+                            "player_id": player["player_id"]
+                        }).execute()
+                        
+                        welcome_back = msg.MSG_PROFILE_UPDATE_DONE.format(club_name=cname)
+                        send_sms(from_number, welcome_back, club_id=cid)
+                        return
+                    except Exception as e:
+                        print(f"[DISPATCHER] Error adding existing player to club: {e}")
+                
+                # Truly new player - start onboarding
                 send_sms(from_number, msg.MSG_WELCOME_NEW.format(club_name=cname, booking_system=booking_sys), club_id=cid)
                 set_user_state(from_number, msg.STATE_WAITING_NAME, {"club_id": cid, "club_name": cname})
                 return
