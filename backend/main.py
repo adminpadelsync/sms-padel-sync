@@ -50,9 +50,7 @@ api_prefix = "/api"
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
-@app.get("/api/health")
-@app.get("/api/health/")
-async def root():
+async def app_root():
     return {"status": "healthy", "service": "SMS Padel Sync API"}
 
 # Important: Import modules AFTER settings is defined and before include_router
@@ -99,8 +97,8 @@ async def debug_routing(request: Request):
         "query_params": str(request.query_params)
     }
 
-@app.get(f"{api_prefix}/debug-routes")
-async def debug_routes():
+@app.get("/api/debug-routes")
+async def list_app_routes():
     routes = []
     for route in app.routes:
         methods = getattr(route, "methods", None)
