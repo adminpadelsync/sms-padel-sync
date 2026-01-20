@@ -93,6 +93,13 @@ def send_sms(to_number: str, body: str, reply_from: str = None, club_id: str = N
         # User requested a hard fail if club_id is missing to avoid hidden fallbacks
         raise ValueError("CRITICAL: send_sms called without club_id. All SMS must be tied to a club.")
 
+    # Normalize to_number (ensure consistent format for simulator matching)
+    to_number = to_number.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if to_number.startswith("1") and len(to_number) == 11:
+        to_number = "+" + to_number
+    elif not to_number.startswith("+"):
+        to_number = "+1" + to_number
+
     # Priority: explicit reply_from > context variable > club-specific lookup > default from env
     send_from = reply_from or get_reply_from()
     

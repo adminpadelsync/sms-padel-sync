@@ -2,9 +2,6 @@ import os
 from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
-import api_routes
-# Import training_routes later to avoid circular dependencies
-# import training_routes
 
 class Settings(BaseSettings):
     app_name: str = "Padel Sync API"
@@ -49,77 +46,35 @@ app.add_middleware(
 # Use a fixed /api prefix for all routes to match Next.js rewrites perfectly.
 api_prefix = "/api"
 
+# Standard health routes (must be before prefix routes if we want to avoid conflicts, but prefix /api matches first)
+@app.get("/")
+@app.get("/api")
+@app.get("/api/")
+@app.get("/api/health")
+@app.get("/api/health/")
+async def root():
+    return {"status": "healthy", "service": "SMS Padel Sync API"}
+
+# Important: Import modules AFTER settings is defined and before include_router
+import api_routes
 import analytics_routes
 import training_routes
 
+# Include routers
 app.include_router(api_routes.router, prefix=api_prefix)
 app.include_router(analytics_routes.router, prefix=f"{api_prefix}/insights")
 app.include_router(training_routes.router, prefix=api_prefix)
 
-@app.get("/")
-@app.get("/api")
-@app.get("/api/health")
-async def root():
-    return {"status": "healthy", "service": "SMS Padel Sync API"}
-
-from sms_handler import handle_incoming_sms
-
 @app.post(f"{api_prefix}/webhook/sms")
+@app.post(f"{api_prefix}/webhook/sms/")
 async def sms_webhook(From: str = Form(...), Body: str = Form(...), To: str = Form(...)):
     """
     Handle incoming SMS from Twilio.
     Twilio sends data as form-encoded.
     To = the Twilio number that received the SMS (determines which club)
     """
+    from sms_handler import handle_incoming_sms
     handle_incoming_sms(From, Body, To)
-    return {"status": "success"}
-
-# --- SMS Test Mode Endpoints ---
-from database import supabase
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
-
-class InboxMessage(BaseModel):
-    from_number: str
-    body: str
-    to_number: Optional[str] = None  # Club's Twilio number (optional for backward compat)
-
-# SMS test mode routes - path depends on environment
-
-@app.get(f"{api_prefix}/sms-outbox")
-@app.get(f"{api_prefix}/sms-outbox/")
-async def get_sms_outbox(phone_number: Optional[str] = None):
-    """
-    Get pending outbound SMS messages (test mode only).
-    Optionally filter by phone_number.
-    """
-    query = supabase.table("sms_outbox").select("*").is_("read_at", "null").order("created_at", desc=False)
-    if phone_number:
-        query = query.eq("to_number", phone_number)
-    result = query.execute()
-    return {"messages": result.data}
-
-@app.post(f"{api_prefix}/sms-outbox/{{message_id}}/read")
-async def mark_message_read(message_id: str):
-    """Mark a message as read."""
-    from logic_utils import get_now_utc
-    supabase.table("sms_outbox").update({"read_at": get_now_utc().isoformat()}).eq("id", message_id).execute()
-    return {"status": "ok"}
-
-@app.post(f"{api_prefix}/sms-inbox")
-async def post_sms_inbox(message: InboxMessage):
-    """
-    Simulate an incoming SMS (test mode).
-    Calls the same handler as the Twilio webhook.
-    """
-    # Default to first club's number if not specified (backward compat)
-    to_number = message.to_number
-    if not to_number:
-        club_res = supabase.table("clubs").select("phone_number").limit(1).execute()
-        to_number = club_res.data[0]["phone_number"] if club_res.data else None
-    
-    handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
 
 @app.api_route(f"{api_prefix}/cron/recalculate-scores", methods=["GET", "POST"])
@@ -128,12 +83,10 @@ async def trigger_score_recalculation_direct():
     from fastapi import HTTPException
     import traceback
     try:
-        print("DEBUG: Direct cron endpoint hit")
         from score_calculator import recalculate_player_scores
         count = recalculate_player_scores()
         return {"message": f"Scores recalculated successfully for {count} players (DIRECT)"}
     except Exception as e:
-        print(f"DEBUG: Direct cron error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -143,20 +96,14 @@ async def debug_routing(request: Request):
         "root_path": request.scope.get("root_path"),
         "path": request.scope.get("path"),
         "method": request.method,
-        "raw_path": request.scope.get("raw_path").decode() if request.scope.get("raw_path") else None,
-        "is_vercel": os.environ.get('VERCEL')
+        "query_params": str(request.query_params)
     }
 
-@app.api_route(f"{api_prefix}/debug-routes", methods=["GET"])
-async def list_routes():
+@app.get(f"{api_prefix}/debug-routes")
+async def debug_routes():
     routes = []
     for route in app.routes:
-        if hasattr(route, "path"):
-             routes.append({
-                 "path": route.path,
-                 "name": route.name,
-                 "methods": list(route.methods) if hasattr(route, "methods") else None
-             })
-    return {"cnt": len(routes), "routes": routes}
-
-
+        methods = getattr(route, "methods", None)
+        path = getattr(route, "path", None)
+        routes.append(f"{methods} {path}")
+    return {"routes": routes}

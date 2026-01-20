@@ -1843,3 +1843,42 @@ async def release_club_number(club_id: str, user: UserContext = Depends(require_
         raise HTTPException(status_code=500, detail=result)
     
     return {"status": "success", "message": result}
+
+
+# --- SMS Simulator Test Routes ---
+class InboxMessage(BaseModel):
+    from_number: str
+    body: str
+    to_number: Optional[str] = None
+
+@router.get("/sms-outbox")
+@router.get("/sms-outbox/")
+async def get_sms_outbox(phone_number: Optional[str] = None, user: UserContext = Depends(get_current_user)):
+    """Get pending outbound SMS messages (test mode only)."""
+    query = supabase.table("sms_outbox").select("*").is_("read_at", "null").order("created_at", desc=False)
+    if phone_number:
+        query = query.eq("to_number", phone_number)
+    result = query.execute()
+    return {"messages": result.data}
+
+@router.post("/sms-outbox/{message_id}/read")
+@router.post("/sms-outbox/{message_id}/read/")
+async def mark_message_read(message_id: str, user: UserContext = Depends(get_current_user)):
+    """Mark a message as read."""
+    from logic_utils import get_now_utc
+    supabase.table("sms_outbox").update({"read_at": get_now_utc().isoformat()}).eq("id", message_id).execute()
+    return {"status": "ok"}
+
+@router.post("/sms-inbox")
+@router.post("/sms-inbox/")
+async def post_sms_inbox(message: InboxMessage, user: UserContext = Depends(get_current_user)):
+    """Simulate an incoming SMS (test mode)."""
+    from sms_handler import handle_incoming_sms
+    # Default to first club's number if not specified
+    to_number = message.to_number
+    if not to_number:
+        club_res = supabase.table("clubs").select("phone_number").limit(1).execute()
+        to_number = club_res.data[0]["phone_number"] if club_res.data else None
+    
+    handle_incoming_sms(message.from_number, message.body, to_number)
+    return {"status": "success"}

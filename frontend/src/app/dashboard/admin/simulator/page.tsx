@@ -72,6 +72,16 @@ export default function SMSSimulatorPage() {
     const [groups, setGroups] = useState<Group[]>([])
     // Track selected "to number" per player (player_id -> phone_number)
     const [playerToNumberSelection, setPlayerToNumberSelection] = useState<Record<string, string>>({})
+    const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null)
+
+    // Helper to normalize phone numbers for comparison
+    const normalizePhone = (phone: string) => {
+        if (!phone) return ''
+        const digits = phone.replace(/\D/g, '')
+        if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+        if (digits.length === 10) return `+1${digits}`
+        return `+${digits}`
+    }
 
     const fetchPlayers = useCallback(async () => {
         try {
@@ -146,12 +156,23 @@ export default function SMSSimulatorPage() {
         }
     }, [])
 
+    const checkBackendHealth = useCallback(async () => {
+        try {
+            const response = await authFetch('/api/health')
+            setBackendHealthy(response.ok)
+        } catch (error) {
+            console.error('Backend health check failed:', error)
+            setBackendHealthy(false)
+        }
+    }, [])
+
     // Fetch players, clubs, and confirmed matches on mount
     useEffect(() => {
         fetchPlayers()
         fetchClubs()
         fetchConfirmedMatches()
-    }, [fetchPlayers, fetchClubs, fetchConfirmedMatches])
+        checkBackendHealth()
+    }, [fetchPlayers, fetchClubs, fetchConfirmedMatches, checkBackendHealth])
 
     useEffect(() => {
         if (currentClubId) {
@@ -172,7 +193,9 @@ export default function SMSSimulatorPage() {
 
                     // Group messages by phone number and add to conversations
                     for (const msg of messages) {
-                        const player = selectedPlayers.find(p => p.phone_number === msg.to_number)
+                        const normalizedTarget = normalizePhone(msg.to_number)
+                        const player = selectedPlayers.find(p => normalizePhone(p.phone_number) === normalizedTarget)
+
                         if (player) {
                             const newMessage: Message = {
                                 id: msg.id,
@@ -191,8 +214,13 @@ export default function SMSSimulatorPage() {
                                 }
                             })
 
-                            // Mark as read
-                            await authFetch(`/api/sms-outbox/${msg.id}/read`, { method: 'POST' })
+                            // Mark as read - use the new slash-resilient route
+                            try {
+                                const readRes = await authFetch(`/api/sms-outbox/${msg.id}/read/`, { method: 'POST' })
+                                if (!readRes.ok) console.error(`Failed to mark message ${msg.id} as read: ${readRes.status}`)
+                            } catch (e) {
+                                console.error(`Error marking message ${msg.id} as read:`, e)
+                            }
                         }
                     }
                 }
@@ -781,8 +809,11 @@ Example: MAYBE 1`
                     <div className="flex items-center gap-3 mb-2">
                         <h1 className="text-2xl font-bold text-gray-900">SMS Testing Simulator</h1>
                         {testMode && (
-                            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                                🔗 Backend Connected
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${backendHealthy === true ? 'bg-green-100 text-green-800' :
+                                backendHealthy === false ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                {backendHealthy === true ? '🔗 Backend Connected' :
+                                    backendHealthy === false ? '❌ Backend Unreachable' : '⏳ Checking Backend...'}
                             </span>
                         )}
                     </div>
@@ -931,7 +962,7 @@ Example: MAYBE 1`
                                     clubs={clubs}
                                     groups={groups.filter(g => !!g.phone_number)}
                                     selectedToNumber={playerToNumberSelection[player.player_id]}
-                                    onToNumberChange={(num: string) => setPlayerToNumberSelection(prev => ({ ...prev, [player.player_id]: num }))}
+                                    onToNumberChange={(num: string) => setPlayerToNumberSelection((prev: Record<string, string>) => ({ ...prev, [player.player_id]: num }))}
                                 />
                             </div>
                         ))}
