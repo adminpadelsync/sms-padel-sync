@@ -1,19 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
+/**
+ * Creates a Supabase client with the service role key to bypass RLS.
+ * This should ONLY be used in Server Actions or API routes.
+ */
 export function createAdminClient() {
-    // Check for TESTING flag to determine which environment keys to use
-    const isTesting = process.env.TESTING === 'true' || process.env.NEXT_PUBLIC_TESTING === 'true'
-
-    const url = isTesting
-        ? (process.env.SUPABASE_URL_TEST || process.env.NEXT_PUBLIC_SUPABASE_URL_TEST || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
-        : (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
-
-    const key = isTesting
-        ? (process.env.SUPABASE_SERVICE_ROLE_KEY_TEST || process.env.SUPABASE_SERVICE_ROLE_KEY)
-        : process.env.SUPABASE_SERVICE_ROLE_KEY
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!url || !key) {
-        console.error(`CRITICAL: Missing Supabase Admin Configuration! (Mode: ${isTesting ? 'TEST' : 'PROD'})`)
+        console.error('CRITICAL: Missing Supabase Admin Configuration!')
         throw new Error('Missing Supabase Service Role Key')
     }
 

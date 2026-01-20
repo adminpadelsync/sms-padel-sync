@@ -50,6 +50,9 @@ Used for testing real SMS flows and compliance before going live.
     - Purchase a number.
     - Register it for A2P compliance.
     - Point it to your specific Preview backend URL.
+6. **Service Role Key**: Go to **Settings > Environment Variables**.
+    - Add `SUPABASE_SERVICE_ROLE_KEY` with the **Test** project secret.
+    - Select **Preview** and **Development** environment scopes.
 
 ---
 
@@ -62,6 +65,9 @@ The live system on `main`.
     - `TWILIO_MESSAGING_SERVICE_SID`: `MG316cc77e9ef996c55d81a96c7cb0d06d`
     - `NEXT_PUBLIC_API_URL`: `https://padelsync.com`
 3. **Security**: Vercel Authentication can remain **Enabled** for Production because custom domains (like padelsync.com) are automatically excluded from protection.
+4. **Service Role Key**: Go to **Settings > Environment Variables**.
+    - Add `SUPABASE_SERVICE_ROLE_KEY` with the **Production** project secret. 
+    - Ensure it is only available in the **Production** environment scope.
 
 ---
 
