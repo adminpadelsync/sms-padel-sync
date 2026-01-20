@@ -315,21 +315,21 @@ async def create_user_admin(request: UserCreateRequest, user: UserContext = Depe
         if request.send_email:
             # Invitation Mode: Supabase sends a native email, user sets password on click
             try:
-                print(f"Sending invitation email to {request.email}...")
+                print(f"DEBUG: INVITE_REQUEST: email={request.email}, redirect_url={request.redirect_url}")
                 from main import settings
+                
                 # Prioritize redirect_url from request, fallback to settings
                 fallback_base = settings.api_base_url
-                base_url = request.redirect_url or fallback_base
+                base_url = request.redirect_url if request.redirect_url else fallback_base
                 
                 # Ensure we have a valid setup-password path
-                redirect_url = f"{base_url.rstrip('/')}/auth/setup-password"
-                print(f"DEBUG: INVITE_FLOW: Using base_url='{base_url}' -> final_redirect='{redirect_url}'")
+                final_redirect = f"{base_url.rstrip('/')}/auth/setup-password"
+                print(f"DEBUG: INVITE_FLOW: Using base_url='{base_url}' -> final_redirect='{final_redirect}'")
                 
-                # Revert to positional dictionary with both keys (known working method for token delivery)
+                # Use only the standard redirectTo key for modern Supabase-py
                 auth_res = supabase.auth.admin.invite_user_by_email(request.email, {
                     "data": {"role": request.role},
-                    "redirect_to": redirect_url,
-                    "redirectTo": redirect_url
+                    "redirectTo": final_redirect
                 })
                 if auth_res.user:
                     new_user_id = auth_res.user.id

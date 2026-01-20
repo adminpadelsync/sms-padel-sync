@@ -123,9 +123,12 @@ export async function createClub(data: CreateClubData) {
 
                 // Get the current frontend URL for the invite redirect
                 const { headers } = await import('next/headers')
-                const host = (await headers()).get('host')
-                const protocol = (await headers()).get('x-forwarded-proto') || 'https'
-                let frontendUrl = host ? `${protocol}://${host}` : null
+                const head = await headers()
+                const host = head.get('x-forwarded-host') || head.get('host')
+                const protocol = head.get('x-forwarded-proto') || 'https'
+                const frontendUrl = host ? `${protocol}://${host}` : null
+
+                console.log(`[createClub] Detected Frontend URL: ${frontendUrl} (from host: ${host}, protocol: ${protocol})`)
 
                 const inviteRes = await fetch(`${baseUrl}/api/admin/users`, {
                     method: 'POST',
@@ -142,6 +145,8 @@ export async function createClub(data: CreateClubData) {
                         redirect_url: frontendUrl
                     })
                 })
+
+                console.log(`[createClub] Invite Response Status: ${inviteRes.status}`)
 
                 if (!inviteRes.ok) {
                     const errBody = await inviteRes.text()
