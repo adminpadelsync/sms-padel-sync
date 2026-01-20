@@ -133,7 +133,8 @@ export default function UserManagementPage() {
                     email: inviteEmail,
                     password: invitePassword,
                     club_ids: selectedClubIds,
-                    send_email: sendWelcomeEmail
+                    send_email: sendWelcomeEmail,
+                    redirect_url: window.location.origin
                 })
             })
 

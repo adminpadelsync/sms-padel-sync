@@ -90,6 +90,7 @@ class UserCreateRequest(BaseModel):
     role: str = "club_admin"
     club_ids: List[str] = []
     send_email: bool = True
+    redirect_url: Optional[str] = None
 
 @router.get("/clubs")
 @router.get("/clubs/")
@@ -316,7 +317,12 @@ async def create_user_admin(request: UserCreateRequest, user: UserContext = Depe
             try:
                 print(f"Sending invitation email to {request.email}...")
                 from main import settings
-                redirect_url = f"{settings.api_base_url}/auth/setup-password"
+                # Prioritize redirect_url from request, fallback to settings
+                fallback_base = settings.api_base_url
+                base_url = request.redirect_url or fallback_base
+                
+                # Ensure we have a valid setup-password path
+                redirect_url = f"{base_url.rstrip('/')}/auth/setup-password"
                 print(f"DEBUG: Invitation Redirect URL: {redirect_url}")
                 
                 # Revert to positional dictionary with both keys (known working method for token delivery)

@@ -121,6 +121,11 @@ export async function createClub(data: CreateClubData) {
                 const { data: { session } } = await supabase.auth.getSession()
                 const token = session?.access_token
 
+                // Get the current frontend URL for the invite redirect
+                const { headers } = await import('next/headers')
+                const origin = (await headers()).get('origin') || (await headers()).get('referer')
+                let frontendUrl = origin ? new URL(origin).origin : null
+
                 const inviteRes = await fetch(`${baseUrl}/api/admin/users`, {
                     method: 'POST',
                     headers: {
@@ -132,7 +137,8 @@ export async function createClub(data: CreateClubData) {
                         email: targetEmail,
                         role: 'club_admin',
                         club_ids: [club.club_id],
-                        send_email: true
+                        send_email: true,
+                        redirect_url: frontendUrl
                     })
                 })
 
