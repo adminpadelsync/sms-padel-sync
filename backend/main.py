@@ -50,6 +50,10 @@ api_prefix = "/api"
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
+@app.get("/api/health")
+@app.get("/api/health/")
+@app.get("/api/ping")
+@app.get("/api/ping/")
 async def app_root():
     return {"status": "healthy", "service": "SMS Padel Sync API"}
 

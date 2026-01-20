@@ -1882,9 +1882,3 @@ async def post_sms_inbox(message: InboxMessage, user: UserContext = Depends(get_
     
     handle_incoming_sms(message.from_number, message.body, to_number)
     return {"status": "success"}
-
-@router.get("/health")
-@router.get("/health/")
-async def api_health():
-    """Health check for the API."""
-    return {"status": "healthy", "service": "SMS Padel Sync API"}
