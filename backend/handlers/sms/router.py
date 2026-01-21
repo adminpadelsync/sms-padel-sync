@@ -40,8 +40,15 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
 
     # 2. Lookup by To-Number (Group or Club)
     if to_number:
+        import re
+        digits = re.sub(r'\D', '', to_number)
+        last_10_to = digits[-10:] if len(digits) >= 10 else digits
+
         # Check Group Number
-        group_res = supabase.table("player_groups").select("group_id, club_id, name").eq("phone_number", to_number).execute()
+        group_res = supabase.table("player_groups").select("group_id, club_id, name") \
+            .or_(f"phone_number.eq.{to_number},phone_number.ilike.%{last_10_to}") \
+            .execute()
+            
         if group_res.data:
             group = group_res.data[0]
             group_id = group["group_id"]
@@ -58,7 +65,10 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
             return (str(club_id), club_name, str(group_id), group_name, booking_system)
         
         # Check Club Number
-        club_res = supabase.table("clubs").select("club_id, name, booking_system").eq("phone_number", to_number).execute()
+        club_res = supabase.table("clubs").select("club_id, name, booking_system") \
+            .or_(f"phone_number.eq.{to_number},phone_number.ilike.%{last_10_to}") \
+            .execute()
+            
         if club_res.data:
             c = club_res.data[0]
             return (str(c["club_id"]), c["name"], None, None, c.get("booking_system") or "Playtomic")
