@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
     ChevronDown,
@@ -128,6 +128,7 @@ export default function MatchDetailPage() {
     const [demoCollapsed, setDemoCollapsed] = useState<boolean>(false)
     const [resultsCollapsed, setResultsCollapsed] = useState<boolean>(true)
     const [feedbackCollapsed, setFeedbackCollapsed] = useState<boolean>(true)
+    const initializedMatchId = useRef<string | null>(null)
 
     // Nudge/Resend states
     const [resendingResult, setResendingResult] = useState(false)
@@ -173,9 +174,9 @@ export default function MatchDetailPage() {
         })
     }, [invites, allPlayers, match?.match_id, match?.created_at])
 
-    // Effect to handle default collapse state
+    // Effect to handle default collapse state - only runs once per match ID
     useEffect(() => {
-        if (match) {
+        if (match && initializedMatchId.current !== match.match_id) {
             if (isPast) {
                 setDemoCollapsed(true)
                 setResultsCollapsed(false)
@@ -185,6 +186,7 @@ export default function MatchDetailPage() {
                 setResultsCollapsed(true)
                 setFeedbackCollapsed(true)
             }
+            initializedMatchId.current = match.match_id
         }
     }, [match, isPast])
 

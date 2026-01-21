@@ -143,6 +143,9 @@ class IntentDispatcher:
                     elif intent == "DECLINE_INVITE" and confidence > 0.8:
                         handle_invite_response(from_number, "no", player, all_sent_invites[0])
                         return
+                    elif intent == "DECLINE_WITH_ALTERNATIVE" and confidence > 0.8:
+                        handle_invite_response(from_number, "no", player, all_sent_invites[0], entities=entities)
+                        return
 
                 # Normal Commands
                 if cmd == "reset":

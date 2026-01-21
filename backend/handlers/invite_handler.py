@@ -23,7 +23,7 @@ def notify_maybe_players(match_id: str, joiner_name: str, spots_left: int):
     except Exception as e:
         print(f"Error notifying maybe players: {e}")
 
-def handle_invite_response(from_number: str, body: str, player: dict, invite: dict):
+def handle_invite_response(from_number: str, body: str, player: dict, invite: dict, entities: dict = None):
     """
     Handle a response to a match invite.
     args:
@@ -42,11 +42,41 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
     
     if cmd == "no":
         # Decline
-        supabase.table("match_invites").update({
+        update_data = {
             "status": "declined", 
             "responded_at": get_now_utc().isoformat()
-        }).eq("invite_id", invite["invite_id"]).execute()
-        send_sms(from_number, msg.MSG_DECLINE, club_id=player.get("club_id"))
+        }
+        
+        # Capture suggested time if provided
+        suggested_time = None
+        if entities and "suggested_time" in entities:
+            # Need to parse this time. handle_match_request uses date_parser, but we can try basic parsing here
+            # Or just store the raw text if we want to let the AI handle it later
+            # For data integrity, let's try to normalize it if possible
+            suggested_time_raw = entities["suggested_time"]
+            from handlers.match_handler import parse_date_with_base
+            from datetime import datetime
+            
+            # Use match scheduled_time as base_dt to get the correct day
+            match_res = supabase.table("matches").select("scheduled_time").eq("match_id", match_id).execute()
+            base_dt = parse_iso_datetime(match_res.data[0]["scheduled_time"]) if match_res.data else get_now_utc()
+            
+            # Normalize to UTC before storing
+            parsed_dt = parse_date_with_base(suggested_time_raw, base_dt, player.get("club_id"))
+            if parsed_dt:
+                update_data["suggested_time"] = parsed_dt.isoformat()
+                suggested_time = parsed_dt
+
+        supabase.table("match_invites").update(update_data).eq("invite_id", invite["invite_id"]).execute()
+        
+        if suggested_time:
+            # Localize for the message
+            friendly_time = format_sms_datetime(suggested_time, club_id=player.get("club_id"))
+            decline_msg = f"No problem! I've noted that you're free at {friendly_time} instead. We'll let you know if we shift the match!"
+        else:
+            decline_msg = msg.MSG_DECLINE
+
+        send_sms(from_number, decline_msg, club_id=player.get("club_id"))
         
         # Immediately invite a replacement player
         from matchmaker import invite_replacement_player

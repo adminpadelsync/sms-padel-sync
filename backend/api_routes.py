@@ -1063,7 +1063,7 @@ async def trigger_result_nudges():
 @router.api_route("/cron/invite-timeout", methods=["GET", "POST"])
 async def process_invite_timeouts():
     """Cron endpoint to process batch refills and send replacements."""
-    from matchmaker import process_batch_refills, process_pending_matches
+    from matchmaker import process_batch_refills, process_pending_matches, process_last_call_flash
     try:
         # 1. Process batch refills (next batch logic)
         new_invites = process_batch_refills()
@@ -1071,8 +1071,11 @@ async def process_invite_timeouts():
         # 2. Process pending matches with no active invites (catch-up logic)
         catch_up_invites = process_pending_matches()
         
+        # 3. Process Last Call flashes (urgency logic)
+        flash_count = process_last_call_flash()
+        
         return {
-            "message": f"Processed invites: {new_invites} batch refills, {catch_up_invites} catch-up invites sent."
+            "message": f"Processed invites: {new_invites} batch refills, {catch_up_invites} catch-up, {flash_count} last call flashes."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

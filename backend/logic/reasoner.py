@@ -58,6 +58,7 @@ Current User Profile: {user_profile}
 - team_a: e.g., ["Me", "Dave"] (List of names for the winning team).
 - team_b: e.g., ["Sarah", "Mike"] (List of names for the losing team).
 - court_text: e.g., "Court 6", "Court 4", "Indoor 2" (name or number of the booked court).
+- suggested_time: e.g., "7pm", "18:00", "tomorrow morning" (suggested alternative time when declining).
 
 ### Instructions for Generating Reply:
 - If the intent is GREETING, respond warmly and ask how you can help.
@@ -72,6 +73,7 @@ Current User Profile: {user_profile}
 - Be concise, friendly, and act like a helpful Padel club manager.
 - ALWAYS use the player's name if provided in the profile.
 - If there is a "Pending Context" regarding a match invite, prioritize ACCEPT_INVITE or DECLINE_INVITE intents for responses like "Yes", "No", "I'm in", etc.
+- If the user declines but suggests another time (e.g. "No, but I can do 7pm"), use intent DECLINE_WITH_ALTERNATIVE and extract the suggested_time.
 - Never say "Yes to what?" if there is an obvious pending invite or match context. Be proactive and assume they are responding to the most recent relevant event in the context.
 
 ### Output Format:

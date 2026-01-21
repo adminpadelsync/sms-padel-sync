@@ -2,6 +2,7 @@ from database import supabase
 from twilio_client import send_sms
 from datetime import datetime, timedelta, timezone
 import pytz
+import random
 from logic_utils import is_quiet_hours, parse_iso_datetime, get_now_utc, format_sms_datetime, get_club_timezone
 from redis_client import clear_user_state, set_user_state
 import sms_constants as msg
@@ -12,7 +13,7 @@ BATCH_SIZE = 6  # Number of invites to send at a time
 INVITE_TIMEOUT_MINUTES = 15  # Time before invite expires
 
 
-def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False, target_player_ids: list[str] = None):
+def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False, target_player_ids: list[str] = None, is_reschedule: bool = False):
     """
     Finds compatible players for a match and sends SMS invites in batches.
     
@@ -231,22 +232,21 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
             "p_invite_score": p.get("_invite_score"),
             "p_score_breakdown": p.get("_score_breakdown")
         }
-        
         try:
             rpc_res = supabase.rpc("attempt_insert_invite", rpc_params).execute()
             result = rpc_res.data
             
             if result == 'SUCCESS':
                 if not is_quiet:
-                    sms_msg = _build_invite_sms(match, requester, club_name)
-                    send_sms(p["phone_number"], sms_msg, club_id=club_id)
+                    # PHASE 4: Single build step for SMS
+                    sms = _build_invite_sms(match, requester, club_name, is_reschedule=is_reschedule)
+                    send_sms(p["phone_number"], sms, club_id=club_id)
                     
                     # CLEAR STATE so they don't get stuck in old feedback loops
                     clear_user_state(p["phone_number"])
                 
                 invite_count += 1
                 print(f"{'Created' if is_quiet else 'Invited'} {p['name']} ({p['phone_number']}) - Status: {invite_status}")
-            
             elif result == 'MATCH_FULL':
                 print(f"Skipping {p['name']} - Match is full.")
                 # We can probably break here if strict, but maybe other spots open? 
@@ -275,7 +275,7 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     return invite_count
 
 
-def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
+def _build_invite_sms(match: dict, requester: dict, club_name: str, is_reschedule: bool = False) -> str:
     """Helper to build the SMS invite body."""
     if match["status"] == "voting":
         options = match.get("voting_options", [])
@@ -313,6 +313,14 @@ def _build_invite_sms(match: dict, requester: dict, club_name: str) -> str:
         
         organizer_name = requester['name'] if requester else "An organizer"
         skill_str = f" ({requester.get('declared_skill_level', '')})" if requester and requester.get('declared_skill_level') else ""
+
+        if is_reschedule:
+            return msg.MSG_INVITE_RESCHEDULED.format(
+                club_name=club_name,
+                organizer_name=organizer_name,
+                skill_str=skill_str,
+                time=time_str
+            )
 
         return (
             f"🎾 {club_name}: {organizer_name}{skill_str} wants to play "
@@ -430,18 +438,6 @@ def _check_match_deadpool(match_id: str):
     if match["status"] not in ["pending", "voting"]:
         return
 
-    # Check if originator is already in a deadpool refill state - if so, don't nudge again immediately
-    originator_id = match.get("originator_id")
-    if originator_id:
-        orig_res = supabase.table("players").select("phone_number").eq("player_id", originator_id).execute()
-        if orig_res.data:
-            from redis_client import get_user_state
-            from sms_constants import STATE_DEADPOOL_REFILL
-            state = get_user_state(orig_res.data[0]["phone_number"])
-            if state and state.get("state") == STATE_DEADPOOL_REFILL:
-                print(f"Skipping deadpool nudge for match {match_id} - originator already in refill state.")
-                return
-
     target_group_id = match.get("target_group_id")
 
     # 2. Count current players and active invites
@@ -479,11 +475,79 @@ def _check_match_deadpool(match_id: str):
         if not originator_id:
             return
             
+        # NEW: Check for "The Diplomat" Bridge Offers (Alternative Times)
+        # See if anyone has suggested a different time
+        if not match.get("bridge_offer_sent"):
+            suggestions_res = supabase.table("match_invites").select("suggested_time")\
+                .eq("match_id", match_id)\
+                .not_.is_("suggested_time", "null")\
+                .execute()
+            
+            if suggestions_res.data:
+                from collections import Counter
+                times = [s["suggested_time"] for s in suggestions_res.data]
+                if times:
+                    # Find the most common suggested time
+                    most_common_time, count = Counter(times).most_common(1)[0]
+                    
+                    # If we have a consensus (or at least a lead)
+                    if count >= 1:
+                        orig_res = supabase.table("players").select("*").eq("player_id", originator_id).execute()
+                        if not orig_res.data:
+                            return
+                        originator = orig_res.data[0]
+                        
+                        club_id = match.get("club_id")
+                        club_res = supabase.table("clubs").select("name").eq("club_id", club_id).maybe_single().execute()
+                        club_name = club_res.data["name"] if club_res.data else "the club"
+                        
+                        old_time_str = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=club_id)
+                        new_time_str = format_sms_datetime(parse_iso_datetime(most_common_time), club_id=club_id)
+                        
+                        if target_group_id:
+                            g_name_res = supabase.table("player_groups").select("name").eq("group_id", target_group_id).maybe_single().execute()
+                            group_name = g_name_res.data["name"] if g_name_res.data else "the group"
+                            
+                            sms_msg = msg.MSG_BRIDGE_OFFER_GROUP.format(
+                                club_name=club_name,
+                                group_name=group_name,
+                                old_time=old_time_str,
+                                new_time=new_time_str,
+                                count=count
+                            )
+                        else:
+                            sms_msg = msg.MSG_BRIDGE_OFFER_CLUB.format(
+                                club_name=club_name,
+                                old_time=old_time_str,
+                                new_time=new_time_str,
+                                count=count
+                            )
+                        
+                        send_sms(originator["phone_number"], sms_msg, club_id=club_id)
+                        set_user_state(originator["phone_number"], msg.STATE_DEADPOOL_REFILL, {
+                            "match_id": match_id,
+                            "bridge_time_iso": most_common_time
+                        })
+                        # Mark bridge offer as sent
+                        supabase.table("matches").update({"bridge_offer_sent": True}).eq("match_id", match_id).execute()
+                        print(f"Bridge offer sent to organizer for match {match_id} (Shift to {new_time_str})")
+                        return
+        if not originator_id:
+            return
+            
         orig_res = supabase.table("players").select("*").eq("player_id", originator_id).execute()
         if not orig_res.data:
             return
         originator = orig_res.data[0]
         
+        # Check if already in refill state for the generic nudge
+        from redis_client import get_user_state
+        from sms_constants import STATE_DEADPOOL_REFILL
+        state = get_user_state(originator["phone_number"])
+        if state and state.get("state") == STATE_DEADPOOL_REFILL:
+            print(f"Skipping generic deadpool nudge for match {match_id} - originator already in refill state.")
+            return
+
         # Get group name if applicable
         group_name = "the group"
         if target_group_id:
@@ -624,3 +688,85 @@ def process_pending_matches():
 
     print(f"Catch-up complete: {total_dispatched} SMS dispatched, {total_new_starts} new matches started.")
     return total_dispatched + total_new_starts
+
+def process_last_call_flash():
+    """
+    Identifies matches with 1 spot left within a defined timeframe 
+    (e.g., 2-4 hours before scheduled_time) and sends a 'Flash Invite' 
+    to a wider eligible pool.
+    """
+    now = get_now_utc()
+    window_start = (now + timedelta(hours=2)).isoformat()
+    # We look up to 24 hours ahead but prioritize the 2-4h window
+    window_end = (now + timedelta(hours=4)).isoformat()
+    
+    # 1. Find relevant matches
+    matches_res = supabase.table("matches").select("*, clubs(name)")\
+        .eq("status", "pending")\
+        .eq("last_call_sent", False)\
+        .gte("scheduled_time", window_start)\
+        .lte("scheduled_time", window_end)\
+        .execute()
+        
+    if not matches_res.data:
+        return 0
+        
+    total_flashed = 0
+    for match in matches_res.data:
+        match_id = match["match_id"]
+        club_id = match["club_id"]
+        club_name = match.get("clubs", {}).get("name") or "the club"
+        
+        # 2. Check if exactly 1 spot left
+        from logic_utils import get_match_participants
+        participants = get_match_participants(match_id)
+        if len(participants["all"]) != 3:
+            continue
+            
+        # 3. Find candidates (Anyone in the club not in the match or recently invited)
+        members_res = supabase.table("club_members").select("player_id").eq("club_id", club_id).execute()
+        member_ids = [m["player_id"] for m in (members_res.data or [])]
+        
+        # Exclude players already in match or already invited
+        already_involved_res = supabase.table("match_invites").select("player_id").eq("match_id", match_id).execute()
+        already_involved = {inv["player_id"] for inv in (already_involved_res.data or [])}
+        already_involved.update(participants["all"])
+        
+        candidates_res = supabase.table("players")\
+            .select("player_id, phone_number, name")\
+            .in_("player_id", member_ids)\
+            .eq("active_status", True)\
+            .execute()
+            
+        candidates = [c for c in (candidates_res.data or []) if c["player_id"] not in already_involved]
+        
+        if not candidates:
+            continue
+            
+        # 4. Broadcast!
+        friendly_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=club_id)
+        flash_msg = msg.MSG_LAST_CALL_BROADCAST.format(
+            club_name=club_name,
+            time=friendly_time
+        )
+        
+        # Limit the broadcast to 10 random eligible players
+        random.shuffle(candidates)
+        for cand in candidates[:10]:
+            # Create a "last_call" invite record
+            supabase.table("match_invites").insert({
+                "match_id": match_id,
+                "player_id": cand["player_id"],
+                "status": "sent",
+                "invite_score": 0,
+                "batch_number": 99 # Special batch for flash
+            }).execute()
+            
+            send_sms(cand["phone_number"], flash_msg, club_id=club_id)
+            
+        # Mark match as last_call_sent
+        supabase.table("matches").update({"last_call_sent": True}).eq("match_id", match_id).execute()
+        total_flashed += 1
+        print(f"Last call sent for match {match_id}")
+        
+    return total_flashed

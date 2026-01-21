@@ -54,6 +54,15 @@ from handlers.date_parser import parse_natural_date, parse_natural_date_with_con
 
 from error_logger import log_match_error
 
+def parse_date_with_base(date_str: str, base_dt: datetime, club_id: str = None) -> Optional[datetime]:
+    """
+    Parse a date string using a base date for context (merging days).
+    Used for alternative time suggestions (e.g. "7pm" when match is at 6pm).
+    """
+    timezone_str = get_club_timezone(club_id) if club_id else "America/New_York"
+    parsed_dt, _, _ = parse_natural_date_with_context(date_str, base_dt=base_dt, timezone=timezone_str)
+    return parsed_dt
+
 
 
 # Default match preferences
@@ -649,11 +658,33 @@ def handle_deadpool_response(from_number: str, body: str, player: dict, state_da
     If YES:
       - If match was group-targeted: clear target_group_id (broaden to club).
       - If match was club-wide: expand the level range by 0.25 on each side.
+      - If a bridge time was offered (suggested_time): switch match to that time.
     """
     response = body.strip().lower()
     match_id = state_data.get("match_id")
+    bridge_time_iso = state_data.get("bridge_time_iso")
     
-    if any(word in response for word in ["yes", "y", "sure", "broaden", "ok"]):
+    if any(word in response for word in ["yes", "y", "sure", "broaden", "ok", "shift", "change"]):
+        # A. Handle Bridge Offer (Shift Time)
+        if bridge_time_iso:
+            # Update match time and re-trigger
+            supabase.table("matches").update({
+                "scheduled_time": bridge_time_iso,
+                "status": "pending" # Ensure it's active
+            }).eq("match_id", match_id).execute()
+            
+            # Clear suggested times so we don't loop
+            supabase.table("match_invites").update({"suggested_time": None}).eq("match_id", match_id).execute()
+            
+            friendly_time = format_sms_datetime(parse_iso_datetime(bridge_time_iso), club_id=player.get("club_id"))
+            send_sms(from_number, f"🎾 Got it! I've shifted the match to {friendly_time}. Re-inviting everyone now!", club_id=cid or player.get("club_id"))
+            
+            from matchmaker import find_and_invite_players
+            find_and_invite_players(match_id, is_reschedule=True)
+            clear_user_state(from_number)
+            return
+
+        # B. Handle Traditional Broadening
         # Fetch match details to know how to broaden
         match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
         if not match_res.data:

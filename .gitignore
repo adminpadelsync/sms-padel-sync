@@ -27,3 +27,4 @@ yarn-error.log*
 # Project Specific
 frontend/lint_output*.txt
 consolidated_test_schema.sql
+.agent/

@@ -70,6 +70,12 @@ MSG_MATCH_CONFIRMED = "MATCH CONFIRMED at {club_name}! {time}. See you on the co
 MSG_MATCH_CONFIRMED_INITIATOR = "MATCH CONFIRMED at {club_name}! {time}.\n\nAs the organizer, please book the court here: {booking_url}\n\nAlternatively, call {club_name} at {club_phone} to book directly."
 MSG_COURT_BOOKED = "🎾 {club_name}: Court booked! Match on {time} is on: {court_text}. See you there! 🏸"
 
+MSG_INVITE_RESCHEDULED = (
+    "🎾 {club_name}: {organizer_name}{skill_str} has RESCHEDULED the match to "
+    "{time}.\n"
+    "Reply YES to re-confirm your spot, NO to decline."
+)
+
 MSG_DECLINE = "No problem! We'll ask you next time."
 MSG_MAYBE = "Got it, we'll keep you updated as this match comes together and follow up with you if we still need players."
 
@@ -104,6 +110,23 @@ MSG_DEADPOOL_CLUB_WIDE = (
     "🎾 {club_name}: I'm struggling to find enough players for {time} within your skill range.\n\n"
     "Would you like to broaden your level range to ±0.50 and try again? (Reply YES to broaden, or NO to cancel)"
 )
+
+# The Diplomat & Executive Logic
+MSG_BRIDGE_OFFER_GROUP = (
+    "🎾 {club_name}: We have 3 players for {old_time}, but {count} others in the {group_name} group "
+    "said they can do {new_time} instead.\n\n"
+    "Want to shift the match to {new_time}? (Reply YES to shift, or NO to keep searching)"
+)
+MSG_BRIDGE_OFFER_CLUB = (
+    "🎾 {club_name}: We have 3 players for {old_time}, but {count} others "
+    "said they can do {new_time} instead.\n\n"
+    "Want to shift the match to {new_time}? (Reply YES to shift, or NO to keep searching)"
+)
+MSG_EXECUTIVE_CALL_NOTICE = (
+    "🎾 {club_name}: I'm struggling to find a 4th at your exact level. "
+    "I'm going to reach out to nearby skill levels now to get this filled, unless you text me 'STOP'."
+)
+MSG_LAST_CALL_BROADCAST = "🎾 {club_name}: LAST CALL! 1 spot left for a match {time}. Who wants it? Reply YES to grab it!"
 
 # Group Management
 MSG_ASK_GROUPS_ONBOARDING = "Would you like to join any player groups? (Reply with numbers, e.g. 1 3, or SKIP)\n\n{groups_list}"
@@ -162,5 +185,6 @@ INTENT_DESCRIPTIONS = {
     "BOOK_COURT": "Confirming a court booking (e.g. 'booked court 6')",
     "RESET": "Restarting the conversation or clearing state",
     "GREETING": "Simple greeting or introduction",
-    "CHITCHAT": "General banter or non-functional talk"
+    "CHITCHAT": "General banter or non-functional talk",
+    "DECLINE_WITH_ALTERNATIVE": "Declining but suggesting a different time (e.g. 'No, but I can do 7pm')"
 }
