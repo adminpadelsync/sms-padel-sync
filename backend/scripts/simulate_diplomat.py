@@ -119,8 +119,8 @@ def run_simulation():
     # We need to ensure the match is considered stuck. 
     # Usually it happens if count < 3 in find_and_invite_players or via cron.
     # Let's call the deadpool check directly by simulating a matchmaking failure
-    from matchmaker import _check_match_deadpool
-    _check_match_deadpool(match_id)
+    from matchmaker import check_match_deadpool
+    check_match_deadpool(match_id)
     
     # Check if a message was "sent" to the organizer (it's dry_run, so we look at logs or mock it, but here we just check if state was updated)
     from redis_client import get_user_state

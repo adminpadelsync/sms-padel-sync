@@ -13,7 +13,7 @@ BATCH_SIZE = 6  # Number of invites to send at a time
 INVITE_TIMEOUT_MINUTES = 15  # Time before invite expires
 
 
-def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False, target_player_ids: list[str] = None, is_reschedule: bool = False):
+def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: int = None, skip_filters: bool = False, target_player_ids: list[str] = None, is_reschedule: bool = False, notify_deadpool: bool = True):
     """
     Finds compatible players for a match and sends SMS invites in batches.
     
@@ -269,9 +269,12 @@ def find_and_invite_players(match_id: str, batch_number: int = 1, max_invites: i
     
     # If this is the first batch and we couldn't find at least 3 people
     # (to make 4 total), check if we should notify about a deadpool.
-    if batch_number == 1 and not skip_filters and invite_count < 3:
-        _check_match_deadpool(match_id)
+    if batch_number == 1 and not skip_filters and invite_count < 3 and notify_deadpool:
+        check_match_deadpool(match_id)
         
+    if is_quiet and batch_number == 1:
+        return -2
+
     return invite_count
 
 
@@ -344,7 +347,7 @@ def invite_replacement_player(match_id: str, count: int = 1):
     
     # If we couldn't find enough players, check for deadpool (group-scoped only)
     if sent < count:
-        _check_match_deadpool(match_id)
+        check_match_deadpool(match_id)
         
     return sent
 
@@ -417,12 +420,12 @@ def process_batch_refills():
             print(f"Triggered batch {next_batch} for match {match_id} ({new_invites} new invites)")
             
             if new_invites < stale_count:
-                _check_match_deadpool(match_id)
+                check_match_deadpool(match_id)
     
     return total_new_invites
 
 
-def _check_match_deadpool(match_id: str):
+def check_match_deadpool(match_id: str):
     """
     Checks if a match has reached a dead end (no more eligible players in group).
     If so, notifies the originator.

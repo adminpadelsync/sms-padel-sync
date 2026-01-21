@@ -527,8 +527,8 @@ def _create_match(
             except Exception as e:
                 print(f"[ERROR] Failed to insert match_participation: {e}")
 
-            from matchmaker import find_and_invite_players
-            count = find_and_invite_players(match_id, skip_filters=skip_filters)
+            from matchmaker import find_and_invite_players, check_match_deadpool
+            count = find_and_invite_players(match_id, skip_filters=skip_filters, notify_deadpool=False)
             
             if count == -2:
                 # Quiet hours - inform the user
@@ -540,6 +540,10 @@ def _create_match(
                     club_name=get_club_name(),
                     resume_time=resume_time
                 ), club_id=cid or player["club_id"])
+            elif not skip_filters and count < 3:
+                # If we're struggling from the start, only send the deadpool message
+                # as per user preference. This message includes the match details.
+                check_match_deadpool(match_id)
             elif skip_filters and group_name:
                 send_sms(from_number, msg.MSG_MATCH_REQUESTED_GROUP.format(
                     club_name=get_club_name(), 
@@ -667,20 +671,53 @@ def handle_deadpool_response(from_number: str, body: str, player: dict, state_da
     if any(word in response for word in ["yes", "y", "sure", "broaden", "ok", "shift", "change"]):
         # A. Handle Bridge Offer (Shift Time)
         if bridge_time_iso:
-            # Update match time and re-trigger
+            # 1. Identify everyone who needs to be re-invited
+            # This includes anyone confirmed, anyone already invited, and anyone who suggested this time
+            participants_res = supabase.table("match_participations").select("player_id").eq("match_id", match_id).execute()
+            invites_res = supabase.table("match_invites").select("player_id").eq("match_id", match_id).execute()
+            suggestors_res = supabase.table("match_invites").select("player_id").eq("match_id", match_id).eq("suggested_time", bridge_time_iso).execute()
+            
+            # Combine IDs (excluding the organizer who is accepting the shift)
+            priority_ids = {p["player_id"] for p in (participants_res.data or [])}
+            priority_ids.update({i["player_id"] for i in (invites_res.data or [])})
+            priority_ids.update({s["player_id"] for s in (suggestors_res.data or [])})
+            
+            # Remove the current player (originator) - they stay in match_participations
+            if player["player_id"] in priority_ids:
+                priority_ids.remove(player["player_id"])
+
+            # 2. Clear old state
+            # Clear suggested times to prevent loops
+            supabase.table("match_invites").update({"suggested_time": None}).eq("match_id", match_id).execute()
+            # Delete non-originator participations (they must re-confirm for new time)
+            supabase.table("match_participations").delete().eq("match_id", match_id).neq("player_id", player["player_id"]).execute()
+            # Delete all invites (stale for old time)
+            supabase.table("match_invites").delete().eq("match_id", match_id).execute()
+            
+            # 3. Update match details
             supabase.table("matches").update({
                 "scheduled_time": bridge_time_iso,
-                "status": "pending" # Ensure it's active
+                "status": "pending",
+                "bridge_offer_sent": False # Reset for future nudges if needed
             }).eq("match_id", match_id).execute()
-            
-            # Clear suggested times so we don't loop
-            supabase.table("match_invites").update({"suggested_time": None}).eq("match_id", match_id).execute()
             
             friendly_time = format_sms_datetime(parse_iso_datetime(bridge_time_iso), club_id=player.get("club_id"))
             send_sms(from_number, f"🎾 Got it! I've shifted the match to {friendly_time}. Re-inviting everyone now!", club_id=cid or player.get("club_id"))
             
+            # 4. Trigger re-invites
             from matchmaker import find_and_invite_players
-            find_and_invite_players(match_id, is_reschedule=True)
+            
+            # Phase A: Re-invite previously involved players first
+            # We skip filters because they already passed filters once or were manual/suggested
+            sent_count = 0
+            if priority_ids:
+                sent_count = find_and_invite_players(match_id, target_player_ids=list(priority_ids), is_reschedule=True, skip_filters=True)
+            
+            # Phase B: If we still need more (e.g. fewer than 3 re-invited), broaden the search
+            if sent_count < 3:
+                # Normal search with filters
+                find_and_invite_players(match_id, is_reschedule=True, batch_number=2)
+                
             clear_user_state(from_number)
             return
 
