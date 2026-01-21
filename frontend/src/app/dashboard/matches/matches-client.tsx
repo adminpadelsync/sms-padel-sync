@@ -258,81 +258,89 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                     <ChevronRight className="w-5 h-5 text-gray-300" />
                                 </div>
 
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-black text-indigo-600 tracking-wide uppercase">
+                                <div className="flex justify-between items-start mb-5 gap-3">
+                                    <div className="flex flex-col gap-1.5 min-w-0">
+                                        <p className="text-sm font-black text-indigo-600 tracking-tight uppercase leading-none whitespace-nowrap">
                                             {formatMatchTime(match.scheduled_time, match.clubs?.timezone || userClubTimezone || undefined)}
                                         </p>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${getStatusStyles(match.status)}`}>
-                                                {match.status.toUpperCase()}
+                                        <div className="flex items-center gap-2">
+                                            <span className={`px-2 py-0.5 text-[9px] font-black rounded-full border flex items-center gap-1 uppercase tracking-tighter ${getStatusStyles(match.status)}`}>
+                                                <div className="w-1 h-1 rounded-full bg-current opacity-70" />
+                                                {match.status}
                                             </span>
                                         </div>
                                     </div>
                                     <button
                                         onClick={(e) => handleMarkAsBooked(e, match.match_id)}
                                         disabled={markingBookedId === match.match_id}
-                                        className="inline-flex items-center justify-center h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none tracking-tight ring-offset-2 hover:ring-2 ring-emerald-500/50"
+                                        className="relative group/btn inline-flex items-center justify-center h-10 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black rounded-xl transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-95 disabled:opacity-50 disabled:pointer-events-none tracking-widest uppercase shrink-0 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px]"
                                     >
                                         {markingBookedId === match.match_id ? (
-                                            <div className="flex items-center gap-1">
-                                                <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                ...
-                                            </div>
+                                            <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
                                         ) : (
-                                            'MARK BOOKED'
+                                            <div className="flex items-center gap-2">
+                                                <span>Mark Booked</span>
+                                                <Plus className="w-3.5 h-3.5 group-hover/btn:rotate-90 transition-transform" />
+                                            </div>
                                         )}
                                     </button>
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {match.originator && (
-                                        <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100/50 group-hover:bg-indigo-50 transition-colors">
-                                            <div className="flex items-center gap-1.5 mb-1.5">
-                                                <div className="p-1 bg-indigo-100 rounded-md">
-                                                    <User className="w-3 h-3 text-indigo-600" />
+                                        <div className="bg-indigo-50/70 p-4 rounded-xl border border-indigo-100/50 group-hover:bg-indigo-50 transition-colors shadow-inner">
+                                            <div className="flex items-center gap-2 mb-2.5">
+                                                <div className="p-1 px-1.5 bg-indigo-500 rounded-md shadow-sm">
+                                                    <User className="w-3 h-3 text-white" />
                                                 </div>
-                                                <p className="text-[10px] uppercase font-black text-indigo-600 tracking-widest">Host / Originator</p>
+                                                <p className="text-[10px] uppercase font-black text-indigo-600 tracking-[0.15em]">Host / Originator</p>
                                             </div>
-                                            <div className="flex justify-between items-center bg-white/60 p-2 rounded-md border border-indigo-50">
-                                                <p className="text-xs font-black text-gray-900 truncate mr-2">{match.originator.name}</p>
-                                                <p className="text-[10px] text-indigo-600 font-mono font-bold tracking-tighter bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shrink-0 shadow-sm">
+                                            <div className="flex justify-between items-center bg-white/80 backdrop-blur-sm p-2.5 rounded-lg border border-indigo-100 shadow-sm">
+                                                <p className="text-xs font-black text-gray-900 truncate mr-3">{match.originator.name}</p>
+                                                <p className="text-[10px] text-indigo-600 font-mono font-black tracking-tighter bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 shrink-0">
                                                     {formatPhoneNumber(match.originator.phone_number)}
                                                 </p>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {Array.from({ length: 4 }).map((_, i) => {
-                                            const allPlayers = [...(match.team_1_details || []), ...(match.team_2_details || [])]
-                                            const p = allPlayers[i]
-                                            return (
-                                                <div key={i} className={`p-2.5 rounded-lg border transition-all flex flex-col justify-center min-h-[54px] ${p ? 'bg-gray-50 border-gray-100 group-hover:bg-white group-hover:border-indigo-100 group-hover:shadow-sm' : 'bg-gray-50/30 border-dashed border-gray-200'}`}>
-                                                    {p ? (
-                                                        <div className="space-y-1">
-                                                            <div className="flex justify-between items-start gap-1">
-                                                                <p className="text-[11px] font-black text-gray-900 truncate leading-tight uppercase tracking-tight">{p.name || 'Anonymous'}</p>
-                                                                <span className="bg-gray-200/50 text-gray-500 px-1 py-0.5 rounded-[4px] text-[8px] font-black shrink-0 border border-gray-300/20">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 px-1">
+                                            <div className="h-px flex-1 bg-gray-100" />
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Match Roster</span>
+                                            <div className="h-px flex-1 bg-gray-100" />
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-1.5">
+                                            {Array.from({ length: 4 }).map((_, i) => {
+                                                const allPlayers = [...(match.team_1_details || []), ...(match.team_2_details || [])]
+                                                const p = allPlayers[i]
+                                                return (
+                                                    <div key={i} className={`px-3 py-2 rounded-xl border transition-all flex items-center justify-between ${p ? 'bg-white border-gray-100 group-hover:border-indigo-100 group-hover:shadow-sm' : 'bg-gray-50/30 border-dashed border-gray-200 opacity-60'}`}>
+                                                        {p ? (
+                                                            <>
+                                                                <div className="flex flex-col min-w-0 pr-2">
+                                                                    <p className="text-[11px] font-black text-gray-900 truncate leading-tight uppercase">{p.name || 'Anonymous'}</p>
+                                                                    <p className="text-[10px] text-indigo-500 font-mono font-bold tracking-tighter mt-0.5">
+                                                                        {formatPhoneNumber(p.phone_number || '').replace(/^\+1/, '')}
+                                                                    </p>
+                                                                </div>
+                                                                <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md text-[9px] font-black border border-gray-200 shrink-0">
                                                                     L{p.declared_skill_level || '-'}
                                                                 </span>
+                                                            </>
+                                                        ) : (
+                                                            <div className="w-full flex items-center justify-center gap-2 py-1">
+                                                                <Plus className="w-3 h-3 text-gray-300" />
+                                                                <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Available Slot</span>
                                                             </div>
-                                                            <p className="text-[10px] text-indigo-600 font-mono font-medium tracking-tighter truncate opacity-70">
-                                                                {formatPhoneNumber(p.phone_number || '').replace(/^\+1/, '')}
-                                                            </p>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="h-full flex items-center justify-center gap-1.5 opacity-40">
-                                                            <Plus className="w-3 h-3 text-gray-400" />
-                                                            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Open</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )
-                                        })}
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
