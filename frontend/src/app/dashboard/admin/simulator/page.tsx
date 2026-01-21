@@ -211,6 +211,10 @@ export default function SMSSimulatorPage() {
         }
     }, [addDebugLog])
 
+    const fetchAllPlayerHistory = useCallback(() => {
+        selectedPlayers.forEach(p => fetchMessagesForPlayer(p))
+    }, [selectedPlayers, fetchMessagesForPlayer])
+
     useEffect(() => {
         if (currentClubId) {
             fetchGroups(currentClubId)
@@ -238,7 +242,6 @@ export default function SMSSimulatorPage() {
                         addDebugLog(`Poll: Found ${messages.length} unread`)
                     }
 
-                    // Use REF to get CURRENT players list (avoids stale matching)
                     const currentSelected = selectedPlayersRef.current
 
                     for (const msg of messages) {
@@ -247,31 +250,32 @@ export default function SMSSimulatorPage() {
 
                         if (player) {
                             addDebugLog(`Matched: ${player.name}`)
-                            const newMessage: Message = {
-                                id: msg.id,
-                                from: 'system',
-                                text: msg.body,
-                                timestamp: new Date(msg.created_at)
-                            }
 
+                            // 1. Add to UI
                             setConversations(prev => {
                                 const existing = prev[player.player_id] || []
                                 if (existing.some(m => m.id === msg.id)) return prev
                                 return {
                                     ...prev,
-                                    [player.player_id]: [...existing, newMessage]
+                                    [player.player_id]: [...existing, {
+                                        id: msg.id,
+                                        from: 'system',
+                                        text: msg.body,
+                                        timestamp: new Date(msg.created_at)
+                                    }]
                                 }
                             })
 
-                            // Mark as read
+                            // 2. Mark as read ONLY if we matched it!
+                            // This prevents background loops from eating messages for non-selected players.
                             try {
-                                const readRes = await authFetch(`/api/sms-outbox/${msg.id}/read/`, { method: 'POST' })
-                                if (!readRes.ok) addDebugLog(`Err: Read-mark failed`)
+                                await authFetch(`/api/sms-outbox/${msg.id}/read/`, { method: 'POST' })
                             } catch (e) {
-                                addDebugLog(`Err: Read exception`)
+                                addDebugLog(`Err: Read-mark exception`)
                             }
                         } else {
-                            addDebugLog(`No match: ${normalizedTarget}`)
+                            // Don't mark as read if no match on current screen
+                            addDebugLog(`Ignored: ${normalizedTarget} (not on screen)`)
                         }
                     }
                 } else if (response.status === 401) {
@@ -289,7 +293,7 @@ export default function SMSSimulatorPage() {
         return () => {
             if (timeoutId) clearTimeout(timeoutId)
         }
-    }, [testMode, selectedPlayers.length === 0]) // Depend on length to trigger/stop
+    }, [testMode, selectedPlayers.length === 0])
 
 
 
@@ -1012,10 +1016,19 @@ Example: MAYBE 1`
                             </div>
                             <div className="flex items-center gap-3">
                                 <button
+                                    onClick={fetchAllPlayerHistory}
+                                    className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors"
+                                >
+                                    [REFRESH ALL COLUMNS]
+                                </button>
+                                <button
                                     onClick={async () => {
                                         if (confirm("Clear all pending unread SMS in the backend outbox?")) {
                                             const res = await authFetch('/api/sms-outbox/clear-all', { method: 'POST' });
-                                            if (res.ok) addDebugLog("Outbox Cleared");
+                                            if (res.ok) {
+                                                addDebugLog("Outbox Cleared");
+                                                setConversations({}); // Clear UI too
+                                            }
                                         }
                                     }}
                                     className="text-orange-400 hover:text-orange-300 font-bold transition-colors"
