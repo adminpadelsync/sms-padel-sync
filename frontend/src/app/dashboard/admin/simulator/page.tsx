@@ -74,6 +74,12 @@ export default function SMSSimulatorPage() {
     const [playerToNumberSelection, setPlayerToNumberSelection] = useState<Record<string, string>>({})
     const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null)
 
+    // --- Debug Logs ---
+    const [debugLogs, setDebugLogs] = useState<{ msg: string, time: string }[]>([])
+    const addDebugLog = (msg: string) => {
+        setDebugLogs(prev => [{ msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 5))
+    }
+
     // Helper to normalize phone numbers for comparison
     const normalizePhone = (phone: string) => {
         if (!phone) return ''
@@ -184,12 +190,22 @@ export default function SMSSimulatorPage() {
     useEffect(() => {
         if (!testMode || selectedPlayers.length === 0) return
 
+        let isPolling = false
+        let timeoutId: NodeJS.Timeout
+
         const pollOutbox = async () => {
+            if (isPolling) return
+            isPolling = true
+
             try {
                 const response = await authFetch('/api/sms-outbox')
                 if (response.ok) {
                     const data = await response.json()
                     const messages: OutboxMessage[] = data.messages || []
+
+                    if (messages.length > 0) {
+                        addDebugLog(`Poll: Found ${messages.length} unread messages`)
+                    }
 
                     // Group messages by phone number and add to conversations
                     for (const msg of messages) {
@@ -197,6 +213,7 @@ export default function SMSSimulatorPage() {
                         const player = selectedPlayers.find(p => normalizePhone(p.phone_number) === normalizedTarget)
 
                         if (player) {
+                            addDebugLog(`Matched: ${player.name} (${normalizedTarget})`)
                             const newMessage: Message = {
                                 id: msg.id,
                                 from: 'system',
@@ -206,7 +223,6 @@ export default function SMSSimulatorPage() {
 
                             setConversations(prev => {
                                 const existing = prev[player.player_id] || []
-                                // Avoid duplicates
                                 if (existing.some(m => m.id === msg.id)) return prev
                                 return {
                                     ...prev,
@@ -217,23 +233,36 @@ export default function SMSSimulatorPage() {
                             // Mark as read - use the new slash-resilient route
                             try {
                                 const readRes = await authFetch(`/api/sms-outbox/${msg.id}/read/`, { method: 'POST' })
-                                if (!readRes.ok) console.error(`Failed to mark message ${msg.id} as read: ${readRes.status}`)
+                                if (!readRes.ok) {
+                                    addDebugLog(`Err: Mark read failed (${readRes.status})`)
+                                }
                             } catch (e) {
                                 console.error(`Error marking message ${msg.id} as read:`, e)
+                                addDebugLog(`Err: Read exception`)
                             }
+                        } else {
+                            // Only log once for unknown numbers to avoid spam
+                            addDebugLog(`No player for: ${normalizedTarget}`)
+                            console.warn(`No selected player matched ${normalizedTarget}.`, selectedPlayers)
                         }
                     }
+                } else if (response.status === 401) {
+                    addDebugLog(`Auth: Session expired`)
                 }
             } catch (error) {
                 console.error('Error polling outbox:', error)
+                addDebugLog(`Net Error: ${error instanceof Error ? error.message : 'Unknown'}`)
+            } finally {
+                isPolling = false
+                timeoutId = setTimeout(pollOutbox, 2000)
             }
         }
 
-        // Poll every 2 seconds
-        const interval = setInterval(pollOutbox, 2000)
-        pollOutbox() // Initial poll
+        timeoutId = setTimeout(pollOutbox, 500)
 
-        return () => clearInterval(interval)
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId)
+        }
     }, [testMode, selectedPlayers])
 
 
@@ -938,6 +967,28 @@ Example: MAYBE 1`
                 )}
 
 
+
+                {/* Activity Feed / Logs */}
+                {testMode && (
+                    <div className="bg-gray-900 rounded-lg p-3 mb-6 font-mono text-xs text-green-400 overflow-hidden shadow-inner">
+                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
+                            <span className="text-gray-400">⚡ Simulator Activity Feed</span>
+                            <span className="text-gray-500">Polling every 2s</span>
+                        </div>
+                        <div className="space-y-1">
+                            {debugLogs.length === 0 ? (
+                                <div className="text-gray-600">Waiting for activity...</div>
+                            ) : (
+                                debugLogs.map((log, i) => (
+                                    <div key={i} className="flex gap-2">
+                                        <span className="text-gray-500">[{log.time}]</span>
+                                        <span>{log.msg}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Player Columns */}
                 {selectedPlayers.length === 0 ? (

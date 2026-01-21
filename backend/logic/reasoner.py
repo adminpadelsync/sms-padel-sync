@@ -7,6 +7,7 @@ import re
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 from sms_constants import INTENT_DESCRIPTIONS
+from error_logger import log_sms_error
 
 load_dotenv()
 
@@ -248,6 +249,15 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
             
         except Exception as e:
             print(f"[REASONER] Logic Error: {e}")
+            
+            # Log to DB for persistent debugging
+            log_sms_error(
+                error_message=f"Reasoner Logic Error: {str(e)}",
+                phone_number=user_profile.get("phone_number") if user_profile else None,
+                sms_body=message,
+                exception=e
+            )
+            
             if attempt < max_retries:
                 time.sleep(1)
             else:

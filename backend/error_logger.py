@@ -3,6 +3,7 @@ Error logging module for SMS system debugging.
 Logs errors to Supabase error_logs table for persistent debugging.
 """
 import traceback
+import os
 from datetime import datetime
 from database import supabase
 
@@ -58,10 +59,32 @@ def log_error(
         supabase.table("error_logs").insert(error_data).execute()
         print(f"[ERROR_LOG] {error_type}: {error_message}")
         
-    except Exception as log_error:
+    except Exception as log_error_ex:
         # Don't let logging errors break the app
-        print(f"[ERROR_LOG] Failed to log error: {log_error}")
+        print(f"[ERROR_LOG] Failed to log error: {log_error_ex}")
         print(f"[ERROR_LOG] Original error: {error_type} - {error_message}")
+        
+    # --- ADMIN NOTIFICATION ---
+    try:
+        admin_phone = os.getenv("ADMIN_ALERT_PHONE")
+        if admin_phone:
+            from twilio_client import send_sms
+            # Only alert for critical or specific types to avoid spamming
+            critical_types = ['sms_processing', 'match_creation', 'db_error']
+            if error_type in critical_types:
+                alert_body = f"🚨 PADEL_SYNC ERROR\nType: {error_type}\nMsg: {error_message[:100]}"
+                # Find a club_id to use for sending (Mandatory for send_sms)
+                # We'll use the one passed in, or fallback to any club from settings if possible
+                alert_cid = club_id
+                if not alert_cid:
+                    # Fallback lookup for alert_cid if needed, but for now we hope it's provided
+                    pass
+                
+                if alert_cid:
+                    send_sms(admin_phone, alert_body, club_id=alert_cid)
+                    print(f"[ADMIN_ALERT] Sent to {admin_phone}")
+    except Exception as alert_err:
+        print(f"[ADMIN_ALERT] Failed to send: {alert_err}")
 
 
 def log_match_error(
