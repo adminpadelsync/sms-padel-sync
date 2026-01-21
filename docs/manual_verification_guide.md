@@ -1,5 +1,17 @@
 # Manual Verification Setup Guide
 
+There are two primary ways to verify the SMS flow: the **Simulator** (for rapid logic testing) and **Real Hardware** (for end-to-end Twilio verification).
+
+## 🔗 Method 1: SMS Testing Simulator (Recommended)
+The **Admin Simulator** (`/dashboard/admin/simulator`) is the fastest way to test conversational logic without spending Twilio credits or configuring webhooks.
+
+- **Unified Inbox/Outbox**: Simulates real player phone numbers.
+- **Backend Connected**: Displays a green indicator when the frontend -> backend proxy is active.
+- **Safety**: Automatically enables `force_test_mode` for its requests, ensuring responses are trapped in the simulator outbox and not sent to real phones.
+
+---
+
+## 📱 Method 2: Testing with Real Hardware (Twilio)
 To test the SMS flow with your real phone, you need to expose your local server to the internet so Twilio can reach it.
 
 ## 1. Start the Backend Server

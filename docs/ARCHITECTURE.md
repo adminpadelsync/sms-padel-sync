@@ -34,6 +34,13 @@ If you add a new endpoint to the Backend (e.g., `/api/new-feature`), you **MUST*
 > [!WARNING]
 > Failure to add the route to `next.config.ts` will result in a **404 Not Found** error when calling the API from the frontend, even if the backend route exists and is working correctly.
 
+### 2. Robust Identity & Routing (Fuzzy Matching)
+To ensure reliable performance across varied database entries and simulator inputs, the system uses a **Last-10-Digit Matching** strategy for all phone-based lookups.
+
+- **Normalization**: Every incoming phone number (from Twilio or Simulator) is normalized using `twilio_client.normalize_phone_number`, which strips whitespace and formatting.
+- **Robust Lookup**: Instead of simple equality checks, `resolve_player` and `resolve_club_context` strip all non-digit characters and match on the **last 10 digits** (using a SQL `ilike` filter).
+- **Result**: This resolves issues where internal records might be stored as `+1XXX...`, `XXX-XXX-...`, or `XXXXXXXXXX` inconsistently.
+
 ## NLP & Reasoning
 The system uses a "Reasoning Gateway" (`backend/logic/reasoner.py`) using Gemini to parse user intents from SMS messages.
 - **Fast Path**: Keywords like "PLAY", "RESET" are handled immediately.
