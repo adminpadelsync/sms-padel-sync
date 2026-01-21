@@ -241,9 +241,20 @@ def parse_natural_date_with_context(
     
     # If the user ONLY provided a time without a day word, we merge with base_dt's date
     if not has_day_context and time_match:
-        print(f"[date_parser] Merging partial time '{text}' with base date {base_dt.date()}")
-        # parsed_dt is already aware if coming from parse_natural_date
-        merged_dt = base_dt.replace(
+        import pytz
+        tz = pytz.timezone(timezone)
+        
+        # Localize base_dt to the target timezone before merging
+        # This prevents the "5 hour shift" when base_dt is in UTC
+        if base_dt.tzinfo:
+            base_local = base_dt.astimezone(tz)
+        else:
+            base_local = tz.localize(base_dt)
+
+        print(f"[date_parser] Merging partial time '{text}' with localized base {base_local.date()} {base_local.tzinfo}")
+        
+        # merged_dt will now be correctly localized to the target timezone
+        merged_dt = base_local.replace(
             hour=parsed_dt.hour, 
             minute=parsed_dt.minute, 
             second=0, 
