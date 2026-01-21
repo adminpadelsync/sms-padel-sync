@@ -132,7 +132,13 @@ def handle_onboarding(from_number: str, body: str, current_state: str, state_dat
             
             try:
                 # Universal Player already added to club in dispatcher, but here we update profile
-                existing_res = supabase.table("players").select("player_id").eq("phone_number", from_number).execute()
+                import re
+                digits = re.sub(r'\D', '', from_number)
+                last_10 = digits[-10:] if len(digits) >= 10 else digits
+                
+                existing_res = supabase.table("players").select("player_id") \
+                    .or_(f"phone_number.eq.{from_number},phone_number.ilike.%{last_10}") \
+                    .execute()
                 
                 if existing_res.data:
                     player_id = existing_res.data[0]["player_id"]

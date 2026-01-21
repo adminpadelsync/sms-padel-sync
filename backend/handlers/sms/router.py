@@ -81,7 +81,16 @@ def resolve_player(from_number: str, club_id: str) -> Optional[Dict]:
     """
     Find player by phone number and verify club membership.
     """
-    player_res = supabase.table("players").select("*").eq("phone_number", from_number).execute()
+    import re
+    # Strip all non-digits and take the last 10
+    digits = re.sub(r'\D', '', from_number)
+    last_10 = digits[-10:] if len(digits) >= 10 else digits
+    
+    # Robust search: try exact match OR match on last 10 digits
+    player_res = supabase.table("players").select("*") \
+        .or_(f"phone_number.eq.{from_number},phone_number.ilike.%{last_10}") \
+        .execute()
+    
     potential_player = player_res.data[0] if player_res.data else None
     
     if potential_player:
