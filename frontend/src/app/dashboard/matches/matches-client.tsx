@@ -242,8 +242,8 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                     <div className="flex items-center gap-2 mb-4">
                         <Calendar className="w-5 h-5 text-indigo-500" />
                         <h2 className="text-xl font-bold text-gray-900 tracking-tight">Court Booking Requirements</h2>
-                        <span className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1 rounded-full border border-red-100 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
+                        <span className="bg-rose-50 text-rose-600 text-[10px] font-black px-2 py-0.5 rounded-full border border-rose-100 flex items-center gap-1 uppercase tracking-wider shadow-sm">
+                            <Clock className="w-2.5 h-2.5" />
                             {bookingNeededMatches.length} Pending
                         </span>
                     </div>
@@ -272,7 +272,7 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                     <button
                                         onClick={(e) => handleMarkAsBooked(e, match.match_id)}
                                         disabled={markingBookedId === match.match_id}
-                                        className="inline-flex items-center justify-center h-8 px-3.5 bg-green-600 hover:bg-green-700 text-white text-xs font-black rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                                        className="inline-flex items-center justify-center h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none tracking-tight ring-offset-2 hover:ring-2 ring-emerald-500/50"
                                     >
                                         {markingBookedId === match.match_id ? (
                                             <div className="flex items-center gap-1">
@@ -291,13 +291,15 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                 <div className="space-y-3">
                                     {match.originator && (
                                         <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100/50 group-hover:bg-indigo-50 transition-colors">
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                                <User className="w-3 h-3 text-indigo-500" />
-                                                <p className="text-[10px] uppercase font-black text-indigo-600 tracking-wider">Host/Originator</p>
+                                            <div className="flex items-center gap-1.5 mb-1.5">
+                                                <div className="p-1 bg-indigo-100 rounded-md">
+                                                    <User className="w-3 h-3 text-indigo-600" />
+                                                </div>
+                                                <p className="text-[10px] uppercase font-black text-indigo-600 tracking-widest">Host / Originator</p>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <p className="text-xs font-bold text-gray-900 truncate mr-2">{match.originator.name}</p>
-                                                <p className="text-[10px] text-indigo-700 font-mono tracking-tighter bg-white px-1.5 py-0.5 rounded border border-indigo-100/50 shrink-0">
+                                            <div className="flex justify-between items-center bg-white/60 p-2 rounded-md border border-indigo-50">
+                                                <p className="text-xs font-black text-gray-900 truncate mr-2">{match.originator.name}</p>
+                                                <p className="text-[10px] text-indigo-600 font-mono font-bold tracking-tighter bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shrink-0 shadow-sm">
                                                     {formatPhoneNumber(match.originator.phone_number)}
                                                 </p>
                                             </div>
@@ -309,19 +311,23 @@ export function MatchesClient({ initialMatches, userClubId, userId, userClubTime
                                             const allPlayers = [...(match.team_1_details || []), ...(match.team_2_details || [])]
                                             const p = allPlayers[i]
                                             return (
-                                                <div key={i} className={`p-2 rounded-lg border transition-all ${p ? 'bg-gray-50 border-gray-100 group-hover:bg-white' : 'bg-gray-50/30 border-dashed border-gray-200'}`}>
+                                                <div key={i} className={`p-2.5 rounded-lg border transition-all flex flex-col justify-center min-h-[54px] ${p ? 'bg-gray-50 border-gray-100 group-hover:bg-white group-hover:border-indigo-100 group-hover:shadow-sm' : 'bg-gray-50/30 border-dashed border-gray-200'}`}>
                                                     {p ? (
-                                                        <>
-                                                            <p className="text-[11px] font-bold text-gray-900 truncate">{p.name || 'Anonymous'}</p>
-                                                            <div className="flex items-center gap-2 mt-0.5 text-[9px] text-gray-500">
-                                                                <span className="bg-gray-200/50 px-1 rounded font-bold">Lvl {p.declared_skill_level || '-'}</span>
-                                                                <span className="font-mono tracking-tighter truncate">{formatPhoneNumber(p.phone_number || '').replace(/^\+1/, '')}</span>
+                                                        <div className="space-y-1">
+                                                            <div className="flex justify-between items-start gap-1">
+                                                                <p className="text-[11px] font-black text-gray-900 truncate leading-tight uppercase tracking-tight">{p.name || 'Anonymous'}</p>
+                                                                <span className="bg-gray-200/50 text-gray-500 px-1 py-0.5 rounded-[4px] text-[8px] font-black shrink-0 border border-gray-300/20">
+                                                                    L{p.declared_skill_level || '-'}
+                                                                </span>
                                                             </div>
-                                                        </>
+                                                            <p className="text-[10px] text-indigo-600 font-mono font-medium tracking-tighter truncate opacity-70">
+                                                                {formatPhoneNumber(p.phone_number || '').replace(/^\+1/, '')}
+                                                            </p>
+                                                        </div>
                                                     ) : (
-                                                        <div className="h-full flex items-center justify-center py-1">
-                                                            <Plus className="w-3 h-3 text-gray-300" />
-                                                            <span className="text-[9px] text-gray-400 font-medium ml-1">Open</span>
+                                                        <div className="h-full flex items-center justify-center gap-1.5 opacity-40">
+                                                            <Plus className="w-3 h-3 text-gray-400" />
+                                                            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Open</span>
                                                         </div>
                                                     )}
                                                 </div>
