@@ -1856,13 +1856,23 @@ class InboxMessage(BaseModel):
 
 @router.get("/sms-outbox")
 @router.get("/sms-outbox/")
-async def get_sms_outbox(phone_number: Optional[str] = None, user: UserContext = Depends(get_current_user)):
-    """Get pending outbound SMS messages (test mode only)."""
-    query = supabase.table("sms_outbox").select("*").is_("read_at", "null").order("created_at", desc=False)
+async def get_sms_outbox(phone_number: Optional[str] = None, history: bool = Query(False), user: UserContext = Depends(get_current_user)):
+    """Get outbound SMS messages (test mode only)."""
+    if history:
+        query = supabase.table("sms_outbox").select("*").order("created_at", desc=True).limit(20)
+    else:
+        query = supabase.table("sms_outbox").select("*").is_("read_at", "null").order("created_at", desc=False)
+        
     if phone_number:
         query = query.eq("to_number", phone_number)
+        
     result = query.execute()
-    return {"messages": result.data}
+    data = result.data or []
+    
+    if history:
+        data.reverse() # UI expects chronological
+        
+    return {"messages": data}
 
 @router.post("/sms-outbox/{message_id}/read")
 @router.post("/sms-outbox/{message_id}/read/")
@@ -1870,6 +1880,14 @@ async def mark_message_read(message_id: str, user: UserContext = Depends(get_cur
     """Mark a message as read."""
     from logic_utils import get_now_utc
     supabase.table("sms_outbox").update({"read_at": get_now_utc().isoformat()}).eq("id", message_id).execute()
+    return {"status": "ok"}
+
+@router.post("/sms-outbox/clear-all")
+@router.post("/sms-outbox/clear-all/")
+async def clear_all_outbox(user: UserContext = Depends(get_current_user)):
+    """Mark all unread messages in the outbox as read."""
+    from logic_utils import get_now_utc
+    supabase.table("sms_outbox").update({"read_at": get_now_utc().isoformat()}).is_("read_at", "null").execute()
     return {"status": "ok"}
 
 @router.post("/sms-inbox")

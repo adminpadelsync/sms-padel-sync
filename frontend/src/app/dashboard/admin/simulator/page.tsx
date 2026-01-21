@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { PlayerColumn } from './player-column'
 import { authFetch } from '@/utils/auth-fetch'
 
@@ -74,10 +74,16 @@ export default function SMSSimulatorPage() {
     const [playerToNumberSelection, setPlayerToNumberSelection] = useState<Record<string, string>>({})
     const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null)
 
+    // Use a ref for selected players to avoid stale closure in poller
+    const selectedPlayersRef = useRef(selectedPlayers)
+    useEffect(() => {
+        selectedPlayersRef.current = selectedPlayers
+    }, [selectedPlayers])
+
     // --- Debug Logs ---
     const [debugLogs, setDebugLogs] = useState<{ msg: string, time: string }[]>([])
     const addDebugLog = (msg: string) => {
-        setDebugLogs(prev => [{ msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 5))
+        setDebugLogs(prev => [{ msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 15))
     }
 
     // Helper to normalize phone numbers for comparison
@@ -180,6 +186,31 @@ export default function SMSSimulatorPage() {
         checkBackendHealth()
     }, [fetchPlayers, fetchClubs, fetchConfirmedMatches, checkBackendHealth])
 
+    const fetchMessagesForPlayer = useCallback(async (player: Player) => {
+        try {
+            const url = `/api/sms-outbox?phone_number=${encodeURIComponent(player.phone_number)}&history=true`
+            const res = await authFetch(url)
+            if (res.ok) {
+                const data = await res.json()
+                const messages: OutboxMessage[] = data.messages || []
+                if (messages.length > 0) {
+                    setConversations(prev => ({
+                        ...prev,
+                        [player.player_id]: messages.map(m => ({
+                            id: m.id,
+                            from: 'system',
+                            text: m.body,
+                            timestamp: new Date(m.created_at)
+                        }))
+                    }))
+                    addDebugLog(`Loaded ${messages.length} msgs for ${player.name}`)
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching player history:', e)
+        }
+    }, [addDebugLog])
+
     useEffect(() => {
         if (currentClubId) {
             fetchGroups(currentClubId)
@@ -204,16 +235,18 @@ export default function SMSSimulatorPage() {
                     const messages: OutboxMessage[] = data.messages || []
 
                     if (messages.length > 0) {
-                        addDebugLog(`Poll: Found ${messages.length} unread messages`)
+                        addDebugLog(`Poll: Found ${messages.length} unread`)
                     }
 
-                    // Group messages by phone number and add to conversations
+                    // Use REF to get CURRENT players list (avoids stale matching)
+                    const currentSelected = selectedPlayersRef.current
+
                     for (const msg of messages) {
                         const normalizedTarget = normalizePhone(msg.to_number)
-                        const player = selectedPlayers.find(p => normalizePhone(p.phone_number) === normalizedTarget)
+                        const player = currentSelected.find(p => normalizePhone(p.phone_number) === normalizedTarget)
 
                         if (player) {
-                            addDebugLog(`Matched: ${player.name} (${normalizedTarget})`)
+                            addDebugLog(`Matched: ${player.name}`)
                             const newMessage: Message = {
                                 id: msg.id,
                                 from: 'system',
@@ -230,28 +263,22 @@ export default function SMSSimulatorPage() {
                                 }
                             })
 
-                            // Mark as read - use the new slash-resilient route
+                            // Mark as read
                             try {
                                 const readRes = await authFetch(`/api/sms-outbox/${msg.id}/read/`, { method: 'POST' })
-                                if (!readRes.ok) {
-                                    addDebugLog(`Err: Mark read failed (${readRes.status})`)
-                                }
+                                if (!readRes.ok) addDebugLog(`Err: Read-mark failed`)
                             } catch (e) {
-                                console.error(`Error marking message ${msg.id} as read:`, e)
                                 addDebugLog(`Err: Read exception`)
                             }
                         } else {
-                            // Only log once for unknown numbers to avoid spam
-                            addDebugLog(`No player for: ${normalizedTarget}`)
-                            console.warn(`No selected player matched ${normalizedTarget}.`, selectedPlayers)
+                            addDebugLog(`No match: ${normalizedTarget}`)
                         }
                     }
                 } else if (response.status === 401) {
-                    addDebugLog(`Auth: Session expired`)
+                    addDebugLog(`Auth: Expired`)
                 }
             } catch (error) {
-                console.error('Error polling outbox:', error)
-                addDebugLog(`Net Error: ${error instanceof Error ? error.message : 'Unknown'}`)
+                addDebugLog(`Net: ${error instanceof Error ? error.message : 'Error'}`)
             } finally {
                 isPolling = false
                 timeoutId = setTimeout(pollOutbox, 2000)
@@ -259,11 +286,10 @@ export default function SMSSimulatorPage() {
         }
 
         timeoutId = setTimeout(pollOutbox, 500)
-
         return () => {
             if (timeoutId) clearTimeout(timeoutId)
         }
-    }, [testMode, selectedPlayers])
+    }, [testMode, selectedPlayers.length === 0]) // Depend on length to trigger/stop
 
 
 
@@ -298,6 +324,8 @@ export default function SMSSimulatorPage() {
                 ...conversations,
                 [player.player_id]: []
             })
+            // Fetch history for this player immediately
+            fetchMessagesForPlayer(player)
         }
     }
 
@@ -330,6 +358,7 @@ export default function SMSSimulatorPage() {
             ...conversations,
             [newPlayer.player_id]: []
         })
+        fetchMessagesForPlayer(newPlayer)
     }
 
     const handleSendMatchInvite = async () => {
@@ -972,15 +1001,36 @@ Example: MAYBE 1`
                 {testMode && (
                     <div className="bg-gray-900 rounded-lg p-3 mb-6 font-mono text-xs text-green-400 overflow-hidden shadow-inner">
                         <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
-                            <span className="text-gray-400">⚡ Simulator Activity Feed</span>
-                            <span className="text-gray-500">Polling every 2s</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-gray-400 font-bold">⚡ SIMULATOR ACTIVITY FEED</span>
+                                <button
+                                    onClick={() => setDebugLogs([])}
+                                    className="text-gray-500 hover:text-gray-300 transition-colors"
+                                >
+                                    [Clear Feed]
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={async () => {
+                                        if (confirm("Clear all pending unread SMS in the backend outbox?")) {
+                                            const res = await authFetch('/api/sms-outbox/clear-all', { method: 'POST' });
+                                            if (res.ok) addDebugLog("Outbox Cleared");
+                                        }
+                                    }}
+                                    className="text-orange-400 hover:text-orange-300 font-bold transition-colors"
+                                >
+                                    [CLEAR LOGS & PENDING SMS]
+                                </button>
+                                <span className="text-gray-500">Polling: 2s</span>
+                            </div>
                         </div>
                         <div className="space-y-1">
                             {debugLogs.length === 0 ? (
-                                <div className="text-gray-600">Waiting for activity...</div>
+                                <div className="text-gray-600 italic">Waiting for activity... Add players to see events.</div>
                             ) : (
                                 debugLogs.map((log, i) => (
-                                    <div key={i} className="flex gap-2">
+                                    <div key={i} className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
                                         <span className="text-gray-500">[{log.time}]</span>
                                         <span>{log.msg}</span>
                                     </div>
