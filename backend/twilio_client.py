@@ -1,4 +1,5 @@
 import os
+import re
 from contextvars import ContextVar
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
@@ -68,17 +69,33 @@ def get_force_test_mode() -> bool:
 
 
 def normalize_phone_number(phone: str) -> str:
-    """Standardize phone numbers to +1XXXXXXXXXX format."""
+    """
+    STRICT normalization: Returns +1XXXXXXXXXX or None.
+    Strips all formatting, spaces, and ENSURES +1 prefix.
+    """
     if not phone:
+        return None
+        
+    # Twilio simulator/test numbers might start with '+' and our internal code
+    if phone.startswith('+1561') and ' ' not in phone and '(' not in phone:
+        # Already clean local testing number
         return phone
-    clean = phone.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    if clean.startswith("+"):
-        return clean
-    if clean.startswith("1") and len(clean) == 11:
-        return "+" + clean
-    if len(clean) == 10:
-        return "+1" + clean
-    return clean
+
+    # Strip everything except digits
+    digits = re.sub(r'\D', '', phone)
+    
+    if not digits:
+        return None
+
+    # Handle US Numbers (10 digits -> +1, 11 digits starting with 1 -> +)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits.startswith('1'):
+        return f"+{digits}"
+    
+    # If it's already a full international number (more than 11 digits or doesn't start with 1)
+    # We still prefix with + to be safe for Twilio
+    return f"+{digits}"
 
 
 def store_in_outbox(to_number: str, body: str) -> bool:

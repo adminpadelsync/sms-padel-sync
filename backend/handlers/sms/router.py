@@ -1,3 +1,4 @@
+import re
 from typing import Optional, Tuple, Dict
 from database import supabase
 from twilio_client import set_reply_from, set_club_name, send_sms
@@ -129,28 +130,28 @@ def resolve_club_context(from_number: str, to_number: str = None, club_id: str =
 def resolve_player(from_number: str, club_id: str) -> Optional[Dict]:
     """
     Find player by phone number and verify club membership.
+    Uses strict normalization match.
     """
-    import re
-    # Strip all non-digits and take the last 10
-    digits = re.sub(r'\D', '', from_number)
-    last_10 = digits[-10:] if len(digits) >= 10 else digits
+    from twilio_client import normalize_phone_number
+    normalized = normalize_phone_number(from_number)
     
-    # Robust search: try exact match OR match on last 10 digits
-    # Note: We quote the phone numbers to handle '+' correctly in the .or_ filter
-    or_filter = f'phone_number.eq."{from_number}",phone_number.ilike.%{last_10}'
+    if not normalized:
+        return None
+
+    # Search for exactly the normalized number
     player_res = supabase.table("players").select("*") \
-        .or_(or_filter) \
+        .eq("phone_number", normalized) \
         .execute()
     
     potential_player = player_res.data[0] if player_res.data else None
     
-    # Secondary Fallback: If formatted differently (e.g. (561) 962-5484), last_10 won't match "5619625484"
-    if not potential_player and len(last_10) >= 7:
-        last_7 = last_10[-7:]
-        # Look for the last 7 digits with anything in between
-        pattern = f"%{last_7[0]}%{last_7[1]}%{last_7[2]}%{last_7[3]}%{last_7[4]}%{last_7[5]}%{last_7[6]}"
-        player_res = supabase.table("players").select("*").ilike("phone_number", pattern).execute()
-        potential_player = player_res.data[0] if player_res.data else None
+    # If not found by full number, try last 10 as absolute backup (if database is still messy)
+    if not potential_player:
+        digits = re.sub(r'\D', '', from_number)
+        last_10 = digits[-10:] if len(digits) >= 10 else digits
+        if last_10:
+            player_res = supabase.table("players").select("*").ilike("phone_number", f"%{last_10}").execute()
+            potential_player = player_res.data[0] if player_res.data else None
 
     if potential_player:
         # Fetch memberships for this club
