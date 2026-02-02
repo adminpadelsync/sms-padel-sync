@@ -136,12 +136,22 @@ def resolve_player(from_number: str, club_id: str) -> Optional[Dict]:
     last_10 = digits[-10:] if len(digits) >= 10 else digits
     
     # Robust search: try exact match OR match on last 10 digits
+    # Note: We quote the phone numbers to handle '+' correctly in the .or_ filter
+    or_filter = f'phone_number.eq."{from_number}",phone_number.ilike.%{last_10}'
     player_res = supabase.table("players").select("*") \
-        .or_(f"phone_number.eq.{from_number},phone_number.ilike.%{last_10}") \
+        .or_(or_filter) \
         .execute()
     
     potential_player = player_res.data[0] if player_res.data else None
     
+    # Secondary Fallback: If formatted differently (e.g. (561) 962-5484), last_10 won't match "5619625484"
+    if not potential_player and len(last_10) >= 7:
+        last_7 = last_10[-7:]
+        # Look for the last 7 digits with anything in between
+        pattern = f"%{last_7[0]}%{last_7[1]}%{last_7[2]}%{last_7[3]}%{last_7[4]}%{last_7[5]}%{last_7[6]}"
+        player_res = supabase.table("players").select("*").ilike("phone_number", pattern).execute()
+        potential_player = player_res.data[0] if player_res.data else None
+
     if potential_player:
         # Fetch memberships for this club
         memberships_res = supabase.table("group_memberships").select(
@@ -159,6 +169,13 @@ def resolve_player(from_number: str, club_id: str) -> Optional[Dict]:
                 player["is_member"] = True
                 return player
             else:
+                # Fallback: if they are in a group in this club, they SHOULD be a member.
+                if group_names:
+                     print(f"[SMS] Player {from_number} is in groups for {club_id}, auto-resolving membership.")
+                     potential_player["club_id"] = str(club_id)
+                     potential_player["is_member"] = True
+                     return potential_player
+
                 print(f"[SMS] Player {from_number} exists but is not a member of club {club_id}")
                 # Still attach club_id for context/settings, but keep it a 'lite' player
                 potential_player["club_id"] = str(club_id)
