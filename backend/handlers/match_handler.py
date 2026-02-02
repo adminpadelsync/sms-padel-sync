@@ -172,7 +172,27 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
 
     
     if groups_data:
-        # Player is in groups - ask group selection FIRST with time confirmation
+        # AUTO-SELECT: If player is ONLY in one group for this club, Bypass the menu
+        if len(groups_data) == 1:
+            item = groups_data[0]
+            print(f"[SMS] Auto-selecting only group for player: {item['name']}")
+            _create_match(
+                from_number,
+                iso_format,
+                human_readable,
+                player,
+                level_min=None,
+                level_max=None,
+                gender_preference=None,
+                target_group_id=item["group_id"],
+                skip_filters=True,
+                group_name=item["name"],
+                friendly_time=format_sms_datetime(parsed_dt, club_id=cid or player.get("club_id")),
+                cid=cid or player.get("club_id")
+            )
+            return
+
+        # Multi-group: ask group selection FIRST with time confirmation
         # Format list - start at 2 since 1 is Everyone
         groups_list = ""
         group_options = {}
@@ -184,6 +204,7 @@ def handle_match_date_input(from_number: str, body: str, player: dict, entities:
                 "group_name": group_name
             }
         
+        print(f"[SMS] Showing group selection menu to {from_number} ({len(groups_data)} options)")
         send_sms(from_number, msg.MSG_ASK_GROUP_WITH_TIME.format(
             club_name=get_club_name(),
             time=human_readable,

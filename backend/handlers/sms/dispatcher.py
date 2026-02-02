@@ -90,33 +90,32 @@ class IntentDispatcher:
             
             print(f"[REASONER] Intent: {intent} (conf: {confidence}) | State: {current_state}")
 
+            # 6. Inject Router-resolved Group into entities for downstream handlers
+            if gid:
+                entities = entities or {}
+                if "group_id" not in entities:
+                    entities["group_id"] = str(gid)
+
             # 5. Global Interrupts
             GLOBAL_INTERRUPTS = ["START_MATCH", "CHECK_STATUS", "RESET", "JOIN_GROUP", "MUTE", "UNMUTE", "REPORT_RESULT", "BOOK_COURT"]
             MATCH_STATES = [msg.STATE_MATCH_REQUEST_DATE, msg.STATE_MATCH_REQUEST_CONFIRM, msg.STATE_MATCH_GROUP_SELECTION]
+            
+            # Explicit commands always interrupt
+            cmd = body.lower().strip()
+            is_explicit_match_cmd = cmd == "play" or cmd == "reset"
+            
             is_match_interruption = (intent in ["START_MATCH", "JOIN_GROUP"] and current_state in MATCH_STATES)
 
-            if intent in GLOBAL_INTERRUPTS and confidence > 0.8 and not is_match_interruption:
+            if (intent in GLOBAL_INTERRUPTS and confidence > 0.8 and not is_match_interruption) or is_explicit_match_cmd:
                 print(f"[SMS] Global interrupt: '{intent}' overriding state '{current_state}'")
                 clear_user_state(from_number)
                 current_state = None 
-                
-                # Logic Mapping for Interrupts
-                if intent == "START_MATCH":
-                    # If not starting with 'play', force it roughly? 
-                    # Actually handle_play_command takes entities.
-                    pass 
-                
-                # We define body override only if we need to force a command string match? 
-                # Better to dispatch directly below.
 
             # 6. Dispatch Logic
             
             # A. Command Processing (No State)
             if player and player.get("is_member") and not current_state:
-                cmd = body.lower().strip()
-                
                 # Invite Response Logic (1Y, 1N, etc.)
-                # Fetch fresh invites for processing
                 all_invites_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute()
                 all_sent_invites = all_invites_res.data or []
                 
@@ -133,7 +132,7 @@ class IntentDispatcher:
                             handle_invite_response(from_number, action, player, all_sent_invites[invite_index])
                             return 
                         else:
-                            send_sms(from_number, f"❌ Invalid match number.", club_id=cid)
+                            send_sms(from_number, "❌ Invalid match number.", club_id=cid)
                             return
 
                     # B. SLOW PATH: Reasoner-detected intents (e.g. "Yes!", "Count me in!")
@@ -151,7 +150,7 @@ class IntentDispatcher:
                 if cmd == "reset":
                     pass # Done, cleared above
                 elif cmd == "play" or (intent == "START_MATCH" and confidence > 0.8):
-                    handle_play_command(from_number, body, player, cid, entities, str(gid) if gid else None)
+                    handle_play_command(from_number, body, player, cid, entities)
                     return
                 elif intent == "REPORT_RESULT" and confidence > 0.8:
                     handle_result_report(from_number, player, entities, cid=cid)
@@ -175,10 +174,7 @@ class IntentDispatcher:
                     handle_groups_command(from_number, player, cid, cname, ai_reply=reasoner_result.reply_text)
                     return
                 elif cmd == "availability":
-                    handle_availability_command(from_number, player, cid) # Need to export this
-                    # If I missed adding it to commands.py, I should fix that.
-                    # I think I didn't add handle_availability_command implementation yet.
-                    # I'll stub it or add it to commands.py
+                    handle_availability_command(from_number, player, cid) 
                     return
                 
                 # Fallback / ChitChat
@@ -225,21 +221,17 @@ class IntentDispatcher:
                 return
             
             elif current_state == msg.STATE_UPDATING_AVAILABILITY:
-                # Need to move this logic to commands or handlers/availability_handler.py
-                # For now, let's assume it's refactored or kept inline? 
-                # It's bulky. Ideally I'd put it in 'commands.py' as 'handle_availability_update'.
                 from .commands import handle_availability_update
                 handle_availability_update(from_number, body, player, cid)
                 return
 
             elif current_state == msg.STATE_BROWSING_GROUPS:
-                # Move to logic?
                 from .commands import handle_group_browsing_response
                 handle_group_browsing_response(from_number, body, player, state_data, entities, cid)
                 return
 
             elif current_state == msg.STATE_MATCH_REQUEST_DATE:
-                handle_match_request(from_number, body, player, entities, cid=cid) # Reuse handler
+                handle_match_request(from_number, body, player, entities, cid=cid)
                 return
             elif current_state == msg.STATE_MATCH_REQUEST_CONFIRM:
                 handle_match_confirmation(from_number, body, player, state_data, entities, cid=cid)
@@ -256,7 +248,6 @@ class IntentDispatcher:
                 return
 
         except Exception as e:
-            # Use resolved cid if available, otherwise fall back to passed club_id
             error_cid = cid if 'cid' in locals() else club_id
             
             log_sms_error(
