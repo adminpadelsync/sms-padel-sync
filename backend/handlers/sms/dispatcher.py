@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+import re
 
 # Core imports
 from twilio_client import set_reply_from, set_club_name, set_dry_run, get_dry_run_responses, send_sms
@@ -7,6 +8,7 @@ from redis_client import get_user_state, set_user_state, clear_user_state
 from logic.reasoner import reason_message, ReasonerResult
 from error_logger import log_sms_error
 import sms_constants as msg
+from logic_utils import get_now_utc, parse_iso_datetime, format_sms_datetime
 
 # New Package Imports
 from .router import resolve_club_context, resolve_player
@@ -62,10 +64,14 @@ class IntentDispatcher:
             # 4. Fetch Pending Context (Invites)
             pending_context = None
             if player:
+                # Include SENT, MAYBE, and RECENTLY DECLINED (within 3 hours) for context
+                # This helps the AI understand if a response like "Sun" is a correction to a previous "No"
+                three_hours_ago = (get_now_utc() - timedelta(hours=3)).isoformat()
+                
                 invites_res = supabase.table("match_invites") \
-                    .select("match_id, status, matches(scheduled_time, clubs(name))") \
+                    .select("match_id, status, responded_at, matches(scheduled_time, clubs(name, club_id))") \
                     .eq("player_id", player["player_id"]) \
-                    .in_("status", ["sent", "maybe"]) \
+                    .or_(f"status.in.(sent,maybe),and(status.eq.declined,responded_at.gt.{three_hours_ago})") \
                     .order("sent_at", desc=True) \
                     .execute()
                 
@@ -73,11 +79,20 @@ class IntentDispatcher:
                     pending_invites = []
                     for inv in invites_res.data:
                         match = inv.get("matches", {})
+                        club = match.get("clubs", {})
+                        
+                        # CRITICAL: Localize the time for the AI to prevent "UTC Leak" hallucinations
+                        raw_time = match.get("scheduled_time")
+                        friendly_time = "Unknown"
+                        if raw_time:
+                            parsed_time = parse_iso_datetime(raw_time)
+                            friendly_time = format_sms_datetime(parsed_time, club_id=club.get("club_id"))
+
                         pending_invites.append({
                             "type": "MATCH_INVITE",
                             "status": inv["status"],
-                            "match_time": match.get("scheduled_time"),
-                            "club_name": match.get("clubs", {}).get("name")
+                            "match_time_local": friendly_time, # Feed the AI the human-readable local time
+                            "club_name": club.get("name")
                         })
                     pending_context = pending_invites
 
@@ -115,35 +130,47 @@ class IntentDispatcher:
             
             # A. Command Processing (No State)
             if player and player.get("is_member") and not current_state:
-                # Invite Response Logic (1Y, 1N, etc.)
+                # 1. Fetch actionable invites (SENT/MAYBE)
                 all_invites_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).in_("status", ["sent", "maybe"]).order("sent_at", desc=True).execute()
                 all_sent_invites = all_invites_res.data or []
                 
-                if all_sent_invites:
-                    import re
-                    # A. FAST PATH: Literal numbered responses (e.g. "1Y", "1")
-                    numbered_match = re.match(r'^(\d+)([ynm])?$', cmd)
-                    if numbered_match:
-                        invite_index = int(numbered_match.group(1)) - 1
-                        action_char = numbered_match.group(2)
-                        action = {'y': 'yes', 'n': 'no', 'm': 'maybe'}.get(action_char, 'yes')
-                        
-                        if 0 <= invite_index < len(all_sent_invites):
-                            handle_invite_response(from_number, action, player, all_sent_invites[invite_index])
-                            return 
-                        else:
-                            send_sms(from_number, "❌ Invalid match number.", club_id=cid)
-                            return
+                # A. FAST PATH: Literal numbered responses (e.g. "1Y", "1")
+                numbered_match = re.match(r'^(\d+)([ynm])?$', cmd)
+                if numbered_match and all_sent_invites:
+                    invite_index = int(numbered_match.group(1)) - 1
+                    action_char = numbered_match.group(2)
+                    action = {'y': 'yes', 'n': 'no', 'm': 'maybe'}.get(action_char, 'yes')
+                    
+                    if 0 <= invite_index < len(all_sent_invites):
+                        handle_invite_response(from_number, action, player, all_sent_invites[invite_index])
+                        return 
+                    else:
+                        send_sms(from_number, "❌ Invalid match number.", club_id=cid)
+                        return
 
-                    # B. SLOW PATH: Reasoner-detected intents (e.g. "Yes!", "Count me in!")
-                    if intent == "ACCEPT_INVITE" and confidence > 0.8:
+                # B. SLOW PATH: Reasoner-detected intents (e.g. "Yes!", "Count me in!")
+                if intent == "ACCEPT_INVITE" and confidence > 0.8:
+                    if all_sent_invites:
                         handle_invite_response(from_number, "yes", player, all_sent_invites[0])
                         return
-                    elif intent == "DECLINE_INVITE" and confidence > 0.8:
+                    else:
+                        # Falling through to AI reply is often fine here if they say "Yes" but have no invites
+                        pass
+                elif intent == "DECLINE_INVITE" and confidence > 0.8:
+                    if all_sent_invites:
                         handle_invite_response(from_number, "no", player, all_sent_invites[0])
                         return
-                    elif intent == "DECLINE_WITH_ALTERNATIVE" and confidence > 0.8:
-                        handle_invite_response(from_number, "no", player, all_sent_invites[0], entities=entities)
+                elif intent == "DECLINE_WITH_ALTERNATIVE" and confidence > 0.8:
+                    # HEURISTIC: If declining with alternative, we can also apply this to a RECENTLY declined invite
+                    # This handles the case where someone says "No Saturday" then corrected to "Wait, Sunday"
+                    target_invite = all_sent_invites[0] if all_sent_invites else None
+                    if not target_invite:
+                        # Try to find the most recent invite regardless of status
+                        recent_res = supabase.table("match_invites").select("*").eq("player_id", player["player_id"]).order("sent_at", desc=True).limit(1).execute()
+                        target_invite = recent_res.data[0] if recent_res.data else None
+                    
+                    if target_invite:
+                        handle_invite_response(from_number, "no", player, target_invite, entities=entities)
                         return
 
                 # Normal Commands

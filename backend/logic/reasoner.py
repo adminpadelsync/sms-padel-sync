@@ -75,6 +75,9 @@ Current User Profile: {user_profile}
 - ALWAYS use the player's name if provided in the profile.
 - If there is a "Pending Context" regarding a match invite, prioritize ACCEPT_INVITE or DECLINE_INVITE intents for responses like "Yes", "No", "I'm in", etc.
 - If the user declines but suggests another time (e.g. "No, but I can do 7pm"), use intent DECLINE_WITH_ALTERNATIVE and extract the suggested_time.
+- AMBIGUITY HANDLING: If the user provides a day/time (e.g. "Sun" or "9am") immediately after having just declined a match with a suggestion (check status 'declined' in pending context), treat it as a correction to their suggested_time (DECLINE_WITH_ALTERNATIVE) rather than a "Yes" to the original match.
+- NEVER promise or confirm that a player is "In" or "Confirmed" for a match in your `reply_text` for ACCEPT_INVITE. The system will send its own confirmation after validating spots. Your reply should be supportive but neutral (e.g., "Got it! Sending that update now.").
+- If you see a match in "Pending Context" with status 'declined', ignore it for the purpose of ACCEPT_INVITE unless the user explicitly says something like "Actually I can play that match after all".
 - Never say "Yes to what?" if there is an obvious pending invite or match context. Be proactive and assume they are responding to the most recent relevant event in the context.
 
 ### Output Format:
