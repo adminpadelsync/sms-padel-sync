@@ -282,8 +282,14 @@ export default function MatchDetailPage() {
 
                 if (res.ok) {
                     const data = await res.json()
-                    // Exclude already invited players and confirmed players
-                    const alreadyInvitedIds = new Set(invites.map(i => i.player_id))
+                    // Exclude only active/pending invitations. 
+                    // Allow re-inviting those who were removed, declined, or never responded.
+                    const activeInviteStatuses = ['accepted', 'sent', 'maybe', 'pending_sms']
+                    const alreadyInvitedIds = new Set(
+                        invites
+                            .filter(i => activeInviteStatuses.includes(i.status))
+                            .map(i => i.player_id)
+                    )
                     const allPlayerIds = new Set([
                         ...(match.team_1_players || []),
                         ...(match.team_2_players || [])
