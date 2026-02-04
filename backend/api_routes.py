@@ -36,6 +36,7 @@ class OutreachRequest(BaseModel):
     player_ids: List[str]
     scheduled_time: str
     initial_player_ids: List[str] = []  # Players already committed to the match
+    direct_assignment: bool = False
 
 class MatchUpdateRequest(BaseModel):
     scheduled_time: Optional[str] = None
@@ -734,9 +735,10 @@ async def create_outreach(request: OutreachRequest, user: UserContext = Depends(
             club_id=request.club_id,
             player_ids=request.player_ids,
             scheduled_time=request.scheduled_time,
-            initial_player_ids=request.initial_player_ids
+            initial_player_ids=request.initial_player_ids,
+            direct_assignment=request.direct_assignment
         )
-        return {"match": match, "message": "Outreach initiated successfully"}
+        return {"match": match, "message": "Outreach initiated successfully" if not request.direct_assignment else "Match directly assigned successfully"}
     except Exception as e:
         print(f"DEBUG: Exception in create_outreach: {e}")
         traceback.print_exc()

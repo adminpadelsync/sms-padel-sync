@@ -37,6 +37,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
         gender_preference: 'mixed',
         scheduled_time: '',
         initial_player_ids: [] as string[], // Players already committed to the match
+        direct_assignment: false, // Manual match assignment by admin
     })
 
     // Player search for initial players
@@ -44,24 +45,18 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
     const [playerSearchResults, setPlayerSearchResults] = useState<Player[]>([])
     const [selectedInitialPlayers, setSelectedInitialPlayers] = useState<Player[]>([])
 
+    // Step 2: Selection
+    const [recommendations, setRecommendations] = useState<Player[]>([])
+    const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
+
     // Initialize with passed players
     useEffect(() => {
         if (isOpen && initialSelectedPlayers.length > 0) {
-            // If we have initial players from the table selection, treat them as the invite list
             setSelectedPlayers(initialSelectedPlayers.map(p => p.player_id))
-            // We DO NOT set them as initial_player_ids anymore, they are just invitees
-            // unless the user explicitly moves them (which we don't strictly support moving back to initial yet, 
-            // but the requirement is they are invites).
         } else {
             setSelectedPlayers([])
         }
     }, [isOpen, initialSelectedPlayers])
-
-
-
-    // Step 2: Selection
-    const [recommendations, setRecommendations] = useState<Player[]>([])
-    const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
 
     // Player search depends on clubId
     useEffect(() => {
@@ -93,17 +88,15 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                 return
             }
 
-            // Quick Mode: if we already have selected players, skip recommendations
-            if (initialSelectedPlayers.length > 0) {
+            // Quick Mode or Direct Assignment skips recommendations
+            if (initialSelectedPlayers.length > 0 || config.direct_assignment) {
                 setStep(3)
                 return
             }
 
             setLoading(true)
             try {
-                // Fetch recommendations
                 const { authFetch } = await import('@/utils/auth-fetch')
-
                 const response = await authFetch('/api/recommendations', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -111,12 +104,11 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                         club_id: clubId,
                         target_level: config.target_level,
                         gender_preference: config.gender_preference === 'mixed' ? null : config.gender_preference,
-                        exclude_player_ids: config.initial_player_ids // Exclude initial players from recommendations
+                        exclude_player_ids: config.initial_player_ids
                     })
                 })
 
                 if (!response.ok) throw new Error('Failed to fetch recommendations')
-
                 const data = await response.json()
                 setRecommendations(data.players)
                 setStep(2)
@@ -135,15 +127,6 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
         setLoading(true)
         try {
             const { authFetch } = await import('@/utils/auth-fetch')
-
-            const payload = {
-                club_id: clubId,
-                player_ids: selectedPlayers,
-                scheduled_time: config.scheduled_time,
-                initial_player_ids: config.initial_player_ids
-            }
-            console.log('Sending Invites Payload:', payload)
-
             const response = await authFetch('/api/outreach', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -151,37 +134,22 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                     club_id: clubId,
                     player_ids: selectedPlayers,
                     scheduled_time: config.scheduled_time,
-                    initial_player_ids: config.initial_player_ids // Players already committed
+                    initial_player_ids: config.initial_player_ids,
+                    direct_assignment: config.direct_assignment
                 })
             })
 
             if (!response.ok) {
                 const errorText = await response.text()
-                let errorMessage = 'Failed to send invites'
-                try {
-                    const errorJson = JSON.parse(errorText)
-                    errorMessage = errorJson.detail || errorMessage
-                } catch (e) {
-                    console.error('Failed to parse error JSON:', e)
-                    // If not JSON, use text if short, otherwise status text
-                    errorMessage = errorText.length < 100 ? errorText : response.statusText
-                }
-
-                console.error('Server Error Details:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    body: errorText
-                })
-
-                throw new Error(errorMessage)
+                throw new Error(errorText || 'Failed to process request')
             }
 
-            alert('Invites sent successfully!')
+            alert(config.direct_assignment ? 'Match created successfully!' : 'Invites sent successfully!')
             onClose()
             window.location.reload()
         } catch (error) {
             console.error(error)
-            alert(error instanceof Error ? error.message : 'Error sending invites')
+            alert(error instanceof Error ? error.message : 'Error processing request')
         } finally {
             setLoading(false)
         }
@@ -209,46 +177,56 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                         <div className="space-y-4">
                             {initialSelectedPlayers.length === 0 ? (
                                 <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Level</label>
-                                        <select
-                                            value={config.target_level}
-                                            onChange={(e) => setConfig({ ...config, target_level: parseFloat(e.target.value) })}
-                                            className="w-full border border-gray-300 rounded-md px-3 py-2"
-                                        >
-                                            {[2.5, 3.0, 3.5, 4.0, 4.5, 5.0].map(l => (
-                                                <option key={l} value={l}>{l}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Target Level</label>
+                                            <select
+                                                disabled={config.direct_assignment}
+                                                value={config.target_level}
+                                                onChange={(e) => setConfig({ ...config, target_level: parseFloat(e.target.value) })}
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-50"
+                                            >
+                                                {[2.5, 3.0, 3.5, 4.0, 4.5, 5.0].map(l => (
+                                                    <option key={l} value={l}>{l}</option>
+                                                ))}
+                                            </select>
+                                        </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Gender Preference</label>
-                                        <select
-                                            value={config.gender_preference}
-                                            onChange={(e) => setConfig({ ...config, gender_preference: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-md px-3 py-2"
-                                        >
-                                            <option value="mixed">Mixed (Any)</option>
-                                            <option value="male">Male</option>
-                                            <option value="female">Female</option>
-                                        </select>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Gender Preference</label>
+                                            <select
+                                                disabled={config.direct_assignment}
+                                                value={config.gender_preference}
+                                                onChange={(e) => setConfig({ ...config, gender_preference: e.target.value })}
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-50"
+                                            >
+                                                <option value="mixed">Mixed (Any)</option>
+                                                <option value="male">Male</option>
+                                                <option value="female">Female</option>
+                                            </select>
+                                        </div>
                                     </div>
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Starting Players (Optional)
+                                            {config.direct_assignment ? 'Confirmed Players' : 'Starting Players (Optional)'}
                                         </label>
                                         <p className="text-xs text-gray-500 mb-2">
-                                            Add 1-3 players who are already committed to this match
+                                            {config.direct_assignment
+                                                ? "Exactly 4 players required for manual assignment"
+                                                : "Add 1-3 players who are already committed to this match"}
                                         </p>
 
-                                        {/* Selected Players */}
                                         {selectedInitialPlayers.length > 0 && (
                                             <div className="mb-2 space-y-1">
-                                                {selectedInitialPlayers.map(player => (
+                                                {selectedInitialPlayers.map((player, idx) => (
                                                     <div key={player.player_id} className="flex items-center justify-between bg-indigo-50 px-3 py-2 rounded">
-                                                        <span className="text-sm font-medium text-gray-900">{player.name}</span>
+                                                        <span className="text-sm font-medium text-gray-900">
+                                                            {player.name}
+                                                            {config.direct_assignment && idx === 0 && (
+                                                                <span className="ml-2 text-xs font-normal text-indigo-600">(Originator)</span>
+                                                            )}
+                                                        </span>
                                                         <button
                                                             onClick={() => handleRemoveInitialPlayer(player.player_id)}
                                                             className="text-red-600 hover:text-red-800 text-sm"
@@ -260,8 +238,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                                             </div>
                                         )}
 
-                                        {/* Search Input */}
-                                        {selectedInitialPlayers.length < 3 && (
+                                        {selectedInitialPlayers.length < (config.direct_assignment ? 4 : 3) && (
                                             <div className="relative">
                                                 <input
                                                     type="text"
@@ -271,7 +248,6 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                                                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                                                 />
 
-                                                {/* Search Results Dropdown */}
                                                 {playerSearchResults.length > 0 && (
                                                     <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                                                         {playerSearchResults.map(player => (
@@ -308,6 +284,19 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                                 </div>
                             )}
 
+                            <div className="flex items-center space-x-2 py-3 border-t border-b border-gray-100">
+                                <input
+                                    type="checkbox"
+                                    id="directAssignment"
+                                    checked={config.direct_assignment}
+                                    onChange={(e) => setConfig({ ...config, direct_assignment: e.target.checked })}
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="directAssignment" className="text-sm font-medium text-gray-900">
+                                    Manual Match Assignment (No invites, 4 players required)
+                                </label>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
                                 <div className="grid grid-cols-2 gap-4">
@@ -332,7 +321,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                                         required
                                     >
                                         {Array.from({ length: 33 }).map((_, i) => {
-                                            const hour = Math.floor(i / 2) + 6 // Start at 6 AM
+                                            const hour = Math.floor(i / 2) + 6
                                             const minute = (i % 2) * 30
                                             const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
                                             return (
@@ -371,9 +360,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                                         </div>
                                     </div>
                                 ))}
-                                {recommendations.length === 0 && (
-                                    <p className="text-center text-gray-500 py-4">No matching players found.</p>
-                                )}
+                                {recommendations.length === 0 && <p className="text-center text-gray-500 py-4">No matching players found.</p>}
                             </div>
                         </div>
                     )}
@@ -385,13 +372,27 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
-                            <h3 className="text-lg font-medium text-gray-900">Ready to send invites?</h3>
+                            <h3 className="text-lg font-medium text-gray-900">
+                                {config.direct_assignment ? 'Confirm Match Assignment' : 'Ready to send invites?'}
+                            </h3>
                             <div className="mt-4 max-w-sm mx-auto text-left bg-gray-50 rounded-lg p-4">
-                                <p className="text-sm text-gray-600 mb-2">You are sending invites to:</p>
+                                <p className="text-sm text-gray-600 mb-2">
+                                    {config.direct_assignment
+                                        ? 'The following 4 players will be added to the match and receive a confirmation SMS immediately:'
+                                        : 'You are sending invites to:'}
+                                </p>
                                 <ul className="space-y-1 mb-4">
-                                    {(initialSelectedPlayers.length > 0 ? initialSelectedPlayers : recommendations.filter(p => selectedPlayers.includes(p.player_id))).map(p => (
+                                    {(config.direct_assignment || initialSelectedPlayers.length > 0
+                                        ? selectedInitialPlayers
+                                        : recommendations.filter(p => selectedPlayers.includes(p.player_id))
+                                    ).map((p, idx) => (
                                         <li key={p.player_id} className="text-sm font-medium text-gray-900 flex justify-between">
-                                            <span>{p.name}</span>
+                                            <span>
+                                                {p.name}
+                                                {config.direct_assignment && idx === 0 && (
+                                                    <span className="ml-2 text-xs font-normal text-indigo-600">(Originator)</span>
+                                                )}
+                                            </span>
                                             <span className="text-gray-500 text-xs">Level {(p.adjusted_skill_level || p.declared_skill_level).toFixed(2)}</span>
                                         </li>
                                     ))}
@@ -410,13 +411,7 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                 <div className="px-6 py-4 bg-gray-50 flex justify-between rounded-b-lg">
                     {step > 1 && (
                         <button
-                            onClick={() => {
-                                if (isQuickMode && step === 3) {
-                                    setStep(1)
-                                } else {
-                                    setStep(step - 1)
-                                }
-                            }}
+                            onClick={() => setStep(isQuickMode && step === 3 ? 1 : step - 1)}
                             className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                         >
                             Back
@@ -426,7 +421,11 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                         {step < 3 ? (
                             <button
                                 onClick={handleNext}
-                                disabled={loading || (step === 1 && !config.scheduled_time)}
+                                disabled={
+                                    loading ||
+                                    (step === 1 && !config.scheduled_time) ||
+                                    (step === 1 && config.direct_assignment && selectedInitialPlayers.length !== 4)
+                                }
                                 className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
                             >
                                 {loading ? 'Loading...' : 'Next'}
@@ -435,9 +434,10 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
                             <button
                                 onClick={handleSendInvites}
                                 disabled={loading}
-                                className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                                className={`px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white disabled:opacity-50 ${config.direct_assignment ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'
+                                    }`}
                             >
-                                {loading ? 'Sending...' : 'Send Invites'}
+                                {loading ? 'Processing...' : (config.direct_assignment ? 'Confirm Match' : 'Create Match')}
                             </button>
                         )}
                     </div>

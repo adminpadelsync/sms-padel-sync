@@ -10,12 +10,27 @@ backend_dir = Path(__file__).parent.parent / "backend"
 load_dotenv(backend_dir / ".env")
 
 def get_connection(env="dev"):
-    # Target switching is now handled by shell environment (verify.sh) or Vercel native scoping
-    db_url = os.getenv("DATABASE_URL")
+    # Select the appropriate env variable
+    env_map = {
+        "dev": "DATABASE_URL",
+        "test": "DATABASE_URL_TEST",
+        "prod": "DATABASE_URL_PROD"
+    }
+    
+    var_name = env_map.get(env, "DATABASE_URL")
+    db_url = os.getenv(var_name)
+    
+    # Fallback to DATABASE_URL if specific one missing
+    if not db_url:
+        db_url = os.getenv("DATABASE_URL")
     
     if not db_url:
-        raise ValueError("DATABASE_URL must be set in the environment.")
+        raise ValueError(f"No database URL found (checked {var_name} and DATABASE_URL).")
     
+    # Check for placeholder
+    if "[PROD_DB_PASSWORD]" in db_url:
+        raise ValueError("DATABASE_URL_PROD still contains the '[PROD_DB_PASSWORD]' placeholder. Please update it in backend/.env")
+
     # psycopg2 often prefers postgresql://
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)

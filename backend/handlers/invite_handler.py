@@ -163,13 +163,8 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 }).eq("match_id", match_id).execute()
                 
                 # Notify All
-                updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
-                final_parts = get_match_participants(match_id)
-                all_player_ids = final_parts["all"]
-                for pid in all_player_ids:
-                    p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
-                    if p_res.data:
-                        send_sms(p_res.data[0]["phone_number"], msg.MSG_MATCH_CONFIRMED.format(club_name=get_club_name(), time=opt), club_id=updated_match["club_id"])
+                from handlers.match_handler import send_match_confirmation_notifications
+                send_match_confirmation_notifications(match_id)
                 return
 
     elif match["status"] == "pending":
@@ -273,84 +268,9 @@ def handle_invite_response(from_number: str, body: str, player: dict, invite: di
                 # They stay 'sent' but the match status 'confirmed' will prevent joins.
                 pass
                 
-                # Fetch updated match for player list and time
-                updated_match = supabase.table("matches").select("*").eq("match_id", match_id).execute().data[0]
-                final_parts = get_match_participants(match_id)
-                all_player_ids = final_parts["all"]
-                
-                # Identify initiator (first player in team 1)
-                initiator_id = final_parts["team_1"][0] if final_parts["team_1"] else None
-                
-                # Fetch club details for the booking link
-                from logic_utils import get_booking_url
-                club_res = supabase.table("clubs").select("*").eq("club_id", updated_match["club_id"]).execute()
-                club = club_res.data[0] if club_res.data else {}
-                booking_url = get_booking_url(club)
-                club_phone = club.get("main_phone") or club.get("phone_number") or "[Club Phone]"
-                club_name = club.get("name", "the club")
-                
-                # Format the date/time nicely
-                friendly_time = format_sms_datetime(parse_iso_datetime(updated_match['scheduled_time']), club_id=updated_match['club_id'])
-                
-                # Get all player names for the confirmation message
-                player_names = []
-                for pid in all_player_ids:
-                    p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
-                    if p_res.data:
-                        p = p_res.data[0]
-                        player_names.append(f"  - {p['name']} ({p['declared_skill_level']})")
-                
-                players_text = "\n".join(player_names)
-                
-                # Check for Group Context for sender/naming
-                group_id = updated_match.get("target_group_id")
-                if group_id:
-                    # Get group details
-                    group_res = supabase.table("player_groups").select("name, phone_number").eq("group_id", group_id).execute()
-                    if group_res.data:
-                        group = group_res.data[0]
-                        group_name = group["name"]
-                        group_phone = group.get("phone_number")
-                        
-                        # Set combined name for this confirmation sequence
-                        club_name = f"{club_name} - {group_name}"
-                        set_club_name(club_name)
-                        
-                        # Set the outgoing sender number to the group's number
-                        if group_phone:
-                            set_reply_from(group_phone)
-                
                 # Notify all players
-                for pid in all_player_ids:
-                    try:
-                        p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
-                        if not p_res.data:
-                            continue
-                            
-                        phone = p_res.data[0]["phone_number"]
-                        
-                        # Build the message content based on role
-                        if pid == initiator_id:
-                            # Booking instructions for the initiator
-                            role_text = (
-                                f"As the organizer, please book the court here: {booking_url}\n\n"
-                                f"Alternatively, call {club_name} at {club_phone} to book directly."
-                            )
-                        else:
-                            # Standard sign-off for others
-                            role_text = "See you on the court! 🏸"
-                        
-                        # Construct final message (clean and professional)
-                        confirmation_msg = (
-                            f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
-                            f"📅 {friendly_time}\n\n"
-                            f"👥 Players:\n{players_text}\n\n"
-                            f"{role_text}"
-                        )
-                        
-                        send_sms(phone, confirmation_msg, club_id=updated_match["club_id"])
-                    except Exception as e:
-                        print(f"Error notifying player {pid} of confirmation: {e}")
+                from handlers.match_handler import send_match_confirmation_notifications
+                send_match_confirmation_notifications(match_id)
         return
 
     elif match["status"] == "confirmed":

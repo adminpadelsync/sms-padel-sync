@@ -916,6 +916,101 @@ def notify_players_of_time_change(match_id: str, old_time_iso: str, new_time_iso
             send_sms(p_res.data[0]["phone_number"], message, club_id=club_id)
 
 
+def send_match_confirmation_notifications(match_id: str):
+    """
+    Send confirmation SMS to all participants of a confirmed match.
+    Refactored from invite_handler.py to be reusable for admin manual assignments.
+    """
+    from twilio_client import send_sms, set_reply_from, set_club_name
+    from logic_utils import get_booking_url, parse_iso_datetime, format_sms_datetime, get_match_participants
+    import sms_constants as msg
+
+    # 1. Fetch updated match for player list and time
+    match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    if not match_res.data:
+        return
+    match = match_res.data[0]
+    club_id = match["club_id"]
+    
+    final_parts = get_match_participants(match_id)
+    all_player_ids = final_parts["all"]
+    
+    # Identify initiator (first player in team 1 or originator)
+    initiator_id = match.get("originator_id") or (final_parts["team_1"][0] if final_parts["team_1"] else None)
+    
+    # Fetch club details for the booking link
+    club_res = supabase.table("clubs").select("*").eq("club_id", club_id).execute()
+    club = club_res.data[0] if club_res.data else {}
+    booking_url = get_booking_url(club)
+    club_phone = club.get("main_phone") or club.get("phone_number") or "[Club Phone]"
+    club_name = club.get("name", "the club")
+    
+    # Format the date/time nicely
+    friendly_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=club_id)
+    
+    # Get all player names for the confirmation message
+    player_names = []
+    for pid in all_player_ids:
+        p_res = supabase.table("players").select("name, declared_skill_level").eq("player_id", pid).execute()
+        if p_res.data:
+            p = p_res.data[0]
+            player_names.append(f"  - {p['name']} ({p['declared_skill_level']})")
+    
+    players_text = "\n".join(player_names)
+    
+    # Check for Group Context for sender/naming
+    group_id = match.get("target_group_id")
+    if group_id:
+        # Get group details
+        group_res = supabase.table("player_groups").select("name, phone_number").eq("group_id", group_id).execute()
+        if group_res.data:
+            group = group_res.data[0]
+            group_name = group["name"]
+            group_phone = group.get("phone_number")
+            
+            # Set combined name for this confirmation sequence
+            club_name = f"{club_name} - {group_name}"
+            set_club_name(club_name)
+            
+            # Set the outgoing sender number to the group's number
+            if group_phone:
+                set_reply_from(group_phone)
+    
+    # Notify all players
+    for pid in all_player_ids:
+        try:
+            p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
+            if not p_res.data:
+                continue
+                
+            phone = p_res.data[0]["phone_number"]
+            
+            # Build the message content based on role
+            if pid == initiator_id:
+                # Booking instructions for the initiator
+                role_text = (
+                    f"As the organizer, please book the court here: {booking_url}\n\n"
+                    f"Alternatively, call {club_name} at {club_phone} to book directly."
+                )
+            else:
+                # Standard sign-off for others
+                role_text = "See you on the court! 🏸"
+            
+            # Construct final message (clean and professional)
+            confirmation_msg = (
+                f"🎾 {club_name}: MATCH CONFIRMED!\n\n"
+                f"📅 {friendly_time}\n\n"
+                f"👥 Players:\n{players_text}\n\n"
+                f"{role_text}"
+            )
+            
+            send_sms(phone, confirmation_msg, club_id=club_id)
+        except Exception as e:
+            print(f"Error notifying player {pid} of confirmation: {e}")
+
+
+
+
 # Backwards compatibility alias
 def handle_match_request(from_number: str, body: str, player: dict, entities: Optional[dict] = None, cid: str = None):
     """

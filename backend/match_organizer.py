@@ -105,7 +105,8 @@ def initiate_match_outreach(
     player_ids: List[str],
     scheduled_time: str,
     initial_player_ids: List[str] = [],
-    originator_id: Optional[str] = None
+    originator_id: Optional[str] = None,
+    direct_assignment: bool = False
 ) -> dict:
     """
     Create a match and send invites to selected players.
@@ -115,16 +116,18 @@ def initiate_match_outreach(
         player_ids: List of player IDs to invite (will receive SMS)
         scheduled_time: ISO format timestamp string
         initial_player_ids: List of player IDs already committed (no SMS sent)
+        direct_assignment: If True, confirm the match immediately with EXACTLY 4 players (no invites)
         
     Returns:
         Created match dictionary
     """
     
-    # 1. Create the match record with initial players already in team_1
+    # 1. Create the match record
     match_data = {
         "club_id": club_id,
         "scheduled_time": to_utc_iso(scheduled_time, club_id),
-        "status": "pending",
+        "status": "confirmed" if direct_assignment else "pending",
+        "confirmed_at": get_now_utc_iso() if direct_assignment else None,
         # Phase 4 Cleanup: Removed team_1_players/team_2_players (using match_participations)
         "originator_id": originator_id or (initial_player_ids[0] if initial_player_ids else None),
         "created_at": get_now_utc_iso()
@@ -137,9 +140,6 @@ def initiate_match_outreach(
     match = match_result.data[0]
     match_id = match['match_id']
     
-    match = match_result.data[0]
-    match_id = match['match_id']
-    
     # Phase 3: Insert initial participants
     if initial_player_ids:
         participations = []
@@ -147,7 +147,7 @@ def initiate_match_outreach(
             participations.append({
                 "match_id": match_id,
                 "player_id": pid,
-                "team_index": 1,
+                "team_index": 1, # Default to team 1, players decide later
                 "status": "confirmed"
             })
         try:
@@ -155,17 +155,21 @@ def initiate_match_outreach(
         except Exception as e:
             print(f"Error inserting initial participants: {e}")
 
-    # 2. Trigger outreach via matchmaker (respects quiet hours)
-    from matchmaker import find_and_invite_players
-    has_targets = player_ids and len(player_ids) > 0
-    find_and_invite_players(
-        match_id=match_id, 
-        target_player_ids=player_ids if has_targets else None, 
-        batch_number=1, 
-        skip_filters=True if has_targets else False # Use filters if doing automatic matching
-    )
-
-    print(f"Match created with {len(initial_player_ids)} initial players already committed")
+    # 2. Trigger outreach via matchmaker (unless direct assignment)
+    if direct_assignment:
+        print(f"Manual match assignment: {len(initial_player_ids)} players confirmed. Sending confirmation SMS.")
+        from handlers.match_handler import send_match_confirmation_notifications
+        send_match_confirmation_notifications(match_id)
+    else:
+        from matchmaker import find_and_invite_players
+        has_targets = player_ids and len(player_ids) > 0
+        find_and_invite_players(
+            match_id=match_id, 
+            target_player_ids=player_ids if has_targets else None, 
+            batch_number=1, 
+            skip_filters=True if has_targets else False # Use filters if doing automatic matching
+        )
+        print(f"Match created with {len(initial_player_ids)} initial players already committed")
     
     return match
 
