@@ -1041,6 +1041,14 @@ async def add_player(match_id: str, request: AddPlayerRequest):
     """Add a player to a match team."""
     try:
         match = add_player_to_match(match_id, request.player_id, request.team)
+        
+        # Trigger confirmation SMS for the added player
+        try:
+            from handlers.match_handler import send_match_confirmation_notifications
+            send_match_confirmation_notifications(match_id, player_id=request.player_id)
+        except Exception as notify_err:
+            print(f"Error notifying player of direct addition: {notify_err}")
+
         return {"match": match, "message": "Player added successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

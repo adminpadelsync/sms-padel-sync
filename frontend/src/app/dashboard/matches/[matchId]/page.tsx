@@ -1195,7 +1195,7 @@ export default function MatchDetailPage() {
                                                         className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 shadow-lg hover:shadow-indigo-100 transition-all flex items-center gap-2"
                                                     >
                                                         <UserPlus className="w-4 h-4" />
-                                                        Send More Invites
+                                                        Add Players/Invites
                                                     </button>
                                                 )}
                                             </div>
@@ -1231,37 +1231,23 @@ export default function MatchDetailPage() {
                                                                             </div>
 
                                                                             <div className="flex items-center gap-2">
-                                                                                {isAddingToTeam ? (
-                                                                                    <div className="flex items-center gap-1 animate-in slide-in-from-right-2" onClick={(e) => e.stopPropagation()}>
-                                                                                        <button
-                                                                                            onClick={() => handleAddPlayerDirectly(p.player_id, 1)}
-                                                                                            className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black hover:bg-indigo-100"
-                                                                                        >
-                                                                                            T1
-                                                                                        </button>
-                                                                                        <button
-                                                                                            onClick={() => handleAddPlayerDirectly(p.player_id, 2)}
-                                                                                            className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black hover:bg-indigo-100"
-                                                                                        >
-                                                                                            T2
-                                                                                        </button>
-                                                                                        <button
-                                                                                            onClick={() => setAddingDirectlyToTeam(null)}
-                                                                                            className="p-1 text-gray-400 hover:text-gray-600"
-                                                                                        >
-                                                                                            <XCircle className="w-3.5 h-3.5" />
-                                                                                        </button>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <button
-                                                                                        onClick={(e) => { e.stopPropagation(); setAddingDirectlyToTeam({ playerId: p.player_id, name: p.name }) }}
-                                                                                        className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-green-50 text-green-600 border border-green-100 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-green-100 transition-all flex items-center gap-1"
-                                                                                    >
-                                                                                        <CheckCircle2 className="w-3 h-3" />
-                                                                                        Add Direct
-                                                                                    </button>
-                                                                                )}
-                                                                                {selectedToInvite.has(p.player_id) && !isAddingToTeam && <CheckCircle2 className="w-5 h-5 text-indigo-500" />}
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); togglePlayerSelection(p.player_id) }}
+                                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${selectedToInvite.has(p.player_id)
+                                                                                        ? 'bg-indigo-600 text-white shadow-lg'
+                                                                                        : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                                        }`}
+                                                                                >
+                                                                                    {selectedToInvite.has(p.player_id) ? <Check className="w-3 h-3" /> : <Send className="w-3 h-3" />}
+                                                                                    {selectedToInvite.has(p.player_id) ? 'Selected' : 'Invite'}
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleAddPlayerDirectly(p.player_id, 1) }}
+                                                                                    className="px-3 py-1.5 bg-green-50 text-green-600 border border-green-100 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-green-100 transition-all flex items-center gap-1"
+                                                                                >
+                                                                                    <CheckCircle2 className="w-3 h-3" />
+                                                                                    Confirm Now
+                                                                                </button>
                                                                             </div>
                                                                         </div>
                                                                     </div>

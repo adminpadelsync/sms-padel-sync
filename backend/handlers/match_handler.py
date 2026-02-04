@@ -916,10 +916,10 @@ def notify_players_of_time_change(match_id: str, old_time_iso: str, new_time_iso
             send_sms(p_res.data[0]["phone_number"], message, club_id=club_id)
 
 
-def send_match_confirmation_notifications(match_id: str):
+def send_match_confirmation_notifications(match_id: str, player_id: str = None):
     """
-    Send confirmation SMS to all participants of a confirmed match.
-    Refactored from invite_handler.py to be reusable for admin manual assignments.
+    Send confirmation SMS to participants of a confirmed match.
+    If player_id is provided, only notify that specific player.
     """
     from twilio_client import send_sms, set_reply_from, set_club_name
     from logic_utils import get_booking_url, parse_iso_datetime, format_sms_datetime, get_match_participants
@@ -976,8 +976,9 @@ def send_match_confirmation_notifications(match_id: str):
             if group_phone:
                 set_reply_from(group_phone)
     
-    # Notify all players
-    for pid in all_player_ids:
+    # Notify all players or just the specific one
+    notify_ids = [player_id] if player_id else all_player_ids
+    for pid in notify_ids:
         try:
             p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
             if not p_res.data:
