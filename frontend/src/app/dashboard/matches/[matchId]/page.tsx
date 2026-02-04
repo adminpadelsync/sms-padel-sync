@@ -157,7 +157,14 @@ export default function MatchDetailPage() {
         const merged = [...invites]
 
         allPlayers.forEach(player => {
-            if (!merged.find(i => i.player_id === player.player_id)) {
+            const existingIndex = merged.findIndex(i => i.player_id === player.player_id)
+            if (existingIndex !== -1) {
+                // Override status if they are actually confirmed in the match
+                merged[existingIndex] = {
+                    ...merged[existingIndex],
+                    status: 'accepted'
+                }
+            } else {
                 // Add synthetic "accepted" invite for this confirmed player
                 merged.push({
                     invite_id: `confirmed-${player.player_id}`,
