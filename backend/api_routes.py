@@ -999,9 +999,23 @@ async def update_match_endpoint(match_id: str, request: MatchUpdateRequest):
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
         
+        # Capture old time for notification
+        old_time = None
+        if 'scheduled_time' in updates:
+            m_res = supabase.table("matches").select("scheduled_time").eq("match_id", match_id).execute()
+            old_time = m_res.data[0]["scheduled_time"] if m_res.data else None
+
         match = update_match(match_id, updates)
         
-        # Trigger SMS notification if requested
+        # Trigger SMS notification for time change
+        if old_time and updates['scheduled_time'] != old_time:
+            try:
+                from handlers.match_handler import notify_players_of_time_change
+                notify_players_of_time_change(match_id, old_time, updates['scheduled_time'])
+            except Exception as time_notify_err:
+                print(f"Error notifying players of time change: {time_notify_err}")
+
+        # Trigger SMS notification if requested (for booking)
         if request.notify_players and request.booked_court_text:
             try:
                 notify_players_of_booking(match_id, request.booked_court_text)

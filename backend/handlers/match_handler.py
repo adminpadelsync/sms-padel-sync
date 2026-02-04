@@ -879,6 +879,43 @@ def notify_players_of_booking(match_id: str, court_text: str):
             send_sms(p_res.data[0]["phone_number"], message, club_id=club_id)
 
 
+def notify_players_of_time_change(match_id: str, old_time_iso: str, new_time_iso: str):
+    """
+    Notify all confirmed players that the match time has changed.
+    """
+    # Fetch match and players
+    match_res = supabase.table("matches").select("*").eq("match_id", match_id).execute()
+    if not match_res.data:
+        return
+    
+    match = match_res.data[0]
+    club_id = match["club_id"]
+    
+    participants = get_match_participants(match_id)
+    all_pids = participants["all"]
+    
+    # Format times
+    from logic_utils import parse_iso_datetime, format_sms_datetime
+    old_time_friendly = format_sms_datetime(parse_iso_datetime(old_time_iso), club_id=club_id)
+    new_time_friendly = format_sms_datetime(parse_iso_datetime(new_time_iso), club_id=club_id)
+    
+    # Get club name
+    club_res = supabase.table("clubs").select("name").eq("club_id", club_id).execute()
+    club_name = club_res.data[0]["name"] if club_res.data else "the club"
+
+    message = (
+        f"🎾 {club_name}: The match time has been updated.\n\n"
+        f"Old Time: {old_time_friendly}\n"
+        f"New Time: {new_time_friendly}\n\n"
+        f"See you on the court!"
+    )
+
+    for pid in all_pids:
+        p_res = supabase.table("players").select("phone_number").eq("player_id", pid).execute()
+        if p_res.data:
+            send_sms(p_res.data[0]["phone_number"], message, club_id=club_id)
+
+
 # Backwards compatibility alias
 def handle_match_request(from_number: str, body: str, player: dict, entities: Optional[dict] = None, cid: str = None):
     """

@@ -39,7 +39,7 @@ interface Invite {
     invite_id: string
     match_id: string
     player_id: string
-    status: 'sent' | 'accepted' | 'declined' | 'expired' | 'maybe' | 'pending_sms'
+    status: 'sent' | 'accepted' | 'declined' | 'expired' | 'maybe' | 'pending_sms' | 'removed'
     sent_at: string
     responded_at: string | null
     player?: Player
@@ -116,6 +116,11 @@ export default function MatchDetailPage() {
     const [editCourtBooked, setEditCourtBooked] = useState(false)
     const [editCourtText, setEditCourtText] = useState('')
     const [notifyPlayersOnUpdate, setNotifyPlayersOnUpdate] = useState(false)
+    const [isEditingTime, setIsEditingTime] = useState(false)
+    const [editTime, setEditTime] = useState('')
+
+    // For direct additions
+    const [addingDirectlyToTeam, setAddingDirectlyToTeam] = useState<{ playerId: string; name: string } | null>(null)
 
     // For inline score editing
     const [isEditingResults, setIsEditingResults] = useState(false)
@@ -210,6 +215,15 @@ export default function MatchDetailPage() {
                 })
                 setSetScores(newScores)
                 setCorrectedWinner(match.winner_team)
+            }
+
+            // Sync edit time
+            if (match.scheduled_time) {
+                // We need to format it for datetime-local input (YYYY-MM-DDTHH:mm)
+                // The API returns UTC ISO, we want to convert it to the club's local time for editing
+                // But for simplicity, we'll just use the raw ISO and hope the browser handles it or just let it be.
+                // Actually, let's just use the raw value for now.
+                setEditTime(match.scheduled_time.split('.')[0].slice(0, 16))
             }
         }
     }, [match, isEditingResults])
@@ -395,7 +409,7 @@ export default function MatchDetailPage() {
     }
 
     const handleRemovePlayer = async (playerId: string) => {
-        if (!match || !confirm('Remove this player from the match?')) return
+        if (!match || !confirm('Remove this player/invite from the match?')) return
         setActionLoading(true)
         try {
             const res = await authFetch(`/api/matches/${matchId}/players/${playerId}`, {
@@ -408,9 +422,63 @@ export default function MatchDetailPage() {
                     const matchData = await matchRes.json()
                     setMatch(matchData.match)
                 }
+                // Also refresh invites to show "Removed" status
+                const invitesRes = await authFetch(`/api/matches/${matchId}/invites`)
+                if (invitesRes.ok) {
+                    const invitesData = await invitesRes.json()
+                    setInvites(invitesData.invites || [])
+                }
             }
         } catch (error) {
             console.error('Error removing player:', error)
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
+    const handleAddPlayerDirectly = async (playerId: string, team: number) => {
+        if (!match) return
+        setActionLoading(true)
+        try {
+            const res = await authFetch(`/api/matches/${matchId}/players`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: playerId, team })
+            })
+            if (res.ok) {
+                const matchRes = await authFetch(`/api/matches/${matchId}`)
+                if (matchRes.ok) {
+                    const matchData = await matchRes.json()
+                    setMatch(matchData.match)
+                }
+                setAddingDirectlyToTeam(null)
+                setShowInvitePanel(false)
+                setSelectedToInvite(new Set())
+                setSearchTerm('')
+            }
+        } catch (error) {
+            console.error('Error adding player directly:', error)
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
+    const handleSaveTime = async () => {
+        if (!match || !editTime) return
+        setActionLoading(true)
+        try {
+            const res = await authFetch(`/api/matches/${matchId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scheduled_time: editTime })
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setMatch(data.match)
+                setIsEditingTime(false)
+            }
+        } catch (error) {
+            console.error('Error saving time:', error)
         } finally {
             setActionLoading(false)
         }
@@ -563,7 +631,42 @@ export default function MatchDetailPage() {
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
-                                <h1 className="text-2xl font-bold text-gray-900">{formattedTime}</h1>
+                                {isEditingTime ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="datetime-local"
+                                            value={editTime}
+                                            onChange={(e) => setEditTime(e.target.value)}
+                                            className="px-3 py-1 bg-white border border-indigo-300 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                        />
+                                        <button
+                                            onClick={handleSaveTime}
+                                            disabled={actionLoading}
+                                            className="p-1 px-3 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"
+                                        >
+                                            {actionLoading ? 'Saving...' : 'Save'}
+                                        </button>
+                                        <button
+                                            onClick={() => setIsEditingTime(false)}
+                                            className="p-1 px-3 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 group">
+                                        <h1 className="text-2xl font-bold text-gray-900">{formattedTime}</h1>
+                                        {!isPast && (
+                                            <button
+                                                onClick={() => setIsEditingTime(true)}
+                                                className="opacity-0 group-hover:opacity-100 p-1.5 text-indigo-400 hover:text-indigo-600 transition-all"
+                                                title="Edit Time"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                                 <span className={`px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider ${match.status === 'confirmed' ? 'bg-green-100 text-green-700 border border-green-200' :
                                     match.status === 'pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                                         match.status === 'cancelled' ? 'bg-red-100 text-red-700 border border-red-200' :
@@ -1108,23 +1211,62 @@ export default function MatchDetailPage() {
                                                     />
                                                     {searchResults.length > 0 ? (
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                            {searchResults.map(p => (
-                                                                <div
-                                                                    key={p.player_id}
-                                                                    onClick={() => togglePlayerSelection(p.player_id)}
-                                                                    className={`group p-4 rounded-2xl cursor-pointer bg-white border-2 transition-all ${selectedToInvite.has(p.player_id) ? 'border-indigo-500 bg-indigo-50' : 'border-white hover:border-gray-100 hover:shadow-md'}`}
-                                                                >
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs">
-                                                                                {p.name[0]}
+                                                            {searchResults.map(p => {
+                                                                const isAddingToTeam = addingDirectlyToTeam?.playerId === p.player_id
+                                                                return (
+                                                                    <div
+                                                                        key={p.player_id}
+                                                                        onClick={() => !isAddingToTeam && togglePlayerSelection(p.player_id)}
+                                                                        className={`group p-4 rounded-2xl cursor-pointer bg-white border-2 transition-all ${selectedToInvite.has(p.player_id) ? 'border-indigo-500 bg-indigo-50' : 'border-white hover:border-gray-100 hover:shadow-md'}`}
+                                                                    >
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs">
+                                                                                    {p.name[0]}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="font-bold text-gray-900">{p.name}</p>
+                                                                                    <p className="text-[10px] text-gray-400 font-medium">Level {p.declared_skill_level?.toFixed(2) || '?.??'}</p>
+                                                                                </div>
                                                                             </div>
-                                                                            <p className="font-bold text-gray-900">{p.name}</p>
+
+                                                                            <div className="flex items-center gap-2">
+                                                                                {isAddingToTeam ? (
+                                                                                    <div className="flex items-center gap-1 animate-in slide-in-from-right-2" onClick={(e) => e.stopPropagation()}>
+                                                                                        <button
+                                                                                            onClick={() => handleAddPlayerDirectly(p.player_id, 1)}
+                                                                                            className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black hover:bg-indigo-100"
+                                                                                        >
+                                                                                            T1
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => handleAddPlayerDirectly(p.player_id, 2)}
+                                                                                            className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black hover:bg-indigo-100"
+                                                                                        >
+                                                                                            T2
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => setAddingDirectlyToTeam(null)}
+                                                                                            className="p-1 text-gray-400 hover:text-gray-600"
+                                                                                        >
+                                                                                            <XCircle className="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <button
+                                                                                        onClick={(e) => { e.stopPropagation(); setAddingDirectlyToTeam({ playerId: p.player_id, name: p.name }) }}
+                                                                                        className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-green-50 text-green-600 border border-green-100 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-green-100 transition-all flex items-center gap-1"
+                                                                                    >
+                                                                                        <CheckCircle2 className="w-3 h-3" />
+                                                                                        Add Direct
+                                                                                    </button>
+                                                                                )}
+                                                                                {selectedToInvite.has(p.player_id) && !isAddingToTeam && <CheckCircle2 className="w-5 h-5 text-indigo-500" />}
+                                                                            </div>
                                                                         </div>
-                                                                        {selectedToInvite.has(p.player_id) && <CheckCircle2 className="w-5 h-5 text-indigo-500" />}
                                                                     </div>
-                                                                </div>
-                                                            ))}
+                                                                )
+                                                            })}
                                                         </div>
                                                     ) : searchTerm.length >= 2 && (
                                                         <p className="text-center py-4 text-sm font-medium text-gray-400">No matching players found</p>
@@ -1177,7 +1319,7 @@ export default function MatchDetailPage() {
                                                                     )}
                                                                 </div>
 
-                                                                {invite.status === 'accepted' && (
+                                                                {invite.status !== 'removed' && invite.status !== 'declined' && (
                                                                     <div onClick={(e) => { e.stopPropagation(); handleRemovePlayer(invite.player_id) }} className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                                                                         <div className="bg-white rounded-full p-1 shadow-md border border-red-50 hover:bg-red-50 transition-colors">
                                                                             <Trash2 className="w-3.5 h-3.5 text-red-500" />

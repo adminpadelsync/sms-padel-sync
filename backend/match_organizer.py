@@ -434,51 +434,55 @@ def remove_player_from_match(match_id: str, player_id: str) -> dict:
     
     # Check if player in match (Source of Truth: match_participations)
     participants = get_match_participants(match_id)
-    if player_id not in participants["all"]:
-         # Strict check: if not in participations, unexpected.
-         # But for cleanup, allow it to pass? No, raise to be safe.
-         raise Exception(f"Player {player_id} not found in match {match_id}")
+    is_participant = player_id in participants["all"]
     
-    # Check if we need to revert status to pending
-    new_total = len(participants["all"]) - 1
-    if match.get('status') == 'confirmed' and new_total < 4:
-        # Revert to pending
-        update_match(match_id, {'status': 'pending', 'confirmed_at': None})
+    # Check if we need to revert status to pending (only if they were actually a participant)
+    if is_participant:
+        new_total = len(participants["all"]) - 1
+        if match.get('status') == 'confirmed' and new_total < 4:
+            # Revert to pending
+            update_match(match_id, {'status': 'pending', 'confirmed_at': None})
     
-    # Update the player's invite status to 'removed'
-    supabase.table("match_invites").update({
-        "status": "removed",
-        "responded_at": get_now_utc().isoformat()
-    }).eq("match_id", match_id).eq("player_id", player_id).execute()
+    # Update the player's invite status to 'removed' if they have an invite
+    invite_res = supabase.table("match_invites").select("status").eq("match_id", match_id).eq("player_id", player_id).execute()
+    existing_invite = invite_res.data[0] if invite_res.data else None
     
-    # Send SMS notification to the removed player
-    from twilio_client import send_sms
-    try:
-        # Get player phone number
-        player_result = supabase.table("players").select("phone_number, name").eq("player_id", player_id).execute()
-        if player_result.data:
-            player = player_result.data[0]
-            phone = player.get('phone_number')
-            
-            # Format match time for message
-            formatted_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=match['club_id'])
-            
-            if phone:
-                club_name = _get_club_name(match['club_id'])
-                message = (
-                    f"🎾 {club_name}: You've been removed from the match on {formatted_time}.\n\n"
-                    f"If you have questions, please contact the organizer."
-                )
-                send_sms(phone, message, club_id=match['club_id'])
-                print(f"Sent removal notification to {player.get('name')} ({phone})")
-    except Exception as e:
-        print(f"[WARNING] Failed to send removal SMS: {e}")
+    if existing_invite:
+        supabase.table("match_invites").update({
+            "status": "removed",
+            "responded_at": get_now_utc().isoformat()
+        }).eq("match_id", match_id).eq("player_id", player_id).execute()
+    
+    # Send SMS notification to the removed player (only if they were a participant or had accepted/maybe)
+    if is_participant or (existing_invite and existing_invite.get('status') in ['accepted', 'maybe']):
+        from twilio_client import send_sms
+        try:
+            # Get player phone number
+            player_result = supabase.table("players").select("phone_number, name").eq("player_id", player_id).execute()
+            if player_result.data:
+                player = player_result.data[0]
+                phone = player.get('phone_number')
+                
+                # Format match time for message
+                formatted_time = format_sms_datetime(parse_iso_datetime(match['scheduled_time']), club_id=match['club_id'])
+                
+                if phone:
+                    club_name = _get_club_name(match['club_id'])
+                    message = (
+                        f"🎾 {club_name}: You've been removed from the match on {formatted_time}.\n\n"
+                        f"If you have questions, please contact the organizer."
+                    )
+                    send_sms(phone, message, club_id=match['club_id'])
+                    print(f"Sent removal notification to {player.get('name')} ({phone})")
+        except Exception as e:
+            print(f"[WARNING] Failed to send removal SMS: {e}")
     
     # Phase 3/4: Remove from match_participations (Source of Truth)
-    try:
-        supabase.table("match_participations").delete().eq("match_id", match_id).eq("player_id", player_id).execute()
-    except Exception as e:
-        print(f"Error removing player from match_participations: {e}")
+    if is_participant:
+        try:
+            supabase.table("match_participations").delete().eq("match_id", match_id).eq("player_id", player_id).execute()
+        except Exception as e:
+            print(f"Error removing player from match_participations: {e}")
 
     # Return updated match details
     return get_match_details(match_id)
