@@ -154,18 +154,20 @@ export default function MatchDetailPage() {
     // Merge confirmed players who might not have an invite record (e.g. the originator)
     const displayInvites = useMemo(() => {
         if (!match) return []
-        const merged = [...invites]
+        const confirmedIds = new Set(allPlayers.map(p => String(p.player_id).toLowerCase()))
 
+        // Start with existing invites and override status if they are confirmed
+        let merged = invites.map(invite => {
+            if (confirmedIds.has(String(invite.player_id).toLowerCase())) {
+                return { ...invite, status: 'accepted' }
+            }
+            return invite
+        })
+
+        // Add confirmed players who don't have an invite record at all
         allPlayers.forEach(player => {
-            const existingIndex = merged.findIndex(i => i.player_id === player.player_id)
-            if (existingIndex !== -1) {
-                // Override status if they are actually confirmed in the match
-                merged[existingIndex] = {
-                    ...merged[existingIndex],
-                    status: 'accepted'
-                }
-            } else {
-                // Add synthetic "accepted" invite for this confirmed player
+            const pid = String(player.player_id).toLowerCase()
+            if (!merged.some(i => String(i.player_id).toLowerCase() === pid)) {
                 merged.push({
                     invite_id: `confirmed-${player.player_id}`,
                     match_id: match.match_id,
