@@ -52,9 +52,15 @@ export function MatchWizard({ isOpen, onClose, clubId, clubTimezone, initialSele
     // Initialize with passed players
     useEffect(() => {
         if (isOpen && initialSelectedPlayers.length > 0) {
-            setSelectedPlayers(initialSelectedPlayers.map(p => p.player_id))
+            const ids = initialSelectedPlayers.map(p => p.player_id)
+            setSelectedPlayers(ids)
+            // Synchronize state for manual assignment validation
+            setSelectedInitialPlayers(initialSelectedPlayers)
+            setConfig(prev => ({ ...prev, initial_player_ids: ids }))
         } else {
             setSelectedPlayers([])
+            setSelectedInitialPlayers([])
+            setConfig(prev => ({ ...prev, initial_player_ids: [] }))
         }
     }, [isOpen, initialSelectedPlayers])
 
