@@ -105,7 +105,14 @@ def update_match_elo(match_id: str, winner_team: int):
     updates = []
     
     # Team 1 results
-    result_1 = 1.0 if winner_team == 1 else 0.0
+    if winner_team == 1:
+        result_1 = 1.0
+    elif winner_team == 2:
+        result_1 = 0.0
+    else:
+        # Draw (0)
+        result_1 = 0.5
+
     for p in players_1:
         k = get_player_k_factor(p.get("elo_confidence", 0))
         delta = calculate_elo_delta(team_1_rating, team_2_rating, result_1, k)

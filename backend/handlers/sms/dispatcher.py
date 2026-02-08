@@ -101,6 +101,9 @@ class IntentDispatcher:
             intent = reasoner_result.intent
             confidence = reasoner_result.confidence
             entities = reasoner_result.entities
+            # Inject raw message for downstream handlers (e.g. multi-match result extraction)
+            entities["_raw_message"] = body
+
             raw_reasoning = reasoner_result.raw_reply
             
             print(f"[REASONER] Intent: {intent} (conf: {confidence}) | State: {current_state}")
@@ -289,12 +292,11 @@ class IntentDispatcher:
             else:
                 print("[DISPATCHER] Could not send error SMS: No club context available.")
         
-        finally:
-            if dry_run:
-                return {
-                    "responses": get_dry_run_responses(),
-                    "intent": intent,
-                    "confidence": confidence,
-                    "entities": entities,
-                    "raw_reasoning": raw_reasoning
-                }
+        if dry_run:
+            return {
+                "responses": get_dry_run_responses(),
+                "intent": intent,
+                "confidence": confidence,
+                "entities": entities,
+                "raw_reasoning": raw_reasoning
+            }

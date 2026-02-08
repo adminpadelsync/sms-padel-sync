@@ -308,3 +308,78 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
         print(f"[REASONER] Name Resolution Logic Error: {e}")
         
     return {"player_id": None, "confidence": 0.0, "reasoning": "Error occurred"}
+
+DETAILED_RESULTS_PROMPT = """
+You are a Padel Match Scorer.
+Your task is to extract one or more match results from a user's text message.
+The user might report a single match, or multiple partial matches (sets) with different partners.
+
+User Message: "{message}"
+
+Players in the session:
+{players_json}
+
+Instruction:
+1. Identify all distinct match or set results reported.
+2. For each result, identify:
+   - team_1: List of 2 player IDs.
+   - team_2: List of 2 player IDs.
+   - score: The score string (e.g. "6-4", "6-2 6-1").
+   - winner: "team_1", "team_2", or "draw".
+3. Handle "we", "us", "me" by mapping them to the sender ({sender_name}, ID: {sender_id}).
+4. If the partners change (partner swapping), treat each configuration as a separate result.
+5. IF the message implies a tie/draw (e.g. "1-1 in sets", "tied", "drew"), set winner to "draw".
+
+Output ONLY a JSON list of objects:
+[
+  {{
+    "team_1": ["ID1", "ID2"],
+    "team_2": ["ID3", "ID4"],
+    "score": "6-4",
+    "winner": "team_1"
+  }},
+  ...
+]
+"""
+
+def extract_detailed_match_results(message: str, players: List[Dict[str, Any]], sender_id: str) -> List[Dict[str, Any]]:
+    """
+    Uses LLM to extract detailed match results, handling partner swapping and ties.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return []
+
+    sender = next((p for p in players if p["player_id"] == sender_id), None)
+    sender_name = sender["name"] if sender else "Unknown"
+
+    players_simple = [{"id": p["player_id"], "name": p["name"]} for p in players]
+    
+    prompt = DETAILED_RESULTS_PROMPT.format(
+        message=message,
+        players_json=json.dumps(players_simple, indent=2),
+        sender_name=sender_name,
+        sender_id=sender_id
+    )
+
+    model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
+    
+    try:
+        res_text = call_gemini_api(prompt, api_key, model_name)
+        if res_text:
+            clean_text = res_text.strip()
+            if "```json" in clean_text:
+                clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in clean_text:
+                clean_text = clean_text.split("```")[1].split("```")[0].strip()
+            
+            data = json.loads(clean_text)
+            if isinstance(data, list):
+                return data
+            elif isinstance(data, dict):
+                return [data]
+            
+    except Exception as e:
+        print(f"[REASONER] Detailed Result Extraction Error: {e}")
+        
+    return []
