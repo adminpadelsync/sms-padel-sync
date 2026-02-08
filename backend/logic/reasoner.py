@@ -14,6 +14,53 @@ load_dotenv()
 # Gemini REST API Configuration
 GEMINI_API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
 
+def extract_json_from_text(text: str) -> Optional[Any]:
+    """
+    Robustly extracts JSON from a string, handling markdown code blocks and extra text.
+    """
+    if not text:
+        return None
+        
+    clean_text = text.strip()
+    
+    # 1. Try to find markdown blocks
+    if "```json" in clean_text:
+        clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in clean_text:
+        clean_text = clean_text.split("```")[1].split("```")[0].strip()
+    
+    # 2. Try to parse cleaned text
+    try:
+        return json.loads(clean_text)
+    except json.JSONDecodeError:
+        pass
+        
+    # 3. Fallback: Find first/last brace/bracket
+    # Determine if we're looking for an object or list
+    first_brace = clean_text.find('{')
+    first_bracket = clean_text.find('[')
+    
+    start_index = -1
+    end_char = ''
+    
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        start_index = first_brace
+        end_char = '}'
+    elif first_bracket != -1:
+        start_index = first_bracket
+        end_char = ']'
+        
+    if start_index != -1:
+        end_index = clean_text.rfind(end_char)
+        if end_index != -1:
+            candidate = clean_text[start_index:end_index+1]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+                
+    return None
+
 class ReasonerResult:
     def __init__(self, intent: str, confidence: float, entities: Dict[str, Any], reply_text: Optional[str] = None, raw_reply: Optional[str] = None):
         self.intent = intent
@@ -228,21 +275,15 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
             res_text = call_gemini_api(prompt, api_key, model_name)
             
             if res_text:
-                # Attempt to parse JSON
-                clean_text = res_text.strip()
-                if "```json" in clean_text:
-                    clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-                elif "```" in clean_text:
-                    clean_text = clean_text.split("```")[1].split("```")[0].strip()
-                    
-                data = json.loads(clean_text)
-                return ReasonerResult(
-                    intent=data.get("intent", "UNKNOWN"),
-                    confidence=data.get("confidence", 0.0),
-                    entities=data.get("entities", {}),
-                    reply_text=data.get("reply_text"),
-                    raw_reply=clean_text
-                )
+                data = extract_json_from_text(res_text)
+                if data:
+                    return ReasonerResult(
+                        intent=data.get("intent", "UNKNOWN"),
+                        confidence=data.get("confidence", 0.0),
+                        entities=data.get("entities", {}),
+                        reply_text=data.get("reply_text"),
+                        raw_reply=res_text
+                    )
             
             if attempt < max_retries:
                  # Exponential backoff
@@ -292,18 +333,13 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
     try:
         res_text = call_gemini_api(prompt, api_key, model_name)
         if res_text:
-            clean_text = res_text.strip()
-            if "```json" in clean_text:
-                clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean_text:
-                clean_text = clean_text.split("```")[1].split("```")[0].strip()
-                
-            data = json.loads(clean_text)
-            return {
-                "player_id": data.get("player_id"),
-                "confidence": data.get("confidence", 0.0),
-                "reasoning": data.get("reasoning", "")
-            }
+            data = extract_json_from_text(res_text)
+            if data:
+                return {
+                    "player_id": data.get("player_id"),
+                    "confidence": data.get("confidence", 0.0),
+                    "reasoning": data.get("reasoning", "")
+                }
     except Exception as e:
         print(f"[REASONER] Name Resolution Logic Error: {e}")
         
@@ -367,13 +403,8 @@ def extract_detailed_match_results(message: str, players: List[Dict[str, Any]], 
     try:
         res_text = call_gemini_api(prompt, api_key, model_name)
         if res_text:
-            clean_text = res_text.strip()
-            if "```json" in clean_text:
-                clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean_text:
-                clean_text = clean_text.split("```")[1].split("```")[0].strip()
+            data = extract_json_from_text(res_text)
             
-            data = json.loads(clean_text)
             if isinstance(data, list):
                 return data
             elif isinstance(data, dict):
