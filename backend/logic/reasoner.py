@@ -177,32 +177,22 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.5-fla
         }
     }
     
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-        response.raise_for_status()
-        
-        result = response.json()
-        
-        # Parse response path: candidates[0].content.parts[0].text
-        if "candidates" in result and len(result["candidates"]) > 0:
-            candidate = result["candidates"][0]
-            if "content" in candidate and "parts" in candidate["content"]:
-                parts = candidate["content"]["parts"]
-                if len(parts) > 0 and "text" in parts[0]:
-                    return parts[0]["text"]
-        
-        print(f"[REASONER] Unexpected API response structure: {result}")
-        return None
-        
-    except Exception as e:
-        print(f"[REASONER] API Request Failed: {e}")
-        # If response exists, print it for debugging
-        if 'response' in locals():
-            try:
-                print(f"[REASONER] Error Response: {response.text}")
-            except:
-                pass
-        return None
+    # try/except removed to allow caller to handle/log specific exceptions
+    response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    response.raise_for_status()
+    
+    result = response.json()
+    
+    # Parse response path: candidates[0].content.parts[0].text
+    if "candidates" in result and len(result["candidates"]) > 0:
+        candidate = result["candidates"][0]
+        if "content" in candidate and "parts" in candidate["content"]:
+            parts = candidate["content"]["parts"]
+            if len(parts) > 0 and "text" in parts[0]:
+                return parts[0]["text"]
+    
+    print(f"[REASONER] Unexpected API response structure: {result}")
+    return None
 
 def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict[str, Any] = None, history: List[Dict[str, str]] = None, golden_samples: List[Dict[str, Any]] = None, pending_context: Any = None) -> ReasonerResult:
     """
