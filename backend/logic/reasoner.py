@@ -162,7 +162,7 @@ Instructions:
 }}
 """
 
-def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-1.5-flash", timeout: int = 25) -> Optional[str]:
+def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-flash-latest", timeout: int = 25) -> Optional[str]:
     """Helper to call Gemini via REST API to avoid SDK dependency issues."""
     url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
     
