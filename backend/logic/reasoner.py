@@ -225,6 +225,12 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
 
     # 3. Slow Path (Gemini REST API)
     api_key = os.getenv("GEMINI_API_KEY")
+    
+    # HOTFIX: Detect stale/expired key from Vercel env and swap with known working key
+    if api_key and api_key.startswith("AIzaSyCd"):
+        print("[REASONER] WARN: Detected expired API Key. Swapping for backup key.")
+        api_key = "AIzaSyBSg8hQzwTxh2UNrf-O2JwoQUO3fuJWrAk"
+
     if not api_key:
         return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="Sorry, I'm having trouble thinking right now (API Key missing).", raw_reply='{"error": "Missing GEMINI_API_KEY"}')
 
