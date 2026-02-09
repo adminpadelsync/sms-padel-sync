@@ -288,7 +288,8 @@ class IntentDispatcher:
             )
             
             if error_cid:
-                send_sms(from_number, "System error in dispatcher.", club_id=error_cid)
+                error_detail = str(e)[:150]
+                send_sms(from_number, f"System error: {error_detail}", club_id=error_cid)
             else:
                 print("[DISPATCHER] Could not send error SMS: No club context available.")
         

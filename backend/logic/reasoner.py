@@ -181,7 +181,15 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = None, timeout: 
     
     # try/except removed to allow caller to handle/log specific exceptions
     response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-    response.raise_for_status()
+    
+    if response.status_code != 200:
+        # Capture response body for debugging before raising
+        error_body = response.text[:500] if response.text else "empty"
+        print(f"[REASONER] API Error {response.status_code}: {error_body}")
+        raise requests.exceptions.HTTPError(
+            f"{response.status_code} Error for model={model_name}: {error_body}",
+            response=response
+        )
     
     result = response.json()
     
