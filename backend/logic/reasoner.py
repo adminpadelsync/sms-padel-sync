@@ -162,7 +162,7 @@ Instructions:
 }}
 """
 
-def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.5-flash") -> Optional[str]:
+def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.5-flash", timeout: int = 25) -> Optional[str]:
     """Helper to call Gemini via REST API to avoid SDK dependency issues."""
     url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
     
@@ -178,7 +178,7 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.5-fla
     }
     
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout)
         response.raise_for_status()
         
         result = response.json()
