@@ -298,9 +298,10 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
             if attempt < max_retries:
                 time.sleep(1)
             else:
-                return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="I encountered an error while processing your request.", raw_reply=f'{{"error": "{str(e)}"}}')
+                # DEBUG MODE: Return actual error to user
+                return ReasonerResult("UNKNOWN", 0.0, {}, reply_text=f"DEBUG ERROR: {str(e)}", raw_reply=f'{{"error": "{str(e)}"}}')
 
-    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="I'm sorry, I timed out. Can you try again?", raw_reply='{"error": "Failed to generate response after retries"}')
+    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="DEBUG: Failed to generate response (Retries Exhausted). Check logs.", raw_reply='{"error": "Failed to generate response after retries"}')
 
 def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
