@@ -162,7 +162,7 @@ Instructions:
 }}
 """
 
-def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-2.5-flash", timeout: int = 25) -> Optional[str]:
+def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-1.5-flash", timeout: int = 25) -> Optional[str]:
     """Helper to call Gemini via REST API to avoid SDK dependency issues."""
     url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
     
@@ -258,7 +258,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
 
     max_retries = 3
     retry_delay = 1.0
-    model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
+    model_name = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
 
     for attempt in range(max_retries + 1):
         try:
@@ -318,7 +318,7 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
         candidates_json=candidates_json
     )
 
-    model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
+    model_name = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
     
     try:
         res_text = call_gemini_api(prompt, api_key, model_name)
@@ -388,7 +388,7 @@ def extract_detailed_match_results(message: str, players: List[Dict[str, Any]], 
         sender_id=sender_id
     )
 
-    model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
+    model_name = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
     
     try:
         res_text = call_gemini_api(prompt, api_key, model_name)
