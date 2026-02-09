@@ -27,7 +27,14 @@ class LLMConfig:
         Returns the configured Model Name.
         Defaults to 'gemini-flash-latest' to ensure availability across different API tiers.
         """
-        return os.getenv("LLM_MODEL_NAME", "gemini-flash-latest")
+        model = os.getenv("LLM_MODEL_NAME", "gemini-flash-latest")
+        
+        # HOTFIX: Vercel env var is set to a non-existent model version "gemini-2.5-flash"
+        # We override it here to ensure the app works.
+        if model == "gemini-2.5-flash":
+            return "gemini-1.5-flash"
+            
+        return model
 
     @staticmethod
     def get_timeout() -> int:
