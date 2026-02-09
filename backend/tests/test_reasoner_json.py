@@ -20,9 +20,17 @@ sys.modules["requests"] = MagicMock()
 
 from logic.reasoner import extract_json_from_text, extract_detailed_match_results
 
+def mock_getenv(key, default=None):
+    if key == "GEMINI_API_TIMEOUT":
+        return "25"
+    if key == "GEMINI_API_KEY":
+        return "dummy_key"
+    return default
+
 class TestReasonerJSON(unittest.TestCase):
     
     def test_clean_json(self):
+
         text = '{"key": "value"}'
         data = extract_json_from_text(text)
         self.assertEqual(data, {"key": "value"})
@@ -54,7 +62,9 @@ class TestReasonerJSON(unittest.TestCase):
         data = extract_json_from_text(text)
         self.assertEqual(data, [{"a": 1}])
         
-    @patch('os.getenv', return_value='dummy_key')
+
+
+    @patch('os.getenv', side_effect=mock_getenv)
     @patch('logic.reasoner.call_gemini_api')
     def test_extract_detailed_results_flow(self, mock_api, mock_getenv):
         # valid markdown response
@@ -65,7 +75,7 @@ class TestReasonerJSON(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["winner"], "team_1")
 
-    @patch('os.getenv', return_value='dummy_key')
+    @patch('os.getenv', side_effect=mock_getenv)
     @patch('logic.reasoner.call_gemini_api')
     def test_extract_detailed_results_error(self, mock_api, mock_getenv):
         # Invalid json
