@@ -262,6 +262,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
     retry_delay = 1.0
     model_name = LLMConfig.get_model_name()
     timeout = LLMConfig.get_timeout()
+    last_error = None
 
     for attempt in range(max_retries + 1):
         try:
@@ -277,6 +278,10 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
                         reply_text=data.get("reply_text"),
                         raw_reply=res_text
                     )
+                else:
+                    last_error = f"JSON parse failed. Raw response: {res_text[:200]}"
+            else:
+                last_error = f"Empty response from model={model_name}, key={api_key[:10]}..."
             
             if attempt < max_retries:
                  # Exponential backoff
@@ -285,6 +290,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
                 continue
             
         except Exception as e:
+            last_error = f"Exception: {str(e)}"
             print(f"[REASONER] Logic Error: {e}")
             
             # Log to DB for persistent debugging
@@ -301,7 +307,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
                 # DEBUG MODE: Return actual error to user
                 return ReasonerResult("UNKNOWN", 0.0, {}, reply_text=f"DEBUG ERROR: {str(e)}", raw_reply=f'{{"error": "{str(e)}"}}')
 
-    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="DEBUG: Failed to generate response (Retries Exhausted). Check logs.", raw_reply='{"error": "Failed to generate response after retries"}')
+    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text=f"DEBUG RETRIES EXHAUSTED: {last_error}", raw_reply=f'{{"error": "{last_error}"}}')
 
 def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
