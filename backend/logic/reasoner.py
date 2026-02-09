@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 from sms_constants import INTENT_DESCRIPTIONS
 from error_logger import log_sms_error
+from llm_config import LLMConfig
 
 load_dotenv()
 
@@ -162,8 +163,9 @@ Instructions:
 }}
 """
 
-def call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-flash-latest", timeout: int = 25) -> Optional[str]:
+def call_gemini_api(prompt: str, api_key: str, model_name: str = None, timeout: int = 25) -> Optional[str]:
     """Helper to call Gemini via REST API to avoid SDK dependency issues."""
+    model_name = model_name or LLMConfig.get_model_name()
     url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
     
     headers = {"Content-Type": "application/json"}
@@ -224,13 +226,7 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
         pass
 
     # 3. Slow Path (Gemini REST API)
-    api_key = os.getenv("GEMINI_API_KEY")
-    
-    # HOTFIX: Detect stale/expired key from Vercel env and swap with known working key
-    if api_key and api_key.startswith("AIzaSyCd"):
-        print("[REASONER] WARN: Detected expired API Key. Swapping for backup key.")
-        api_key = "AIzaSyBSg8hQzwTxh2UNrf-O2JwoQUO3fuJWrAk"
-
+    api_key = LLMConfig.get_api_key()
     if not api_key:
         return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="Sorry, I'm having trouble thinking right now (API Key missing).", raw_reply='{"error": "Missing GEMINI_API_KEY"}')
 
@@ -264,11 +260,12 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
 
     max_retries = 3
     retry_delay = 1.0
-    model_name = os.getenv("LLM_MODEL_NAME", "gemini-flash-latest")
+    model_name = LLMConfig.get_model_name()
+    timeout = LLMConfig.get_timeout()
 
     for attempt in range(max_retries + 1):
         try:
-            res_text = call_gemini_api(prompt, api_key, model_name)
+            res_text = call_gemini_api(prompt, api_key, model_name, timeout=timeout)
             
             if res_text:
                 data = extract_json_from_text(res_text)
@@ -310,7 +307,7 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
     Use Gemini to resolve a nickname or fuzzy name to a specific player ID.
     Returns: {"player_id": str or None, "confidence": float, "reasoning": str}
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = LLMConfig.get_api_key()
     if not api_key:
         return {"player_id": None, "confidence": 0.0, "reasoning": "API key missing"}
 
@@ -324,10 +321,11 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
         candidates_json=candidates_json
     )
 
-    model_name = os.getenv("LLM_MODEL_NAME", "gemini-flash-latest")
+    model_name = LLMConfig.get_model_name()
+    timeout = LLMConfig.get_timeout()
     
     try:
-        res_text = call_gemini_api(prompt, api_key, model_name)
+        res_text = call_gemini_api(prompt, api_key, model_name, timeout=timeout)
         if res_text:
             data = extract_json_from_text(res_text)
             if data:
@@ -378,7 +376,7 @@ def extract_detailed_match_results(message: str, players: List[Dict[str, Any]], 
     """
     Uses LLM to extract detailed match results, handling partner swapping and ties.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = LLMConfig.get_api_key()
     if not api_key:
         return []
 
@@ -394,10 +392,11 @@ def extract_detailed_match_results(message: str, players: List[Dict[str, Any]], 
         sender_id=sender_id
     )
 
-    model_name = os.getenv("LLM_MODEL_NAME", "gemini-flash-latest")
+    model_name = LLMConfig.get_model_name()
+    timeout = LLMConfig.get_timeout()
     
     try:
-        res_text = call_gemini_api(prompt, api_key, model_name)
+        res_text = call_gemini_api(prompt, api_key, model_name, timeout=timeout)
         if res_text:
             data = extract_json_from_text(res_text)
             
