@@ -185,13 +185,19 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = None, timeout: 
     
     result = response.json()
     
-    # Parse response path: candidates[0].content.parts[0].text
+    # Parse response path: candidates[0].content.parts[].text
+    # Gemini 2.5 "thinking" models return multiple parts:
+    #   parts[0] = thinking/reasoning text
+    #   parts[-1] = actual answer text
+    # We return the LAST text part which contains the final answer.
     if "candidates" in result and len(result["candidates"]) > 0:
         candidate = result["candidates"][0]
         if "content" in candidate and "parts" in candidate["content"]:
             parts = candidate["content"]["parts"]
-            if len(parts) > 0 and "text" in parts[0]:
-                return parts[0]["text"]
+            # Find the last part with text content (skip thinking parts)
+            for part in reversed(parts):
+                if "text" in part:
+                    return part["text"]
     
     print(f"[REASONER] Unexpected API response structure: {result}")
     return None
