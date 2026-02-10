@@ -362,34 +362,49 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
 
 DETAILED_RESULTS_PROMPT = """
 You are a Padel Match Scorer.
-Your task is to extract one or more match results from a user's text message.
-The user might report a single match, or multiple partial matches (sets) with different partners.
+Your task is to extract match results grouped by PAIRING (team configuration) from a user's text message.
+A "pairing" is a unique combination of team_1 vs team_2. If multiple sets are played with the SAME two teams, they belong to the SAME pairing and should be returned as ONE result with a combined score.
 
 User Message: "{message}"
 
 Players in the session:
 {players_json}
 
-Instruction:
-1. Identify all distinct match or set results reported.
-2. For each result, identify:
-   - team_1: List of 2 player IDs.
-   - team_2: List of 2 player IDs.
-   - score: The score string (e.g. "6-4", "6-2 6-1").
-   - winner: "team_1", "team_2", or "draw".
-3. Handle "we", "us", "me" by mapping them to the sender ({sender_name}, ID: {sender_id}).
-4. If the partners change (partner swapping), treat each configuration as a separate result.
-5. IF the message implies a tie/draw (e.g. "1-1 in sets", "tied", "drew"), set winner to "draw".
+Instructions:
+1. Group sets by team configuration. If team_1 and team_2 are the same players across multiple sets, combine them into ONE result.
+   Example: "Billy and Josh won 6-3, 6-1" → ONE result with score "6-3, 6-1", NOT two separate results.
+2. Only create a SEPARATE result when the team composition actually changes (partner swap).
+   Example: "Billy and Josh won 6-3, 6-1. Then Billy and Eddie won 6-2" → TWO results (different teams).
+3. For each result (pairing), provide:
+   - team_1: List of exactly 2 player IDs (the team listed first / winning team by default).
+   - team_2: List of exactly 2 player IDs.
+   - sets: List of individual set scores, each with score and winner.
+   - winner: "team_1", "team_2", or "draw" (overall pairing winner based on sets won).
+4. Handle "we", "us", "me" by mapping them to the sender ({sender_name}, ID: {sender_id}).
+5. Recognize super tiebreak scores (e.g. "10-8", "10-7") as a deciding tiebreak set.
+6. If sets are split with no tiebreak played, set winner to "draw".
 
-Output ONLY a JSON list of objects:
+Output ONLY a JSON list:
 [
   {{
     "team_1": ["ID1", "ID2"],
     "team_2": ["ID3", "ID4"],
-    "score": "6-4",
+    "sets": [
+      {{"score": "6-3", "winner": "team_1"}},
+      {{"score": "6-1", "winner": "team_1"}}
+    ],
     "winner": "team_1"
   }},
-  ...
+  {{
+    "team_1": ["ID1", "ID4"],
+    "team_2": ["ID3", "ID2"],
+    "sets": [
+      {{"score": "6-2", "winner": "team_1"}},
+      {{"score": "6-3", "winner": "team_2"}},
+      {{"score": "10-8", "winner": "team_1"}}
+    ],
+    "winner": "team_1"
+  }}
 ]
 """
 

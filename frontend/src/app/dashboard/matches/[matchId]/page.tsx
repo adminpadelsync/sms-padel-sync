@@ -94,6 +94,152 @@ const statusConfig: Record<string, { bg: string; text: string; label: string; ic
     pending_sms: { bg: 'bg-indigo-50', text: 'text-indigo-600', label: 'Queued (Quiet Hours)', icon: '🌙' }
 }
 
+// -- Pairing Box Score Types & Component --
+interface PairingPlayer { id: string; name: string }
+interface PairingTeam { player_1: PairingPlayer; player_2: PairingPlayer }
+interface PairingSet { set_number: number; score: string; winner_team: number; is_tiebreak: boolean }
+interface Pairing { team_1: PairingTeam; team_2: PairingTeam; sets: PairingSet[]; winner: number }
+
+function MatchPairingBoxScore({ matchId, fallbackMatch }: { matchId: string; fallbackMatch: Match }) {
+    const [pairings, setPairings] = useState<Pairing[]>([])
+    const [loaded, setLoaded] = useState(false)
+
+    useEffect(() => {
+        async function fetchSets() {
+            try {
+                const res = await authFetch(`/api/matches/${matchId}/sets`)
+                if (res.ok) {
+                    const data = await res.json()
+                    if (data.pairings && data.pairings.length > 0) {
+                        setPairings(data.pairings)
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching match sets:', e)
+            } finally {
+                setLoaded(true)
+            }
+        }
+        fetchSets()
+    }, [matchId])
+
+    // Fallback to old flat display if no match_sets data
+    if (loaded && pairings.length === 0) {
+        const sets = fallbackMatch.score_text?.split(',').map(s => s.trim().split('-')) || []
+        return (
+            <div className="overflow-x-auto bg-gradient-to-b from-white to-gray-50/20 p-8">
+                <div className="rounded-3xl border border-gray-100 bg-white shadow-xl overflow-hidden max-w-3xl mx-auto">
+                    <table className="min-w-full text-center">
+                        <thead>
+                            <tr className="bg-gray-50/50">
+                                <th className="px-8 py-5 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-50">Teams</th>
+                                {sets.map((_, i) => (
+                                    <th key={i} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Set {i + 1}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {[1, 2].map(teamNum => {
+                                const isWinner = fallbackMatch.winner_team === teamNum
+                                const players = teamNum === 1 ? fallbackMatch.team_1_player_details : fallbackMatch.team_2_player_details
+                                return (
+                                    <tr key={teamNum} className={`${isWinner ? 'bg-indigo-50/20' : ''} transition-colors`}>
+                                        <td className="px-8 py-6 text-left border-r border-gray-50">
+                                            <div className="flex flex-col gap-1">
+                                                {players?.map((p: Player) => (
+                                                    <p key={p.player_id} className={`text-base font-black tracking-tight ${isWinner ? 'text-indigo-900' : 'text-gray-900'}`}>{p.name}</p>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        {sets.map((s, i) => (
+                                            <td key={i} className={`px-6 py-6 text-4xl font-black transition-all ${isWinner ? 'text-indigo-600 scale-110' : 'text-gray-200'}`}>
+                                                {s[teamNum - 1]}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )
+    }
+
+    if (!loaded) {
+        return <div className="text-center py-8 text-gray-400 text-sm">Loading results...</div>
+    }
+
+    // Pairing box score display
+    return (
+        <div className="p-6 space-y-6">
+            {pairings.map((pairing, pIdx) => {
+                const firstName = (name: string) => name.split(' ')[0]
+                const lastName = (name: string) => { const parts = name.split(' '); return parts.length > 1 ? parts[parts.length - 1][0] + '.' : '' }
+                const shortName = (name: string) => `${firstName(name)} ${lastName(name)}`
+
+                const t1Label = `${shortName(pairing.team_1.player_1.name)} & ${shortName(pairing.team_1.player_2.name)}`
+                const t2Label = `${shortName(pairing.team_2.player_1.name)} & ${shortName(pairing.team_2.player_2.name)}`
+
+                return (
+                    <div key={pIdx}>
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pairing {pIdx + 1}</span>
+                            {pairing.winner === 0 && (
+                                <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Draw</span>
+                            )}
+                        </div>
+                        <div className="rounded-2xl border border-gray-100 bg-white shadow-lg overflow-hidden">
+                            <table className="min-w-full text-center">
+                                <thead>
+                                    <tr className="bg-gray-50/50">
+                                        <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-50 w-1/2"></th>
+                                        {pairing.sets.map((s, i) => (
+                                            <th key={i} className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest w-16">
+                                                {s.is_tiebreak ? 'TB' : `S${i + 1}`}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {[1, 2].map(teamNum => {
+                                        const isWinner = pairing.winner === teamNum
+                                        const label = teamNum === 1 ? t1Label : t2Label
+
+                                        return (
+                                            <tr key={teamNum} className={`${isWinner ? 'bg-green-50/40' : ''} transition-colors`}>
+                                                <td className="px-6 py-4 text-left border-r border-gray-50">
+                                                    <div className="flex items-center gap-2">
+                                                        {isWinner && <Trophy className="w-4 h-4 text-green-600 flex-shrink-0" />}
+                                                        <span className={`text-sm font-bold tracking-tight ${isWinner ? 'text-green-800' : 'text-gray-700'}`}>
+                                                            {label}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                {pairing.sets.map((s, i) => {
+                                                    const scoreParts = s.score.split('-')
+                                                    const teamScore = scoreParts[teamNum - 1] || '0'
+                                                    const setWon = s.winner_team === teamNum
+
+                                                    return (
+                                                        <td key={i} className={`px-4 py-4 text-2xl font-black transition-all ${setWon ? 'text-green-700' : 'text-gray-300'}`}>
+                                                            {teamScore}
+                                                        </td>
+                                                    )
+                                                })}
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 export default function MatchDetailPage() {
     const params = useParams()
     const router = useRouter()
@@ -890,46 +1036,7 @@ export default function MatchDetailPage() {
                                                 </div>
                                             </div>
                                         ) : match?.score_text ? (
-                                            <div className="overflow-x-auto bg-gradient-to-b from-white to-gray-50/20 p-8">
-                                                <div className="rounded-3xl border border-gray-100 bg-white shadow-xl overflow-hidden max-w-3xl mx-auto">
-                                                    <table className="min-w-full text-center">
-                                                        <thead>
-                                                            <tr className="bg-gray-50/50">
-                                                                <th className="px-8 py-5 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-50">Teams</th>
-                                                                {match.score_text.split(',').map((_, i) => (
-                                                                    <th key={i} className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                                                        Set {i + 1}
-                                                                    </th>
-                                                                ))}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-50">
-                                                            {[1, 2].map(teamNum => {
-                                                                const isWinner = match.winner_team === teamNum
-                                                                const players = teamNum === 1 ? match.team_1_player_details : match.team_2_player_details
-                                                                const sets = match.score_text!.split(',').map(s => s.trim().split('-'))
-
-                                                                return (
-                                                                    <tr key={teamNum} className={`${isWinner ? 'bg-indigo-50/20' : ''} transition-colors`}>
-                                                                        <td className="px-8 py-6 text-left border-r border-gray-50">
-                                                                            <div className="flex flex-col gap-1">
-                                                                                {players?.map((p: Player) => (
-                                                                                    <p key={p.player_id} className={`text-base font-black tracking-tight ${isWinner ? 'text-indigo-900' : 'text-gray-900'}`}>{p.name}</p>
-                                                                                ))}
-                                                                            </div>
-                                                                        </td>
-                                                                        {sets.map((s, i) => (
-                                                                            <td key={i} className={`px-6 py-6 text-4xl font-black transition-all ${isWinner ? 'text-indigo-600 scale-110' : 'text-gray-200'}`}>
-                                                                                {s[teamNum - 1]}
-                                                                            </td>
-                                                                        ))}
-                                                                    </tr>
-                                                                )
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+                                            <MatchPairingBoxScore matchId={matchId} fallbackMatch={match} />
                                         ) : (
                                             <div className="text-center py-16 bg-gray-50/50 m-6 rounded-2xl border-2 border-dashed border-gray-100">
                                                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
@@ -938,6 +1045,7 @@ export default function MatchDetailPage() {
                                                 <p className="text-gray-400 font-black uppercase tracking-widest text-[10px]">Awaiting match results</p>
                                             </div>
                                         )}
+
                                     </div>
                                 )}
                             </div>

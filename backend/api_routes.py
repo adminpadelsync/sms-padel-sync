@@ -954,6 +954,72 @@ async def get_match(match_id: str, user: UserContext = Depends(get_current_user)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@router.get("/matches/{match_id}/sets")
+async def get_match_sets(match_id: str):
+    """Get set-by-set results for a match, grouped by pairing (team configuration)."""
+    try:
+        sets_res = supabase.table("match_sets").select("*").eq("match_id", match_id).order("set_number").execute()
+        sets_data = sets_res.data or []
+        
+        if not sets_data:
+            return {"pairings": [], "sets": []}
+        
+        # Collect all player IDs
+        player_ids = set()
+        for s in sets_data:
+            for key in ["team_1_player_1", "team_1_player_2", "team_2_player_1", "team_2_player_2"]:
+                if s.get(key):
+                    player_ids.add(s[key])
+        
+        # Fetch player names
+        name_map = {}
+        if player_ids:
+            players_res = supabase.table("players").select("player_id, name").in_("player_id", list(player_ids)).execute()
+            name_map = {p["player_id"]: p["name"] for p in (players_res.data or [])}
+        
+        # Group sets by pairing (same team composition)
+        pairings = []
+        pairing_map = {}  # key = frozenset of team tuples -> index  
+        
+        for s in sets_data:
+            t1_key = tuple(sorted([s["team_1_player_1"], s["team_1_player_2"]]))
+            t2_key = tuple(sorted([s["team_2_player_1"], s["team_2_player_2"]]))
+            pairing_key = (t1_key, t2_key) if t1_key < t2_key else (t2_key, t1_key)
+            
+            if pairing_key not in pairing_map:
+                pairing_map[pairing_key] = len(pairings)
+                pairings.append({
+                    "team_1": {
+                        "player_1": {"id": s["team_1_player_1"], "name": name_map.get(s["team_1_player_1"], "Unknown")},
+                        "player_2": {"id": s["team_1_player_2"], "name": name_map.get(s["team_1_player_2"], "Unknown")},
+                    },
+                    "team_2": {
+                        "player_1": {"id": s["team_2_player_1"], "name": name_map.get(s["team_2_player_1"], "Unknown")},
+                        "player_2": {"id": s["team_2_player_2"], "name": name_map.get(s["team_2_player_2"], "Unknown")},
+                    },
+                    "sets": [],
+                    "winner": 0,
+                })
+            
+            idx = pairing_map[pairing_key]
+            pairings[idx]["sets"].append({
+                "set_number": s["set_number"],
+                "score": s["score"],
+                "winner_team": s["winner_team"],
+                "is_tiebreak": s.get("is_tiebreak", False),
+            })
+        
+        # Compute winner for each pairing
+        for p in pairings:
+            t1_wins = sum(1 for s in p["sets"] if s["winner_team"] == 1)
+            t2_wins = sum(1 for s in p["sets"] if s["winner_team"] == 2)
+            p["winner"] = 1 if t1_wins > t2_wins else (2 if t2_wins > t1_wins else 0)
+        
+        return {"pairings": pairings, "sets": sets_data}
+    except Exception as e:
+        print(f"[API] Error fetching match sets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/matches/{match_id}/invites")
 async def get_invites(match_id: str):
     """Get all invites for a match with player details and status."""
