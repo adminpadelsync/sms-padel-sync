@@ -361,34 +361,44 @@ def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Di
     return {"player_id": None, "confidence": 0.0, "reasoning": "Error occurred"}
 
 DETAILED_RESULTS_PROMPT = """
-You are a Padel Match Scorer.
-Your task is to extract match results grouped by PAIRING (team configuration) from a user's text message.
-A "pairing" is a unique combination of team_1 vs team_2. If multiple sets are played with the SAME two teams, they belong to the SAME pairing and should be returned as ONE result with a combined score.
+You are a Padel Match Scorer. There are EXACTLY 4 players in this session.
+Your task is to parse match results and group them by PAIRING (team configuration).
+
+CRITICAL RULES:
+- There are EXACTLY 4 players. Every pairing uses ALL 4 players (2 per team).
+- When the user says "A and B won 6-3", team_1=[A,B] and team_2 is AUTOMATICALLY the other 2 players.
+- When teams swap partners, that's a NEW pairing. Consecutive sets with the SAME teams are ONE pairing.
+- Use ONLY the player IDs provided below. Never invent or duplicate IDs.
 
 User Message: "{message}"
 
-Players in the session:
+Players in this session (use ONLY these IDs):
 {players_json}
 
-Instructions:
-1. Group sets by team configuration. If team_1 and team_2 are the same players across multiple sets, combine them into ONE result.
-   Example: "Billy and Josh won 6-3, 6-1" → ONE result with score "6-3, 6-1", NOT two separate results.
-2. Only create a SEPARATE result when the team composition actually changes (partner swap).
-   Example: "Billy and Josh won 6-3, 6-1. Then Billy and Eddie won 6-2" → TWO results (different teams).
-3. For each result (pairing), provide:
-   - team_1: List of exactly 2 player IDs (the team listed first / winning team by default).
-   - team_2: List of exactly 2 player IDs.
-   - sets: List of individual set scores, each with score and winner.
-   - winner: "team_1", "team_2", or "draw" (overall pairing winner based on sets won).
-4. Handle "we", "us", "me" by mapping them to the sender ({sender_name}, ID: {sender_id}).
-5. Recognize super tiebreak scores (e.g. "10-8", "10-7") as a deciding tiebreak set.
-6. If sets are split with no tiebreak played, set winner to "draw".
+The sender is {sender_name} (ID: {sender_id}). Map "we", "us", "me" to the sender.
+
+PARSING LOGIC:
+1. When the user mentions 2 players winning/losing, those 2 are one team. The OTHER 2 players (from the 4 above) are the opposing team.
+2. If consecutive sets have the same 2 players on the same side, combine into ONE pairing.
+3. If the teams change (partner swap), start a NEW pairing.
+
+EXAMPLE:
+Message: "Billy and Josh won 6-3, 6-1. Billy and Eddie won the 3rd set 6-2. Adam and Josh won the 4th set 6-3. Billy and Eddie won the tiebreak 10-7"
+Players: Billy (ID_B), Josh (ID_J), Adam (ID_A), Eddie (ID_E)
+
+Reasoning:
+- Sets 1-2: Billy+Josh won 6-3, 6-1 → team_1=[ID_B, ID_J], team_2=[ID_A, ID_E] (the other 2)
+- Set 3: Billy+Eddie won 6-2 → NEW pairing (different teams). team_1=[ID_B, ID_E], team_2=[ID_A, ID_J]
+- Set 4: Adam+Josh won 6-3 → SAME pairing as set 3 (Billy+Eddie vs Adam+Josh, just the other side won). This is team_2 winning. Add to same pairing with winner="team_2"
+- Set 5: Billy+Eddie won 10-7 → Still SAME pairing. Add to same pairing with winner="team_1"
+
+Result: 2 pairings, NOT 3.
 
 Output ONLY a JSON list:
 [
   {{
-    "team_1": ["ID1", "ID2"],
-    "team_2": ["ID3", "ID4"],
+    "team_1": ["ID_B", "ID_J"],
+    "team_2": ["ID_A", "ID_E"],
     "sets": [
       {{"score": "6-3", "winner": "team_1"}},
       {{"score": "6-1", "winner": "team_1"}}
@@ -396,12 +406,12 @@ Output ONLY a JSON list:
     "winner": "team_1"
   }},
   {{
-    "team_1": ["ID1", "ID4"],
-    "team_2": ["ID3", "ID2"],
+    "team_1": ["ID_B", "ID_E"],
+    "team_2": ["ID_A", "ID_J"],
     "sets": [
       {{"score": "6-2", "winner": "team_1"}},
       {{"score": "6-3", "winner": "team_2"}},
-      {{"score": "10-8", "winner": "team_1"}}
+      {{"score": "10-7", "winner": "team_1"}}
     ],
     "winner": "team_1"
   }}

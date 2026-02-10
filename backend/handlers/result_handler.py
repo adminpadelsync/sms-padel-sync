@@ -79,30 +79,43 @@ def _resolve_teams(res: Dict, all_pids: List[str], existing_parts: Dict) -> tupl
     """
     Resolve team assignments from an LLM result dict.
     Returns (team_1_ids, team_2_ids) with exactly 2 players each if possible.
+    Key safety: deduplicates, checks for cross-team overlap, and infers
+    the opposing team from the remaining 2 players in a 4-player match.
     """
     valid_set = set(all_pids)
     
-    t1 = _validate_player_ids(res.get("team_1", []), valid_set)
-    t2 = _validate_player_ids(res.get("team_2", []), valid_set)
+    # Deduplicate within each team
+    t1 = list(dict.fromkeys(pid for pid in res.get("team_1", []) if pid in valid_set))
+    t2 = list(dict.fromkeys(pid for pid in res.get("team_2", []) if pid in valid_set))
     
-    if len(t1) == 2 and len(t2) < 2:
+    # Remove any overlap (player can't be on both teams)
+    overlap = set(t1) & set(t2)
+    if overlap:
+        print(f"[RESULT_HANDLER] Removing overlapping players from team_2: {overlap}")
+        t2 = [pid for pid in t2 if pid not in overlap]
+    
+    # Infer missing team from remaining players (core partner-swap logic)
+    if len(t1) == 2 and len(t2) != 2:
         t2 = [pid for pid in all_pids if pid not in t1]
         print(f"[RESULT_HANDLER] Inferred team_2 from remaining players: {[pid[:8] for pid in t2]}")
     
-    if len(t2) == 2 and len(t1) < 2:
+    if len(t2) == 2 and len(t1) != 2:
         t1 = [pid for pid in all_pids if pid not in t2]
         print(f"[RESULT_HANDLER] Inferred team_1 from remaining players: {[pid[:8] for pid in t1]}")
     
-    if len(t1) != 2 or len(t2) != 2:
+    # Final validation: must have exactly 2 unique players per team, no overlap
+    all_assigned = set(t1) | set(t2)
+    if len(t1) != 2 or len(t2) != 2 or len(all_assigned) != 4:
         fallback_t1 = existing_parts.get("team_1", [])
         fallback_t2 = existing_parts.get("team_2", [])
         if len(fallback_t1) == 2 and len(fallback_t2) == 2:
             t1, t2 = fallback_t1, fallback_t2
             print(f"[RESULT_HANDLER] Fell back to existing match teams")
         else:
-            print(f"[RESULT_HANDLER] WARNING: Could not resolve valid 2v2 teams (t1={len(t1)}, t2={len(t2)})")
+            print(f"[RESULT_HANDLER] WARNING: Could not resolve valid 2v2 teams (t1={len(t1)}, t2={len(t2)}, unique={len(all_assigned)})")
     
     return t1, t2
+
 
 
 def _is_super_tiebreak(score: str) -> bool:
@@ -295,7 +308,13 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         
         # Build summary for this pairing
         scores_str = ", ".join(pairing_scores)
-        all_set_scores.append(f"{t1_names} vs {t2_names}: {scores_str}")
+        winner_label = ""
+        if pairing_winner == 1:
+            winner_label = f" → {t1_names} 🏆"
+        elif pairing_winner == 2:
+            winner_label = f" → {t2_names} 🏆"
+        all_set_scores.append(f"{t1_names} vs {t2_names}: {scores_str}{winner_label}")
+
         
         print(f"[RESULT_HANDLER] Pairing {pairing_idx}: {t1_names} vs {t2_names} → {scores_str} → winner=team_{pairing_winner}")
         
@@ -317,11 +336,14 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     
     print(f"[RESULT_HANDLER] Done: {pairings_processed}/{len(pairings)} pairings processed. Summary: {summary_score}")
 
-    # 7. Send confirmation
+    # 7. Send confirmation with score breakdown
     if pairings_processed > 0:
-        result_msg = f"🎾 {pairings_processed} pairing{'s' if pairings_processed > 1 else ''} recorded! Ratings updated. 📈"
-        if pairings_processed > 1:
-            result_msg += f"\n({pairings_processed} different team configurations scored)"
+        result_msg = f"🎾 Scores recorded! Ratings updated. 📈\n\n"
+        for score_line in all_set_scores:
+            # score_line is like "Billy & Josh vs Adam & Eddie: 6-3, 6-1"
+            result_msg += f"• {score_line}\n"
+        result_msg += f"\n({pairings_processed} pairing{'s' if pairings_processed > 1 else ''} scored)"
         send_sms(from_number, result_msg, club_id=club_id)
     else:
         send_sms(from_number, "I couldn't verify the teams or scores. Please try again.", club_id=club_id)
+
