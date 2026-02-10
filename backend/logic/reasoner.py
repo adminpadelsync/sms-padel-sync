@@ -165,25 +165,32 @@ Instructions:
 
 def call_gemini_api(prompt: str, api_key: str, model_name: str = None, timeout: int = 25) -> Optional[str]:
     """Helper to call Gemini via REST API to avoid SDK dependency issues."""
+    import time
     model_name = model_name or LLMConfig.get_model_name()
     url = GEMINI_API_URL_TEMPLATE.format(model=model_name, key=api_key)
     
     headers = {"Content-Type": "application/json"}
     payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }],
+        "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.1,
             "maxOutputTokens": 1024
         }
     }
     
-    # try/except removed to allow caller to handle/log specific exceptions
-    response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    max_retries = 3
+    for attempt in range(max_retries + 1):
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        
+        if response.status_code == 429 and attempt < max_retries:
+            wait = 2 ** (attempt + 1)  # 2s, 4s, 8s
+            print(f"[REASONER] Rate limited (429), retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+            time.sleep(wait)
+            continue
+        
+        break
     
     if response.status_code != 200:
-        # Capture response body for debugging before raising
         error_body = response.text[:500] if response.text else "empty"
         print(f"[REASONER] API Error {response.status_code}: {error_body}")
         raise requests.exceptions.HTTPError(
@@ -202,7 +209,6 @@ def call_gemini_api(prompt: str, api_key: str, model_name: str = None, timeout: 
         candidate = result["candidates"][0]
         if "content" in candidate and "parts" in candidate["content"]:
             parts = candidate["content"]["parts"]
-            # Find the last part with text content (skip thinking parts)
             for part in reversed(parts):
                 if "text" in part:
                     return part["text"]
@@ -318,10 +324,11 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
             if attempt < max_retries:
                 time.sleep(1)
             else:
-                # DEBUG MODE: Return actual error to user
-                return ReasonerResult("UNKNOWN", 0.0, {}, reply_text=f"DEBUG ERROR: {str(e)}", raw_reply=f'{{"error": "{str(e)}"}}')
+                print(f"[REASONER] Final error after retries: {e}")
+                return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="Sorry, I'm having trouble processing that right now. Please try again in a moment.", raw_reply=f'{{"error": "{str(e)}"}}')
 
-    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text=f"DEBUG RETRIES EXHAUSTED: {last_error}", raw_reply=f'{{"error": "{last_error}"}}')
+    print(f"[REASONER] Retries exhausted: {last_error}")
+    return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="Sorry, I'm having trouble processing that right now. Please try again in a moment.", raw_reply=f'{{"error": "{last_error}"}}')
 
 def resolve_names_with_ai(name_str: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
