@@ -180,3 +180,88 @@ def update_match_elo(match_id: str, winner_team: int):
         supabase.table("player_rating_history").insert(history_records).execute()
         
     return True
+
+
+def apply_elo_for_pairing(match_id: str, team_1_ids: list, team_2_ids: list, winner_team: int):
+    """
+    Apply Elo updates using explicit team arrays (no match_participations lookup).
+    Used by result_handler for partner-swap scenarios where the same players
+    appear in multiple pairings with different team compositions.
+    """
+    if len(team_1_ids) != 2 or len(team_2_ids) != 2:
+        print(f"apply_elo_for_pairing: invalid teams t1={team_1_ids} t2={team_2_ids}")
+        return False
+
+    def get_player_data(pid):
+        p_res = supabase.table("players").select("player_id, elo_rating, elo_confidence, declared_skill_level, total_matches_played").eq("player_id", pid).execute()
+        if not p_res.data: return None
+        p = p_res.data[0]
+        if p.get("elo_rating") is None or (p.get("elo_rating") == 1500 and p.get("elo_confidence", 0) == 0):
+            p["elo_rating"] = get_initial_elo(float(p.get("declared_skill_level") or 3.5))
+        return p
+
+    players_1 = [get_player_data(pid) for pid in team_1_ids]
+    players_2 = [get_player_data(pid) for pid in team_2_ids]
+
+    if None in players_1 or None in players_2:
+        return False
+
+    team_1_rating = sum(p["elo_rating"] for p in players_1) / 2
+    team_2_rating = sum(p["elo_rating"] for p in players_2) / 2
+
+    if winner_team == 1:
+        result_1 = 1.0
+    elif winner_team == 2:
+        result_1 = 0.0
+    else:
+        result_1 = 0.5
+
+    updates = []
+    for p in players_1:
+        k = get_player_k_factor(p.get("elo_confidence", 0))
+        delta = calculate_elo_delta(team_1_rating, team_2_rating, result_1, k)
+        old_elo = p["elo_rating"]
+        new_elo = old_elo + delta
+        updates.append({
+            "player_id": p["player_id"],
+            "old_elo": old_elo, "new_elo": new_elo,
+            "old_sync": elo_to_sync_rating(old_elo), "new_sync": elo_to_sync_rating(new_elo),
+            "new_confidence": p.get("elo_confidence", 0) + 1,
+            "new_matches_played": (p.get("total_matches_played", 0) or 0) + 1
+        })
+
+    result_2 = 1.0 - result_1
+    for p in players_2:
+        k = get_player_k_factor(p.get("elo_confidence", 0))
+        delta = calculate_elo_delta(team_2_rating, team_1_rating, result_2, k)
+        old_elo = p["elo_rating"]
+        new_elo = old_elo + delta
+        updates.append({
+            "player_id": p["player_id"],
+            "old_elo": old_elo, "new_elo": new_elo,
+            "old_sync": elo_to_sync_rating(old_elo), "new_sync": elo_to_sync_rating(new_elo),
+            "new_confidence": p.get("elo_confidence", 0) + 1,
+            "new_matches_played": (p.get("total_matches_played", 0) or 0) + 1
+        })
+
+    history_records = []
+    for up in updates:
+        supabase.table("players").update({
+            "elo_rating": up["new_elo"],
+            "elo_confidence": up["new_confidence"],
+            "adjusted_skill_level": up["new_sync"],
+            "total_matches_played": up["new_matches_played"]
+        }).eq("player_id", up["player_id"]).execute()
+
+        history_records.append({
+            "player_id": up["player_id"],
+            "old_elo_rating": up["old_elo"], "new_elo_rating": up["new_elo"],
+            "old_sync_rating": up["old_sync"], "new_sync_rating": up["new_sync"],
+            "change_type": "match_result",
+            "match_id": match_id
+        })
+
+    if history_records:
+        supabase.table("player_rating_history").insert(history_records).execute()
+
+    return True

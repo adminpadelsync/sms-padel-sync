@@ -1,7 +1,7 @@
 from database import supabase
 from twilio_client import send_sms, get_club_name
 import sms_constants as msg
-from logic.elo_service import update_match_elo
+from logic.elo_service import apply_elo_for_pairing
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from logic_utils import get_now_utc, normalize_score
@@ -299,26 +299,12 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         
         print(f"[RESULT_HANDLER] Pairing {pairing_idx}: {t1_names} vs {t2_names} → {scores_str} → winner=team_{pairing_winner}")
         
-        # Assign teams on the original match for this pairing's Elo calculation
-        # Use upsert to avoid duplicate key errors when players appear in multiple pairings
-        parts_data = []
-        for p in t1:
-            parts_data.append({"match_id": match_id, "player_id": p, "team_index": 1, "status": "confirmed"})
-        for p in t2:
-            parts_data.append({"match_id": match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
-        supabase.table("match_participations").upsert(parts_data, on_conflict="match_id,player_id").execute()
-
-        
-        # Apply Elo for this pairing (once per pairing, not per set)
-        # Temporarily set match winner for Elo calculation
-        supabase.table("matches").update({
-            "winner_team": pairing_winner,
-        }).eq("match_id", match_id).execute()
-        
-        elo_success = update_match_elo(match_id, pairing_winner)
+        # Apply Elo for this pairing directly (bypasses match_participations)
+        elo_success = apply_elo_for_pairing(match_id, t1, t2, pairing_winner)
         print(f"[RESULT_HANDLER] Pairing {pairing_idx}: Elo update success={elo_success}")
         if elo_success:
             pairings_processed += 1
+
     
     # 6. Update the match with summary info
     summary_score = " | ".join(all_set_scores) if all_set_scores else ""
