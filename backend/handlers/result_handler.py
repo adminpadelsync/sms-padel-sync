@@ -127,29 +127,44 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             winner_val = 2
             
         score_text = normalize_score(res.get("score", ""))
-        print(f"[RESULT_HANDLER] Result {i}: score={score_text}, winner_val={winner_val}")
         
-        # If we have specific players for teams, update participation
-        if "team_1" in res and "team_2" in res:
-            t1 = res["team_1"]
-            t2 = res["team_2"]
-            print(f"[RESULT_HANDLER] Result {i}: team_1={t1}, team_2={t2}")
+        # Resolve teams — handle partial/missing team data from LLM
+        t1 = res.get("team_1", [])
+        t2 = res.get("team_2", [])
+        
+        # If team_2 is empty but team_1 has players, infer team_2 from remaining players
+        if t1 and not t2:
+            t2 = [pid for pid in all_pids if pid not in t1]
+            print(f"[RESULT_HANDLER] Inferred team_2={t2} from remaining players")
+        
+        # If neither team is set, use existing match teams
+        if not t1 and not t2:
+            t1 = parts.get("team_1", [])
+            t2 = parts.get("team_2", [])
+            print(f"[RESULT_HANDLER] Using existing match teams: t1={t1}, t2={t2}")
+        
+        print(f"[RESULT_HANDLER] Result {i}: score={score_text}, winner_val={winner_val}, team_1={t1}, team_2={t2}")
+        
+        # Update participation if we have valid teams (2 per side)
+        if len(t1) == 2 and len(t2) == 2:
             if is_new_match:
-                # Insert participants
+                # Insert participants for new match
                 parts_data = []
                 for p in t1: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 1, "status": "confirmed"})
                 for p in t2: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
                 supabase.table("match_participations").insert(parts_data).execute()
+                print(f"[RESULT_HANDLER] Inserted participations for new match {current_match_id[:12]}...")
             else:
-                # Update existing match participants if different
-                if len(t1) == 2 and len(t2) == 2:
-                    current_parts = get_match_participants(current_match_id)
-                    supabase.table("match_participations").delete().eq("match_id", current_match_id).execute()
-                    parts_data = []
-                    for p in t1: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 1, "status": "confirmed"})
-                    for p in t2: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
-                    supabase.table("match_participations").insert(parts_data).execute()
-                    print(f"[RESULT_HANDLER] Updated participations for match {current_match_id[:12]}...")
+                # Update existing match participants
+                current_parts = get_match_participants(current_match_id)
+                supabase.table("match_participations").delete().eq("match_id", current_match_id).execute()
+                parts_data = []
+                for p in t1: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 1, "status": "confirmed"})
+                for p in t2: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
+                supabase.table("match_participations").insert(parts_data).execute()
+                print(f"[RESULT_HANDLER] Updated participations for match {current_match_id[:12]}...")
+        else:
+            print(f"[RESULT_HANDLER] WARNING: Invalid team sizes t1={len(t1)}, t2={len(t2)} - skipping participation update")
 
         # Update Match Status and Score
         supabase.table("matches").update({
