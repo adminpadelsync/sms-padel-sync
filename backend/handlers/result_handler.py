@@ -300,14 +300,14 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
         print(f"[RESULT_HANDLER] Pairing {pairing_idx}: {t1_names} vs {t2_names} → {scores_str} → winner=team_{pairing_winner}")
         
         # Assign teams on the original match for this pairing's Elo calculation
-        # Re-assign match_participations to reflect this pairing's teams
-        supabase.table("match_participations").delete().eq("match_id", match_id).execute()
+        # Use upsert to avoid duplicate key errors when players appear in multiple pairings
         parts_data = []
         for p in t1:
             parts_data.append({"match_id": match_id, "player_id": p, "team_index": 1, "status": "confirmed"})
         for p in t2:
             parts_data.append({"match_id": match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
-        supabase.table("match_participations").insert(parts_data).execute()
+        supabase.table("match_participations").upsert(parts_data, on_conflict="match_id,player_id").execute()
+
         
         # Apply Elo for this pairing (once per pairing, not per set)
         # Temporarily set match winner for Elo calculation
