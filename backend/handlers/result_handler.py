@@ -106,8 +106,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
                 "scheduled_time": scheduled_time, # Same time
                 "status": "completed",
                 "created_at": get_now_utc().isoformat(),
-                "originator_id": player_id,
-                "notes": f"Multi-match report {i+1}"
+                "originator_id": player_id
             }
             ins = supabase.table("matches").insert(new_match_data).execute()
             if ins.data:
