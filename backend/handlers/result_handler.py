@@ -17,10 +17,14 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     player_id = player["player_id"]
     club_id = cid or player.get("club_id")
     
+    print(f"[RESULT_HANDLER] Starting for player={player_id[:12]}... club={club_id}")
+    
     # 1. Find the most recent confirmed or completed match for this player
     since = (get_now_utc() - timedelta(hours=24)).isoformat()
     parts_res = supabase.table("match_participations").select("match_id").eq("player_id", player_id).in_("status", ["confirmed", "completed"]).execute()
     match_ids = [p['match_id'] for p in parts_res.data] if parts_res.data else []
+    
+    print(f"[RESULT_HANDLER] Found {len(match_ids)} match participations")
     
     match_res = None
     if match_ids:
@@ -34,32 +38,25 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     original_match_id = match["match_id"]
     scheduled_time = match["scheduled_time"]
     
+    print(f"[RESULT_HANDLER] Found match={original_match_id[:12]}... scheduled={scheduled_time} status={match.get('status')}")
+    
     # Get all players in the session
     parts = get_match_participants(original_match_id)
     all_pids = parts["all"]
     players_data = supabase.table("players").select("player_id, name").in_("player_id", all_pids).execute().data or []
     
-    # 2. Extract Detailed Results (Multi-Match / Partner Swap / Draw)
-    # We pass the full message body if possible. Since we don't have it here directly, 
-    # we assume the Reasoner passed it in entities or we need to change signature.
-    # Ah, the handler signature is (from_number, player, entities, cid). 
-    # We might lose the raw message if not passed. 
-    # Current implementation of `commands.py` passes `body` as key in entities? No.
-    # We might need to assume `entities` has `raw_text` or similar, or we just rely on what we have.
-    # WAIT: `commands.py` calls this. Let's assume we can get the text.
-    # If not, checking `entities` for a "message" or "raw" key would be good.
-    # As a fallback, we construct a "message" from the entities if needed, but that defeats the purpose.
-    # let's look at `commands.py` later. For now, let's assume `entities` contains `raw_message` or we use `score` + `winner`.
-    
-    # ACTUALLY: The `entities` dict usually comes from the ReasonerResult. 
-    # I should update `commands.py` to pass the raw message if it doesn't already.
-    # For now, let's try to look for `_raw_message` in entities, or if not, use the fallback logic.
+    print(f"[RESULT_HANDLER] Match players: {[p['name'] for p in players_data]}")
+    print(f"[RESULT_HANDLER] Teams: team_1={parts.get('team_1', [])}, team_2={parts.get('team_2', [])}")
     
     msg_body = entities.get("_raw_message", "")
     detailed_results = []
     
+    print(f"[RESULT_HANDLER] Raw message body: '{msg_body[:100]}...' " if msg_body else "[RESULT_HANDLER] No _raw_message in entities")
+    print(f"[RESULT_HANDLER] Entities keys: {list(entities.keys())}")
+    
     if msg_body:
         detailed_results = extract_detailed_match_results(msg_body, players_data, player_id)
+        print(f"[RESULT_HANDLER] LLM extracted {len(detailed_results)} results: {detailed_results}")
         
     if not detailed_results:
         # Fallback to existing single-match logic (but we still need to handle draws/swaps if manually parsed?)
@@ -94,6 +91,7 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     results_processed = 0
     
     for i, res in enumerate(detailed_results):
+        print(f"[RESULT_HANDLER] Processing result {i}: {res}")
         # Determine Match ID (First result uses existing match, others create new)
         current_match_id = original_match_id
         is_new_match = False
@@ -108,18 +106,20 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
                 "created_at": get_now_utc().isoformat(),
                 "originator_id": player_id
             }
-            ins = supabase.table("matches").insert(new_match_data).execute()
-            if ins.data:
-                current_match_id = ins.data[0]["match_id"]
-                is_new_match = True
-            else:
-                print("Failed to create secondary match")
+            try:
+                ins = supabase.table("matches").insert(new_match_data).execute()
+                if ins.data:
+                    current_match_id = ins.data[0]["match_id"]
+                    is_new_match = True
+                    print(f"[RESULT_HANDLER] Created new match={current_match_id[:12]}...")
+                else:
+                    print(f"[RESULT_HANDLER] Failed to create secondary match: no data returned")
+                    continue
+            except Exception as e:
+                print(f"[RESULT_HANDLER] Failed to create secondary match: {e}")
                 continue
 
         # Determine Teams and Winner
-        # If detail has explicit teams, we verify/update.
-        # If detail says "use_existing_teams", we use existing verification logic or assume simple case.
-        
         winner_val = 1
         if res.get("winner") == "draw":
             winner_val = 0
@@ -127,11 +127,13 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             winner_val = 2
             
         score_text = normalize_score(res.get("score", ""))
+        print(f"[RESULT_HANDLER] Result {i}: score={score_text}, winner_val={winner_val}")
         
         # If we have specific players for teams, update participation
         if "team_1" in res and "team_2" in res:
             t1 = res["team_1"]
             t2 = res["team_2"]
+            print(f"[RESULT_HANDLER] Result {i}: team_1={t1}, team_2={t2}")
             if is_new_match:
                 # Insert participants
                 parts_data = []
@@ -139,25 +141,15 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
                 for p in t2: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
                 supabase.table("match_participations").insert(parts_data).execute()
             else:
-                # Update existing match participants if different? 
-                # For the FIRST match, if they swapped partners, we should technically update the DB to reflect the first game's reality.
-                # Let's do it: Update match_participations for current_match_id
-                # (Safety: Only if all players are valid)
-                pass # Already handled by new match logic or assumed correct for first match mostly.
-                # Actually, partner swapping implies the first match might ALSO be different from scheduled.
-                # We should update it.
-                
-                # Nuke existing participants and re-insert? Or smart diff.
-                # Let's verify we have 4 players.
+                # Update existing match participants if different
                 if len(t1) == 2 and len(t2) == 2:
                     current_parts = get_match_participants(current_match_id)
-                    # If different, update
-                    # ... implementation detail: delete and insert for simplicity
                     supabase.table("match_participations").delete().eq("match_id", current_match_id).execute()
                     parts_data = []
                     for p in t1: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 1, "status": "confirmed"})
                     for p in t2: parts_data.append({"match_id": current_match_id, "player_id": p, "team_index": 2, "status": "confirmed"})
                     supabase.table("match_participations").insert(parts_data).execute()
+                    print(f"[RESULT_HANDLER] Updated participations for match {current_match_id[:12]}...")
 
         # Update Match Status and Score
         supabase.table("matches").update({
@@ -166,12 +158,16 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
             "status": "completed",
             "teams_verified": True
         }).eq("match_id", current_match_id).execute()
+        print(f"[RESULT_HANDLER] Updated match status to completed, score={score_text}")
         
         # Update Elo
-        if update_match_elo(current_match_id, winner_val):
+        elo_success = update_match_elo(current_match_id, winner_val)
+        print(f"[RESULT_HANDLER] Elo update for match {current_match_id[:12]}...: success={elo_success}")
+        if elo_success:
             results_processed += 1
 
     # 4. Send Confirmation
+    print(f"[RESULT_HANDLER] Final: results_processed={results_processed} out of {len(detailed_results)} results")
     if results_processed > 0:
         msg = f"🎾 {results_processed} match result{'s' if results_processed > 1 else ''} recorded! Ratings updated. 📈"
         if results_processed > 1:
