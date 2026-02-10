@@ -309,6 +309,17 @@ def reason_message(message: str, current_state: str = "IDLE", user_profile: Dict
                 time.sleep(sleep_time)
                 continue
             
+        except requests.exceptions.HTTPError as e:
+            # call_gemini_api already retries 429s internally, don't retry again here
+            last_error = f"HTTP Error: {str(e)}"
+            print(f"[REASONER] HTTP Error (no outer retry): {e}")
+            log_sms_error(
+                error_message=f"Reasoner HTTP Error: {str(e)}",
+                phone_number=user_profile.get("phone_number") if user_profile else None,
+                sms_body=message,
+                exception=e
+            )
+            return ReasonerResult("UNKNOWN", 0.0, {}, reply_text="Sorry, I'm having trouble processing that right now. Please try again in a moment.", raw_reply=f'{{"error": "{str(e)}"}}')
         except Exception as e:
             last_error = f"Exception: {str(e)}"
             print(f"[REASONER] Logic Error: {e}")
