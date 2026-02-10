@@ -19,33 +19,61 @@ def handle_result_report(from_number: str, player: Dict, entities: Dict[str, Any
     
     print(f"[RESULT_HANDLER] Starting for player={player_id[:12]}... club={club_id}")
     
-    # 1. Find the most recent confirmed or completed match for this player
-    since = (get_now_utc() - timedelta(hours=24)).isoformat()
+    # 1. Find the most recent match for this player to report results on.
+    # Prefer non-completed matches (confirmed/pending) over already-completed ones.
     parts_res = supabase.table("match_participations").select("match_id").eq("player_id", player_id).in_("status", ["confirmed", "completed"]).execute()
     match_ids = [p['match_id'] for p in parts_res.data] if parts_res.data else []
     
     print(f"[RESULT_HANDLER] Found {len(match_ids)} match participations")
     
-    match_res = None
+    match = None
     if match_ids:
-        match_res = supabase.table("matches").select("*, clubs(name)").in_("match_id", match_ids).order("scheduled_time", desc=True).limit(1).execute()
+        # First try: find non-completed matches (the ones we actually want to score)
+        match_res = supabase.table("matches").select("*, clubs(name)").in_("match_id", match_ids).neq("status", "completed").order("scheduled_time", desc=True).limit(5).execute()
+        
+        if match_res.data:
+            # Pick the match with the most participants (most likely the real one)
+            best_match = None
+            best_count = 0
+            for m in match_res.data:
+                p_count = supabase.table("match_participations").select("player_id", count="exact").eq("match_id", m["match_id"]).execute()
+                cnt = p_count.count if p_count.count else 0
+                print(f"[RESULT_HANDLER] Candidate match={m['match_id'][:12]}... status={m['status']} participants={cnt}")
+                if cnt > best_count:
+                    best_count = cnt
+                    best_match = m
+            match = best_match
+        
+        # Fallback: if all matches are completed, use the most recent completed one with 4+ participants
+        if not match:
+            match_res = supabase.table("matches").select("*, clubs(name)").in_("match_id", match_ids).order("scheduled_time", desc=True).limit(5).execute()
+            if match_res.data:
+                for m in match_res.data:
+                    p_count = supabase.table("match_participations").select("player_id", count="exact").eq("match_id", m["match_id"]).execute()
+                    cnt = p_count.count if p_count.count else 0
+                    print(f"[RESULT_HANDLER] Fallback candidate match={m['match_id'][:12]}... status={m['status']} participants={cnt}")
+                    if cnt >= 4:
+                        match = m
+                        break
+                # If still nothing with 4 players, just use the most recent
+                if not match and match_res.data:
+                    match = match_res.data[0]
     
-    if not match_res or not match_res.data:
+    if not match:
         send_sms(from_number, "I couldn't find a recent match to report a result for.", club_id=club_id)
         return
 
-    match = match_res.data[0]
     original_match_id = match["match_id"]
     scheduled_time = match["scheduled_time"]
     
-    print(f"[RESULT_HANDLER] Found match={original_match_id[:12]}... scheduled={scheduled_time} status={match.get('status')}")
+    print(f"[RESULT_HANDLER] Selected match={original_match_id[:12]}... scheduled={scheduled_time} status={match.get('status')}")
     
     # Get all players in the session
     parts = get_match_participants(original_match_id)
     all_pids = parts["all"]
     players_data = supabase.table("players").select("player_id, name").in_("player_id", all_pids).execute().data or []
     
-    print(f"[RESULT_HANDLER] Match players: {[p['name'] for p in players_data]}")
+    print(f"[RESULT_HANDLER] Match players ({len(players_data)}): {[p['name'] for p in players_data]}")
     print(f"[RESULT_HANDLER] Teams: team_1={parts.get('team_1', [])}, team_2={parts.get('team_2', [])}")
     
     msg_body = entities.get("_raw_message", "")
